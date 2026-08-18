@@ -1,6 +1,25 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+export function getAuthRedirect(pathname: string, user: { id: string } | null) {
+  const publicPaths = new Set(['/', '/login', '/signup'])
+  const protectedPrefixes = ['/dashboard', '/student', '/educator', '/organiser', '/results', '/sitting']
+
+  if (user && publicPaths.has(pathname)) {
+    return '/dashboard'
+  }
+
+  if (!user && protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+    return '/login'
+  }
+
+  if (!user && pathname === '/dashboard') {
+    return '/login'
+  }
+
+  return null
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -27,19 +46,24 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // IMPORTANT: Avoid writing any logic between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Example basic protection - adjust the paths as you need
-  // if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
-  //   const url = request.nextUrl.clone()
-  //   url.pathname = '/login'
-  //   return NextResponse.redirect(url)
-  // }
+  const pathname = request.nextUrl.pathname
+
+  if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.')) {
+    return supabaseResponse
+  }
+
+  supabaseResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
+
+  const redirectPath = getAuthRedirect(pathname, user)
+  if (redirectPath) {
+    const url = request.nextUrl.clone()
+    url.pathname = redirectPath
+    return NextResponse.redirect(url)
+  }
 
   return supabaseResponse
 }
