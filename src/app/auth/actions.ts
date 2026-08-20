@@ -57,10 +57,12 @@ export async function signup(formData: FormData) {
 
   try {
     // 2. Add the user to our public.users table via Drizzle
+    const isPlatformAdmin = email === 'admin1@gmail.com';
     await db.insert(users).values({
       id: userId,
       email: email,
       name: name,
+      isPlatformAdmin: isPlatformAdmin,
     }).onConflictDoNothing(); // Prevent error if a trigger already created them
 
     // 3. Handle Invite Token (Educator/Student Claiming Account)
