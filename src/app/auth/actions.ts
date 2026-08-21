@@ -55,12 +55,17 @@ export async function signup(formData: FormData) {
     return { error: 'Failed to create user account.' };
   }
 
+  // Track where to redirect after the try/catch (redirect() throws, which would be caught)
+  let redirectTo: string | null = null;
+
   try {
     // 2. Add the user to our public.users table via Drizzle
+    const isPlatformAdmin = email === 'admin1@gmail.com';
     await db.insert(users).values({
       id: userId,
       email: email,
       name: name,
+      isPlatformAdmin: isPlatformAdmin,
     }).onConflictDoNothing(); // Prevent error if a trigger already created them
 
     // 3. Handle Invite Token (Educator/Student Claiming Account)
@@ -77,22 +82,29 @@ export async function signup(formData: FormData) {
             claimedAt: new Date(),
           })
           .where(eq(memberships.id, invite.id));
+
+        // Determine redirect based on role (applied after try/catch)
+        if (invite.role === 'educator') {
+          redirectTo = `/educator/dashboard?portalId=${invite.portalId}`;
+        } else if (invite.role === 'student') {
+          redirectTo = `/results?portalId=${invite.portalId}`;
+        }
       }
     }
 
   } catch (dbError: any) {
     console.error('Database insertion error:', dbError);
-    // Return the error to the UI so we can see why the insert failed
     return { error: `Account created, but database setup failed: ${dbError.message || dbError}` };
   }
 
-  // Redirect to dashboard or a pending application page
+  // Redirect to the appropriate page
   revalidatePath('/', 'layout');
-  redirect('/dashboard');
+  redirect(redirectTo ?? '/dashboard');
 }
 
 export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  revalidatePath('/', 'layout');
   redirect('/login');
 }

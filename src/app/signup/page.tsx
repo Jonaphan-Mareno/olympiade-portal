@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, Suspense } from 'react';
 import { signup } from '@/app/auth/actions';
 import { SubmitButton } from '@/components/SubmitButton';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
-export default function SignupPage() {
+function SignupForm() {
   const searchParams = useSearchParams();
-  const inviteToken = searchParams.get('token');
+  const inviteToken = searchParams.get('inviteToken') || searchParams.get('token');
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(formData: FormData) {
@@ -92,5 +92,19 @@ export default function SignupPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="auth-wrapper">
+        <div className="glass-panel auth-form-container" style={{ textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+        </div>
+      </div>
+    }>
+      <SignupForm />
+    </Suspense>
   );
 }

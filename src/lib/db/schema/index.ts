@@ -18,8 +18,19 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+export const organiserApplications = pgTable('organiser_applications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull().unique(),
+  pdfUrl: text('pdf_url').notNull(),
+  status: text('status', { enum: ['pending', 'approved', 'rejected'] }).default('pending').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+
 export const schools = pgTable('schools', {
   id: uuid('id').primaryKey().defaultRandom(),
+  portalId: uuid('portal_id').references(() => portals.id, { onDelete: 'cascade' }).notNull(),
   name: text('name').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
