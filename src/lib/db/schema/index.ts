@@ -30,6 +30,7 @@ export const organiserApplications = pgTable('organiser_applications', {
 
 export const schools = pgTable('schools', {
   id: uuid('id').primaryKey().defaultRandom(),
+  portalId: uuid('portal_id').references(() => portals.id, { onDelete: 'cascade' }).notNull(),
   name: text('name').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });

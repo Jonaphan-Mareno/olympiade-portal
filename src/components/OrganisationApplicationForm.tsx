@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { submitOrganisationApplication } from '@/app/auth/actions';
+import { submitOrganiserApplication } from '@/app/organiser/actions';
 
 export default function OrganisationApplicationForm() {
   const [isOpen, setIsOpen] = useState(false);
@@ -9,7 +9,7 @@ export default function OrganisationApplicationForm() {
 
   async function handleSubmit(formData: FormData) {
     setError(null);
-    const result = await submitOrganisationApplication(formData);
+    const result = await submitOrganiserApplication(formData);
     if (result?.error) {
       setError(result.error);
     }

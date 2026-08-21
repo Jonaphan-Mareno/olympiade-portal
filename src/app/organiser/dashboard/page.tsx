@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
-import { organiserApplications, portals } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { organiserApplications, portals, schools } from '@/lib/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import { submitOrganiserApplication } from '../actions';
+import CreatePortalSection from '@/components/organiser/CreatePortalSection';
 
 export default async function OrganiserDashboardPage() {
   const supabase = await createClient();
@@ -47,6 +48,19 @@ export default async function OrganiserDashboardPage() {
   // State 4: Approved - Show real organiser portal
   if (state === 'approved') {
     const userPortals = await db.select().from(portals).where(eq(portals.ownerUserId, user.id));
+
+    // Fetch schools for all user portals
+    const portalIds = userPortals.map(p => p.id);
+    const portalSchools = portalIds.length > 0
+      ? await db.select().from(schools).where(inArray(schools.portalId, portalIds))
+      : [];
+
+    const schoolsByPortal = new Map<string, typeof portalSchools>();
+    for (const school of portalSchools) {
+      const list = schoolsByPortal.get(school.portalId) ?? [];
+      list.push(school);
+      schoolsByPortal.set(school.portalId, list);
+    }
     
     return (
       <div className="glass-panel" style={{ padding: '2rem' }}>
@@ -57,13 +71,46 @@ export default async function OrganiserDashboardPage() {
         
         <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Your Olympiads</h2>
         {userPortals.length === 0 ? (
-          <p>You haven't created any Olympiads yet.</p>
+          <p style={{ color: 'var(--text-secondary)' }}>You haven&apos;t created any Olympiads yet.</p>
         ) : (
-          <ul>
-            {userPortals.map(p => <li key={p.id}>{p.name} ({p.status})</li>)}
-          </ul>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {userPortals.map(p => {
+              const portalSchoolList = schoolsByPortal.get(p.id) ?? [];
+              return (
+                <div key={p.id} className="glass-card" style={{ padding: '1.25rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <h3 style={{ fontSize: '1.1rem' }}>{p.name}</h3>
+                    <span style={{
+                      fontSize: '0.75rem',
+                      padding: '0.25rem 0.75rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: p.status === 'approved' ? 'rgba(16, 185, 129, 0.1)' : p.status === 'rejected' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                      color: p.status === 'approved' ? 'var(--success-color)' : p.status === 'rejected' ? 'var(--danger-color)' : 'var(--text-secondary)',
+                      border: `1px solid ${p.status === 'approved' ? 'rgba(16, 185, 129, 0.2)' : p.status === 'rejected' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.1)'}`,
+                    }}>
+                      {p.status}
+                    </span>
+                  </div>
+                  {portalSchoolList.length > 0 && (
+                    <div>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
+                        Schools ({portalSchoolList.length})
+                      </span>
+                      <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        {portalSchoolList.map(s => (
+                          <li key={s.id} style={{ fontSize: '0.9rem', color: 'var(--text-primary)', paddingLeft: '0.5rem', borderLeft: '2px solid var(--primary-color)' }}>
+                            {s.name}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
-        <button className="btn btn-primary" style={{ marginTop: '1rem' }}>Create New Olympiad</button>
+        <CreatePortalSection />
       </div>
     );
   }
@@ -103,7 +150,7 @@ export default async function OrganiserDashboardPage() {
         Please submit your application below.
       </p>
 
-      <form action={submitOrganiserApplication} className="auth-form-container" style={{ width: '100%', maxWidth: '600px', margin: '0 auto', boxShadow: 'none', background: 'transparent' }}>
+      <form action={submitOrganiserApplication as (fd: FormData) => Promise<void>} className="auth-form-container" style={{ width: '100%', maxWidth: '600px', margin: '0 auto', boxShadow: 'none', background: 'transparent' }}>
         
         <div style={{ marginBottom: '2rem', padding: '1.5rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '0.75rem', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
           <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: 'var(--primary-color)' }}>Application Requirements</h3>
