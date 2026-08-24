@@ -16,7 +16,7 @@ export default function SignOutButton() {
   };
 
   return (
-    <button 
+    <button
       onClick={handleSignOut}
       style={{
         backgroundColor: 'transparent',
@@ -26,10 +26,12 @@ export default function SignOutButton() {
         borderRadius: '0.375rem',
         fontWeight: '500',
         cursor: 'pointer',
-        transition: 'all 0.2s'
+        transition: 'all 0.2s',
       }}
-      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#EFF6FF')}
+      onMouseOut={(e) =>
+        (e.currentTarget.style.backgroundColor = 'transparent')
+      }
     >
       Sign Out
     </button>

@@ -27,34 +27,51 @@ function emptyEntry(): SchoolEntry {
 
 async function fetchSchools(q: string): Promise<SchoolSuggestion[]> {
   if (q.trim().length < 2) return [];
-  const res = await fetch(`/api/schools/search?q=${encodeURIComponent(q.trim())}`);
+  const res = await fetch(
+    `/api/schools/search?q=${encodeURIComponent(q.trim())}`
+  );
   if (!res.ok) return [];
   return res.json();
 }
 
-export default function CreatePortalForm({ onClose }: { onClose?: () => void }) {
-  console.log("CreatePortalForm rendered - hot reload test");
+export default function CreatePortalForm({
+  onClose,
+}: {
+  onClose?: () => void;
+}) {
+  console.log('CreatePortalForm rendered - hot reload test');
   const [entries, setEntries] = useState<SchoolEntry[]>([emptyEntry()]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const searchTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const searchTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(
+    new Map()
+  );
 
   // Close suggestions when clicking outside
   useEffect(() => {
     function handleClick() {
-      setEntries(prev => prev.map(e => ({ ...e, showSuggestions: false })));
+      setEntries((prev) => prev.map((e) => ({ ...e, showSuggestions: false })));
     }
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
-  const updateEntry = useCallback((index: number, patch: Partial<SchoolEntry>) => {
-    setEntries(prev => prev.map((e, i) => (i === index ? { ...e, ...patch } : e)));
-  }, []);
+  const updateEntry = useCallback(
+    (index: number, patch: Partial<SchoolEntry>) => {
+      setEntries((prev) =>
+        prev.map((e, i) => (i === index ? { ...e, ...patch } : e))
+      );
+    },
+    []
+  );
 
   function onQueryChange(index: number, value: string) {
-    updateEntry(index, { query: value, existingId: null, showSuggestions: true });
+    updateEntry(index, {
+      query: value,
+      existingId: null,
+      showSuggestions: true,
+    });
 
     // Debounce search
     const existing = searchTimers.current.get(index);
@@ -62,9 +79,15 @@ export default function CreatePortalForm({ onClose }: { onClose?: () => void }) 
 
     const timer = setTimeout(async () => {
       const results = await fetchSchools(value);
-      setEntries(prev =>
+      setEntries((prev) =>
         prev.map((e, i) =>
-          i === index ? { ...e, suggestions: results, showSuggestions: results.length > 0 } : e
+          i === index
+            ? {
+                ...e,
+                suggestions: results,
+                showSuggestions: results.length > 0,
+              }
+            : e
         )
       );
     }, 250);
@@ -81,20 +104,21 @@ export default function CreatePortalForm({ onClose }: { onClose?: () => void }) 
   }
 
   function addSchool() {
-    setEntries(prev => [...prev, emptyEntry()]);
+    setEntries((prev) => [...prev, emptyEntry()]);
   }
 
   function removeSchool(index: number) {
-    setEntries(prev => prev.filter((_, i) => i !== index));
+    setEntries((prev) => prev.filter((_, i) => i !== index));
   }
 
   function addTeacherEmail(index: number) {
-    setEntries(prev =>
+    setEntries((prev) =>
       prev.map((e, i) => {
         if (i !== index) return e;
         const email = e.newTeacherEmail.trim().toLowerCase();
         if (!email || !email.includes('@')) return e;
-        if (e.teacherEmails.includes(email)) return { ...e, newTeacherEmail: '' };
+        if (e.teacherEmails.includes(email))
+          return { ...e, newTeacherEmail: '' };
         return {
           ...e,
           teacherEmails: [...e.teacherEmails, email],
@@ -105,10 +129,15 @@ export default function CreatePortalForm({ onClose }: { onClose?: () => void }) 
   }
 
   function removeTeacherEmail(schoolIndex: number, emailIndex: number) {
-    setEntries(prev =>
+    setEntries((prev) =>
       prev.map((e, i) =>
         i === schoolIndex
-          ? { ...e, teacherEmails: e.teacherEmails.filter((_, ei) => ei !== emailIndex) }
+          ? {
+              ...e,
+              teacherEmails: e.teacherEmails.filter(
+                (_, ei) => ei !== emailIndex
+              ),
+            }
           : e
       )
     );
@@ -127,7 +156,7 @@ export default function CreatePortalForm({ onClose }: { onClose?: () => void }) 
       } else {
         formData.set(`school_newName_${i}`, entry.query.trim());
       }
-      entry.teacherEmails.forEach(email => {
+      entry.teacherEmails.forEach((email) => {
         formData.append(`school_teacherEmails_${i}`, email);
       });
     });
@@ -151,7 +180,11 @@ export default function CreatePortalForm({ onClose }: { onClose?: () => void }) 
           Portal created successfully!
         </div>
         {onClose && (
-          <button type="button" className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-medium py-2.5 px-6 rounded-lg transition-colors border-none cursor-pointer" onClick={onClose}>
+          <button
+            type="button"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-medium py-2.5 px-6 rounded-lg transition-colors border-none cursor-pointer"
+            onClick={onClose}
+          >
             Close
           </button>
         )}
@@ -175,202 +208,259 @@ export default function CreatePortalForm({ onClose }: { onClose?: () => void }) 
         .btn-white:hover { background: #F8FAFC; }
       `}</style>
       <form action={handleSubmit} className="light-form">
-      {error && <div className="bg-red-50 text-red-900 p-3 rounded-lg text-sm border border-red-100">{error}</div>}
+        {error && (
+          <div className="bg-red-50 text-red-900 p-3 rounded-lg text-sm border border-red-100">
+            {error}
+          </div>
+        )}
 
-      {/* Portal Name */}
-      <div className="flex flex-col gap-1.5">
-        <label className="light-label text-slate-700" htmlFor="portalName">
-          Olympiad / Portal Name
-        </label>
-        <input
-          className="light-input text-slate-900"
-          type="text"
-          name="portalName"
-          id="portalName"
-          placeholder="e.g. National Mathematics Olympiad"
-          required
-        />
-      </div>
+        {/* Portal Name */}
+        <div className="flex flex-col gap-1.5">
+          <label className="light-label text-slate-700" htmlFor="portalName">
+            Olympiad / Portal Name
+          </label>
+          <input
+            className="light-input text-slate-900"
+            type="text"
+            name="portalName"
+            id="portalName"
+            placeholder="e.g. National Mathematics Olympiad"
+            required
+          />
+        </div>
 
-      {/* Schools */}
-      <div>
-        <label className="text-sm font-semibold text-slate-700 block mb-3">
-          Schools
-        </label>
-        <div className="flex flex-col gap-4">
-          {entries.map((entry, index) => (
-            <div
-              key={index}
-              style={{ padding: "1.25rem", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "0.75rem" }}
-            >
-              {/* School name with autocomplete */}
-              <div style={{ position: 'relative', marginBottom: '0.75rem' }} onClick={(e) => e.stopPropagation()}>
-                <input
-                  className="light-input text-slate-900"
-                  type="text"
-                  value={entry.query}
-                  onChange={(e) => onQueryChange(index, e.target.value)}
-                  onFocus={() => {
-                    if (entry.suggestions.length > 0 && !entry.existingId) {
-                      updateEntry(index, { showSuggestions: true });
-                    }
-                  }}
-                  placeholder={`School ${index + 1} — start typing to search existing schools`}
-                />
-                {entry.existingId && (
-                  <span style={{
-                    position: 'absolute',
-                    right: '0.75rem',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    fontSize: '0.7rem',
-                    padding: '0.15rem 0.5rem',
-                    background: 'rgba(99, 102, 241, 0.15)',
-                    color: 'var(--primary-color)',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid rgba(99, 102, 241, 0.3)',
-                  }}>
-                    existing
-                  </span>
-                )}
-                {/* Suggestions dropdown */}
-                {entry.showSuggestions && entry.suggestions.length > 0 && !entry.existingId && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    zIndex: 50,
-                    background: '#FFFFFF',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '0.5rem',
-                    marginTop: '0.25rem',
-                    maxHeight: '200px',
-                    overflowY: 'auto',
-                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
-                  }}>
-                    {entry.suggestions.map(s => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => selectSuggestion(index, s)}
-                        style={{
-                          display: 'block',
-                          width: '100%',
-                          textAlign: 'left',
-                          padding: '0.6rem 1rem',
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#0F172A',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          fontSize: '0.9rem',
-                          transition: 'background 0.15s',
-                        }}
-                        onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#F1F5F9'; }}
-                        onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
-                      >
-                        {s.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Teacher emails */}
-              <div>
-                <span className="text-sm font-semibold text-slate-700 block mb-2 mt-4">
-                  Teachers / Educators
-                </span>
-
-                {/* Existing teacher email tags */}
-                {entry.teacherEmails.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-3 mb-2">
-                    {entry.teacherEmails.map((email, ei) => (
-                      <span
-                        key={ei}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0066CC]/10 text-[#0066CC] text-xs font-medium"
-                      >
-                        {email}
-                        <button
-                          type="button"
-                          onClick={() => removeTeacherEmail(index, ei)}
-                          className="hover:bg-[#0066CC]/20 rounded-full p-0.5 transition-colors flex items-center justify-center outline-none"
-                          aria-label={`Remove ${email}`}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                          </svg>
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Add teacher email input */}
-                <div style={{ display: "flex", gap: "0.5rem" }}>
+        {/* Schools */}
+        <div>
+          <label className="text-sm font-semibold text-slate-700 block mb-3">
+            Schools
+          </label>
+          <div className="flex flex-col gap-4">
+            {entries.map((entry, index) => (
+              <div
+                key={index}
+                style={{
+                  padding: '1.25rem',
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '0.75rem',
+                }}
+              >
+                {/* School name with autocomplete */}
+                <div
+                  style={{ position: 'relative', marginBottom: '0.75rem' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <input
-                    className="light-input text-slate-900" style={{ flex: 1 }}
-                    type="email"
-                    value={entry.newTeacherEmail}
-                    onChange={(e) => updateEntry(index, { newTeacherEmail: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addTeacherEmail(index);
+                    className="light-input text-slate-900"
+                    type="text"
+                    value={entry.query}
+                    onChange={(e) => onQueryChange(index, e.target.value)}
+                    onFocus={() => {
+                      if (entry.suggestions.length > 0 && !entry.existingId) {
+                        updateEntry(index, { showSuggestions: true });
                       }
                     }}
-                    placeholder="teacher@email.com"
+                    placeholder={`School ${index + 1} — start typing to search existing schools`}
                   />
+                  {entry.existingId && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        right: '0.75rem',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        fontSize: '0.7rem',
+                        padding: '0.15rem 0.5rem',
+                        background: 'rgba(99, 102, 241, 0.15)',
+                        color: 'var(--primary-color)',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid rgba(99, 102, 241, 0.3)',
+                      }}
+                    >
+                      existing
+                    </span>
+                  )}
+                  {/* Suggestions dropdown */}
+                  {entry.showSuggestions &&
+                    entry.suggestions.length > 0 &&
+                    !entry.existingId && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          zIndex: 50,
+                          background: '#FFFFFF',
+                          border: '1px solid #E2E8F0',
+                          borderRadius: '0.5rem',
+                          marginTop: '0.25rem',
+                          maxHeight: '200px',
+                          overflowY: 'auto',
+                          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
+                        }}
+                      >
+                        {entry.suggestions.map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => selectSuggestion(index, s)}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              textAlign: 'left',
+                              padding: '0.6rem 1rem',
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#0F172A',
+                              cursor: 'pointer',
+                              fontFamily: 'inherit',
+                              fontSize: '0.9rem',
+                              transition: 'background 0.15s',
+                            }}
+                            onMouseEnter={(e) => {
+                              (e.target as HTMLElement).style.background =
+                                '#F1F5F9';
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.target as HTMLElement).style.background =
+                                'transparent';
+                            }}
+                          >
+                            {s.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                </div>
+
+                {/* Teacher emails */}
+                <div>
+                  <span className="text-sm font-semibold text-slate-700 block mb-2 mt-4">
+                    Teachers / Educators
+                  </span>
+
+                  {/* Existing teacher email tags */}
+                  {entry.teacherEmails.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3 mb-2">
+                      {entry.teacherEmails.map((email, ei) => (
+                        <span
+                          key={ei}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0066CC]/10 text-[#0066CC] text-xs font-medium"
+                        >
+                          {email}
+                          <button
+                            type="button"
+                            onClick={() => removeTeacherEmail(index, ei)}
+                            className="hover:bg-[#0066CC]/20 rounded-full p-0.5 transition-colors flex items-center justify-center outline-none"
+                            aria-label={`Remove ${email}`}
+                          >
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <line x1="18" y1="6" x2="6" y2="18"></line>
+                              <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add teacher email input */}
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      className="light-input text-slate-900"
+                      style={{ flex: 1 }}
+                      type="email"
+                      value={entry.newTeacherEmail}
+                      onChange={(e) =>
+                        updateEntry(index, { newTeacherEmail: e.target.value })
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addTeacherEmail(index);
+                        }
+                      }}
+                      placeholder="teacher@email.com"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => addTeacherEmail(index)}
+                      className="light-btn btn-white"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+
+                {/* Remove school button */}
+                {entries.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => addTeacherEmail(index)}
-                    className="light-btn btn-white"
+                    onClick={() => removeSchool(index)}
+                    className="text-link-danger"
                   >
-                    Add
+                    Remove this school
                   </button>
-                </div>
+                )}
               </div>
-
-              {/* Remove school button */}
-              {entries.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeSchool(index)}
-                  className="text-link-danger"
-                >
-                  Remove this school
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={addSchool}
-          className="text-link-blue"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          Add School
-        </button>
-      </div>
-
-      {/* Action Footer */}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", paddingTop: "1rem", borderTop: "1px solid #F1F5F9" }}>
-        {onClose && (
-          <button type="button" className="light-btn btn-ghost text-slate-700" onClick={onClose}>
-            Cancel
+            ))}
+          </div>
+          <button type="button" onClick={addSchool} className="text-link-blue">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Add School
           </button>
-        )}
-        <button type="submit" className="light-btn btn-blue text-white" disabled={isPending}>
-          {isPending ? 'Creating...' : 'Create Portal'}
-        </button>
-      </div>
-    </form>
+        </div>
+
+        {/* Action Footer */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: '0.75rem',
+            paddingTop: '1rem',
+            borderTop: '1px solid #F1F5F9',
+          }}
+        >
+          {onClose && (
+            <button
+              type="button"
+              className="light-btn btn-ghost text-slate-700"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+          )}
+          <button
+            type="submit"
+            className="light-btn btn-blue text-white"
+            disabled={isPending}
+          >
+            {isPending ? 'Creating...' : 'Create Portal'}
+          </button>
+        </div>
+      </form>
     </>
   );
 }

@@ -1,7 +1,13 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { organiserApplications, portals, schools, memberships, users } from '@/lib/db/schema';
+import {
+  organiserApplications,
+  portals,
+  schools,
+  memberships,
+  users,
+} from '@/lib/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
@@ -10,7 +16,9 @@ import { sendInviteEmail } from '@/lib/email';
 
 export async function submitOrganiserApplication(formData: FormData) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     redirect('/login');
@@ -31,13 +39,15 @@ export async function submitOrganiserApplication(formData: FormData) {
 
   if (uploadError) {
     console.error('Upload Error:', uploadError);
-    return { error: 'Failed to upload PDF application. ' + uploadError.message };
+    return {
+      error: 'Failed to upload PDF application. ' + uploadError.message,
+    };
   }
 
   // Get public URL
-  const { data: { publicUrl } } = supabase.storage
-    .from('applications')
-    .getPublicUrl(fileName);
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from('applications').getPublicUrl(fileName);
 
   // Check if an application already exists
   const existingApp = await db.query.organiserApplications.findFirst({
@@ -45,7 +55,8 @@ export async function submitOrganiserApplication(formData: FormData) {
   });
 
   if (existingApp) {
-    await db.update(organiserApplications)
+    await db
+      .update(organiserApplications)
       .set({
         pdfUrl: publicUrl,
         status: 'pending',
@@ -66,7 +77,9 @@ export async function submitOrganiserApplication(formData: FormData) {
 
 export async function createPortal(formData: FormData) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     redirect('/login');
@@ -90,13 +103,20 @@ export async function createPortal(formData: FormData) {
   const schoolCount = parseInt(formData.get('schoolCount') as string, 10) || 0;
 
   // Parse school entries from form data
-  const schoolEntries: { existingId: string | null; newName: string; teacherEmails: string[] }[] = [];
+  const schoolEntries: {
+    existingId: string | null;
+    newName: string;
+    teacherEmails: string[];
+  }[] = [];
   for (let i = 0; i < schoolCount; i++) {
-    const existingId = (formData.get(`school_existingId_${i}`) as string)?.trim() || null;
-    const newName = (formData.get(`school_newName_${i}`) as string)?.trim() || '';
-    const teacherEmails = formData.getAll(`school_teacherEmails_${i}`)
-      .map(e => (e as string).trim().toLowerCase())
-      .filter(e => e.length > 0 && e.includes('@'));
+    const existingId =
+      (formData.get(`school_existingId_${i}`) as string)?.trim() || null;
+    const newName =
+      (formData.get(`school_newName_${i}`) as string)?.trim() || '';
+    const teacherEmails = formData
+      .getAll(`school_teacherEmails_${i}`)
+      .map((e) => (e as string).trim().toLowerCase())
+      .filter((e) => e.length > 0 && e.includes('@'));
 
     // Must have either an existing school ID or a new name
     if (existingId || newName) {
@@ -105,19 +125,28 @@ export async function createPortal(formData: FormData) {
   }
 
   // Collect all unique teacher emails across all schools for a single lookup
-  const allEmails = [...new Set(schoolEntries.flatMap(e => e.teacherEmails))];
-  const existingUsers = allEmails.length > 0
-    ? await db.select({ id: users.id, email: users.email }).from(users).where(inArray(users.email, allEmails))
-    : [];
-  const existingUserMap = new Map(existingUsers.map(u => [u.email, u.id]));
+  const allEmails = [...new Set(schoolEntries.flatMap((e) => e.teacherEmails))];
+  const existingUsers =
+    allEmails.length > 0
+      ? await db
+          .select({ id: users.id, email: users.email })
+          .from(users)
+          .where(inArray(users.email, allEmails))
+      : [];
+  const existingUserMap = new Map(existingUsers.map((u) => [u.email, u.id]));
 
   // Track invites to send after the transaction
-  const invitesToSend: { email: string; schoolName: string; inviteToken: string }[] = [];
+  const invitesToSend: {
+    email: string;
+    schoolName: string;
+    inviteToken: string;
+  }[] = [];
 
   try {
     await db.transaction(async (tx) => {
       // Create the portal
-      const [newPortal] = await tx.insert(portals)
+      const [newPortal] = await tx
+        .insert(portals)
         .values({
           ownerUserId: user.id,
           name,
@@ -133,11 +162,15 @@ export async function createPortal(formData: FormData) {
         if (entry.existingId) {
           // Use an existing school - look up its name
           schoolId = entry.existingId;
-          const [existingSchool] = await tx.select({ name: schools.name }).from(schools).where(eq(schools.id, entry.existingId));
+          const [existingSchool] = await tx
+            .select({ name: schools.name })
+            .from(schools)
+            .where(eq(schools.id, entry.existingId));
           schoolName = existingSchool?.name ?? entry.newName;
         } else {
           // Create a new school
-          const [newSchool] = await tx.insert(schools)
+          const [newSchool] = await tx
+            .insert(schools)
             .values({
               portalId: newPortal.id,
               name: entry.newName,
@@ -166,13 +199,16 @@ export async function createPortal(formData: FormData) {
               });
             } else {
               // No account yet - create invite and track for email
-              const [membership] = await tx.insert(memberships).values({
-                portalId: newPortal.id,
-                schoolId,
-                role: 'educator',
-                status: 'invited',
-                invitedEmail: email,
-              }).returning();
+              const [membership] = await tx
+                .insert(memberships)
+                .values({
+                  portalId: newPortal.id,
+                  schoolId,
+                  role: 'educator',
+                  status: 'invited',
+                  invitedEmail: email,
+                })
+                .returning();
 
               invitesToSend.push({
                 email,

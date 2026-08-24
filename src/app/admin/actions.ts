@@ -10,9 +10,11 @@ import { redirect } from 'next/navigation';
 
 async function verifyPlatformAdmin() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return false;
-  
+
   const [dbUser] = await db.select().from(users).where(eq(users.id, user.id));
   return dbUser?.isPlatformAdmin === true;
 }
@@ -25,7 +27,8 @@ export async function approveApplication(formData: FormData) {
   const applicationId = formData.get('applicationId') as string;
   if (!applicationId) return;
 
-  await db.update(organiserApplications)
+  await db
+    .update(organiserApplications)
     .set({
       status: 'approved',
       updatedAt: new Date(),
@@ -43,7 +46,8 @@ export async function denyApplication(formData: FormData) {
   const applicationId = formData.get('applicationId') as string;
   if (!applicationId) return;
 
-  await db.update(organiserApplications)
+  await db
+    .update(organiserApplications)
     .set({
       status: 'rejected',
       updatedAt: new Date(),

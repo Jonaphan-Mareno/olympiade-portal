@@ -64,7 +64,11 @@ export default function OrganisationApplicationForm() {
         <button type="submit" className="btn btn-primary">
           Send Application
         </button>
-        <button type="button" className="btn btn-secondary" onClick={() => setIsOpen(false)}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setIsOpen(false)}
+        >
           Cancel
         </button>
       </div>
