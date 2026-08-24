@@ -7,7 +7,7 @@
   --accent-glow: rgba(99, 102, 241, 0.4);
   --text-primary: #ffffff;
   --text-secondary: #a1a1aa;
-  
+
   --primary-color: #6366f1; /* Indigo */
   --primary-hover: #4f46e5;
   --danger-color: #ef4444;
@@ -34,13 +34,26 @@ body {
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
-  background-image: 
-    radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.08), transparent 25%),
-    radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.08), transparent 25%);
+  background-image:
+    radial-gradient(
+      circle at 15% 50%,
+      rgba(99, 102, 241, 0.08),
+      transparent 25%
+    ),
+    radial-gradient(
+      circle at 85% 30%,
+      rgba(139, 92, 246, 0.08),
+      transparent 25%
+    );
 }
 
 /* Typography */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -70,7 +83,9 @@ a:hover {
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: var(--radius-md);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s ease;
 }
 
 .glass-card:hover {
@@ -136,7 +151,11 @@ a:hover {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  background: linear-gradient(
+    135deg,
+    var(--primary-color),
+    var(--primary-hover)
+  );
   color: white;
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
@@ -208,8 +227,13 @@ a:hover {
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-20px) scale(1.05); }
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-20px) scale(1.05);
+  }
 }
 
 /* Form specific */
@@ -252,7 +276,7 @@ a:hover {
 
 /* Custom utilities for the dashboard */
 .btn-brand-blue {
-  background-color: #0066CC;
+  background-color: #0066cc;
   color: white;
   padding: 0.625rem 1.25rem;
   border-radius: 0.5rem;
@@ -266,11 +290,11 @@ a:hover {
   font-size: 1rem;
 }
 .btn-brand-blue:hover {
-  background-color: #004C99;
+  background-color: #004c99;
 }
 
 .text-link-blue {
-  color: #0066CC;
+  color: #0066cc;
   font-weight: 600;
   font-size: 0.875rem;
   background: transparent;
@@ -288,7 +312,7 @@ a:hover {
 }
 
 .text-link-danger {
-  color: #EF4444;
+  color: #ef4444;
   font-weight: 500;
   font-size: 0.75rem;
   background: transparent;
@@ -299,5 +323,5 @@ a:hover {
   font-family: inherit;
 }
 .text-link-danger:hover {
-  color: #B91C1C;
+  color: #b91c1c;
 }

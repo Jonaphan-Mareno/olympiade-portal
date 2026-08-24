@@ -32,7 +32,9 @@ Tables: users, portals, schools, memberships, rounds, submissions, results, orga
 
   const target = tableMap[table];
   if (!target) {
-    console.log(`Unknown table: "${table}". Available: ${Object.keys(tableMap).join(', ')}`);
+    console.log(
+      `Unknown table: "${table}". Available: ${Object.keys(tableMap).join(', ')}`
+    );
     process.exit(1);
   }
 
@@ -48,4 +50,7 @@ Tables: users, portals, schools, memberships, rounds, submissions, results, orga
   await sql.end();
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

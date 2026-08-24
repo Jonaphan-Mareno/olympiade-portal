@@ -15,32 +15,46 @@ export async function login(formData: FormData) {
 
   // Development bypass for admin testing
   if (email === 'admin1@gmail.com' && password === '111111') {
-    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
-    
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
     if (loginError) {
       // User doesn't exist or wrong state, try creating them
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: 'Platform Admin' } }
-      });
+      const { data: authData, error: signUpError } = await supabase.auth.signUp(
+        {
+          email,
+          password,
+          options: { data: { full_name: 'Platform Admin' } },
+        }
+      );
 
       if (!signUpError && authData.user?.id) {
-        await db.insert(users).values({
-          id: authData.user.id,
-          email: email,
-          name: 'Platform Admin',
-          isPlatformAdmin: true,
-        }).onConflictDoNothing();
-        
+        await db
+          .insert(users)
+          .values({
+            id: authData.user.id,
+            email: email,
+            name: 'Platform Admin',
+            isPlatformAdmin: true,
+          })
+          .onConflictDoNothing();
+
         // Ensure they are signed in (in case signUp didn't auto sign in)
         await supabase.auth.signInWithPassword({ email, password });
       } else {
-        return { error: 'Admin bypass failed to create account: ' + signUpError?.message };
+        return {
+          error:
+            'Admin bypass failed to create account: ' + signUpError?.message,
+        };
       }
     }
   } else {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) {
       return { error: error.message };
     }
@@ -85,21 +99,28 @@ export async function signup(formData: FormData) {
   try {
     // 2. Add the user to our public.users table via Drizzle
     const isPlatformAdmin = email === 'admin1@gmail.com';
-    await db.insert(users).values({
-      id: userId,
-      email: email,
-      name: name,
-      isPlatformAdmin: isPlatformAdmin,
-    }).onConflictDoNothing(); // Prevent error if a trigger already created them
+    await db
+      .insert(users)
+      .values({
+        id: userId,
+        email: email,
+        name: name,
+        isPlatformAdmin: isPlatformAdmin,
+      })
+      .onConflictDoNothing(); // Prevent error if a trigger already created them
 
     // 3. Handle Invite Token (Educator/Student Claiming Account)
     if (inviteToken) {
       // Find the membership by token
-      const [invite] = await db.select().from(memberships).where(eq(memberships.inviteToken, inviteToken));
-      
+      const [invite] = await db
+        .select()
+        .from(memberships)
+        .where(eq(memberships.inviteToken, inviteToken));
+
       if (invite) {
         // Claim it
-        await db.update(memberships)
+        await db
+          .update(memberships)
           .set({
             userId: userId,
             status: 'accepted',
@@ -115,10 +136,11 @@ export async function signup(formData: FormData) {
         }
       }
     }
-
   } catch (dbError: any) {
     console.error('Database insertion error:', dbError);
-    return { error: `Account created, but database setup failed: ${dbError.message || dbError}` };
+    return {
+      error: `Account created, but database setup failed: ${dbError.message || dbError}`,
+    };
   }
 
   // Redirect to the appropriate page

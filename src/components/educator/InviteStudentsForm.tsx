@@ -9,7 +9,11 @@ interface InviteStudentsFormProps {
   schoolName: string;
 }
 
-export default function InviteStudentsForm({ portalId, schoolId, schoolName }: InviteStudentsFormProps) {
+export default function InviteStudentsForm({
+  portalId,
+  schoolId,
+  schoolName,
+}: InviteStudentsFormProps) {
   const [emails, setEmails] = useState<string[]>([]);
   const [newEmail, setNewEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -23,12 +27,12 @@ export default function InviteStudentsForm({ portalId, schoolId, schoolName }: I
       setNewEmail('');
       return;
     }
-    setEmails(prev => [...prev, email]);
+    setEmails((prev) => [...prev, email]);
     setNewEmail('');
   }
 
   function removeEmail(index: number) {
-    setEmails(prev => prev.filter((_, i) => i !== index));
+    setEmails((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handleSubmit(formData: FormData) {
@@ -37,31 +41,42 @@ export default function InviteStudentsForm({ portalId, schoolId, schoolName }: I
 
     formData.set('portalId', portalId);
     formData.set('schoolId', schoolId);
-    emails.forEach(email => formData.append('studentEmails', email));
+    emails.forEach((email) => formData.append('studentEmails', email));
 
     startTransition(async () => {
       const result = await inviteStudents(formData);
       if (result?.error) {
         setError(result.error);
       } else {
-        setSuccess(`${result.count} student${result.count !== 1 ? 's' : ''} invited successfully!`);
+        setSuccess(
+          `${result.count} student${result.count !== 1 ? 's' : ''} invited successfully!`
+        );
         setEmails([]);
       }
     });
   }
 
   return (
-    <form action={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      {error && <div className="form-error" style={{ marginBottom: 0 }}>{error}</div>}
+    <form
+      action={handleSubmit}
+      style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
+    >
+      {error && (
+        <div className="form-error" style={{ marginBottom: 0 }}>
+          {error}
+        </div>
+      )}
       {success && (
-        <div style={{
-          background: 'rgba(16, 185, 129, 0.1)',
-          color: 'var(--success-color)',
-          padding: '0.5rem 0.75rem',
-          borderRadius: 'var(--radius-sm)',
-          border: '1px solid rgba(16, 185, 129, 0.2)',
-          fontSize: '0.85rem',
-        }}>
+        <div
+          style={{
+            background: 'rgba(16, 185, 129, 0.1)',
+            color: 'var(--success-color)',
+            padding: '0.5rem 0.75rem',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid rgba(16, 185, 129, 0.2)',
+            fontSize: '0.85rem',
+          }}
+        >
           {success}
         </div>
       )}
@@ -137,9 +152,15 @@ export default function InviteStudentsForm({ portalId, schoolId, schoolName }: I
         type="submit"
         className="btn btn-primary"
         disabled={isPending || emails.length === 0}
-        style={{ fontSize: '0.85rem', padding: '0.5rem 1rem', alignSelf: 'flex-start' }}
+        style={{
+          fontSize: '0.85rem',
+          padding: '0.5rem 1rem',
+          alignSelf: 'flex-start',
+        }}
       >
-        {isPending ? 'Sending invites...' : `Invite ${emails.length} student${emails.length !== 1 ? 's' : ''}`}
+        {isPending
+          ? 'Sending invites...'
+          : `Invite ${emails.length} student${emails.length !== 1 ? 's' : ''}`}
       </button>
     </form>
   );
