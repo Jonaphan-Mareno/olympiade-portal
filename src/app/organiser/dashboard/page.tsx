@@ -5,6 +5,7 @@ import { organiserApplications, portals, schools } from '@/lib/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { submitOrganiserApplication } from '../actions';
 import CreatePortalSection from '@/components/organiser/CreatePortalSection';
+import ApplicationForm from './ApplicationForm';
 
 export default async function OrganiserDashboardPage() {
   const supabase = await createClient();
@@ -62,134 +63,124 @@ export default async function OrganiserDashboardPage() {
       schoolsByPortal.set(school.portalId, list);
     }
     
+    // We need metrics
+    const activeOlympiads = userPortals.length;
+    const totalParticipants = 0; 
+    const pendingApprovals = 0;
+
     return (
-      <div className="glass-panel" style={{ padding: '2rem' }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '1.5rem' }}>Organiser Portal</h1>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
-          Welcome! You are an approved organiser. Here you can manage your Olympiads.
-        </p>
-        
-        <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Your Olympiads</h2>
-        {userPortals.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)' }}>You haven&apos;t created any Olympiads yet.</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {userPortals.map(p => {
-              const portalSchoolList = schoolsByPortal.get(p.id) ?? [];
-              return (
-                <div key={p.id} className="glass-card" style={{ padding: '1.25rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <h3 style={{ fontSize: '1.1rem' }}>{p.name}</h3>
-                    <span style={{
-                      fontSize: '0.75rem',
-                      padding: '0.25rem 0.75rem',
-                      borderRadius: 'var(--radius-sm)',
-                      background: p.status === 'approved' ? 'rgba(16, 185, 129, 0.1)' : p.status === 'rejected' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-                      color: p.status === 'approved' ? 'var(--success-color)' : p.status === 'rejected' ? 'var(--danger-color)' : 'var(--text-secondary)',
-                      border: `1px solid ${p.status === 'approved' ? 'rgba(16, 185, 129, 0.2)' : p.status === 'rejected' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.1)'}`,
-                    }}>
-                      {p.status}
-                    </span>
-                  </div>
-                  {portalSchoolList.length > 0 && (
-                    <div>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
-                        Schools ({portalSchoolList.length})
-                      </span>
-                      <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        {portalSchoolList.map(s => (
-                          <li key={s.id} style={{ fontSize: '0.9rem', color: 'var(--text-primary)', paddingLeft: '0.5rem', borderLeft: '2px solid var(--primary-color)' }}>
-                            {s.name}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+      <div style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', padding: '2rem 1rem' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          
+          {/* Welcome Banner */}
+          <div className="bg-[url('/images/banner.png')] bg-cover bg-center" style={{ 
+            backgroundImage: "url('/images/banner.png')", 
+            backgroundSize: 'cover', 
+            backgroundPosition: 'center', 
+            borderRadius: '1rem', 
+            padding: '3rem 2rem 5rem 2rem', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '1.5rem',
+            marginBottom: '0'
+          }}>
+            {/* Placeholder Profile Picture */}
+            <div className="border-4 border-white/20" style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', border: '4px solid rgba(255, 255, 255, 0.2)' }}>
+              <span style={{ fontSize: '2rem', color: '#0066CC' }}>{user.email?.charAt(0).toUpperCase()}</span>
+            </div>
+            <div>
+              <h1 className="text-white" style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#FFFFFF', margin: 0 }}>
+                Welcome back, {user.user_metadata?.full_name?.split(' ')[0] || 'Organiser'}
+              </h1>
+              <p className="text-slate-100" style={{ color: '#F1F5F9', fontSize: '1.1rem', marginTop: '0.5rem' }}>
+                Here is what's happening with your Olympiads today.
+              </p>
+            </div>
           </div>
-        )}
-        <CreatePortalSection />
+
+
+
+          {/* Action Area (Your Olympiads) */}
+          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '0.75rem', padding: '2rem', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px 0 rgba(0,0,0,0.1)', marginTop: '4rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#0F172A', margin: 0 }}>Your Olympiads</h2>
+              {userPortals.length > 0 && <CreatePortalSection isEmpty={false} />}
+            </div>
+
+            {userPortals.length === 0 ? (
+              <CreatePortalSection isEmpty={true} />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {userPortals.map(p => {
+                  const portalSchoolList = schoolsByPortal.get(p.id) ?? [];
+                  return (
+                    <div key={p.id} style={{ padding: '1.5rem', border: '1px solid #E2E8F0', borderRadius: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1E293B', margin: '0 0 0.25rem 0' }}>{p.name}</h3>
+                        <span style={{ fontSize: '0.85rem', color: '#64748B' }}>
+                          {portalSchoolList.length} Participating Schools
+                        </span>
+                      </div>
+                      <span style={{
+                        fontSize: '0.75rem',
+                        fontWeight: '600',
+                        padding: '0.25rem 0.75rem',
+                        borderRadius: '9999px',
+                        background: p.status === 'approved' ? '#DCFCE7' : p.status === 'rejected' ? '#FEE2E2' : '#F1F5F9',
+                        color: p.status === 'approved' ? '#166534' : p.status === 'rejected' ? '#991B1B' : '#475569',
+                      }}>
+                        {p.status.toUpperCase()}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
     );
   }
 
-  // State 2: Pending
-  if (state === 'pending') {
-    return (
-      <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center' }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>Application Under Review</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>
-          Your application to become an organiser is currently being reviewed by administrators. 
-          Please check back later.
-        </p>
-      </div>
-    );
-  }
+  // Non-approved states (Application flow)
+  const isPending = state === 'pending';
+  const isRejected = state === 'rejected';
 
-  // State 3: Rejected (Cooldown)
-  if (state === 'rejected') {
-    return (
-      <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center' }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '1rem', color: 'var(--danger-color)' }}>Application Denied</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>
-          Unfortunately, your application to become an organiser was denied. 
-          You cannot apply again until <strong>{nextApplyDate?.toLocaleDateString()}</strong>.
-        </p>
-      </div>
-    );
-  }
-
-  // State 1: Temporary (No application or cooldown expired)
   return (
-    <div className="glass-panel" style={{ padding: '2rem' }}>
-      <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>Organiser Application</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
-        To host Olympiads on our platform, you must first be approved by an administrator.
-        Please submit your application below.
-      </p>
-
-      <form action={submitOrganiserApplication as (fd: FormData) => Promise<void>} className="auth-form-container" style={{ width: '100%', maxWidth: '600px', margin: '0 auto', boxShadow: 'none', background: 'transparent' }}>
-        
-        <div style={{ marginBottom: '2rem', padding: '1.5rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '0.75rem', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: 'var(--primary-color)' }}>Application Requirements</h3>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-            Please upload a single PDF document that includes the following information:
-          </p>
-          <ul style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <li><strong>Your Background:</strong> A brief introduction about yourself or your organization.</li>
-            <li><strong>Previous Experience:</strong> Details of any Olympiads or similar competitions you have previously organized.</li>
-            <li><strong>Credibility:</strong> Why you are credible to organize this Olympiad and what resources you bring.</li>
-            <li><strong>Olympiad Proposal:</strong> A brief overview of the Olympiad you intend to host on our platform.</li>
-          </ul>
-        </div>
-
-        <div className="input-group" style={{ position: 'relative' }}>
-          <input 
-            type="file" 
-            name="applicationPdf" 
-            id="applicationPdf" 
-            accept="application/pdf"
-            required 
-            style={{ 
-              width: '100%', 
-              padding: '1rem', 
-              background: 'rgba(255, 255, 255, 0.05)', 
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '0.75rem',
-              color: 'var(--text-primary)'
-            }}
-          />
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-            Please upload your application as a PDF document.
-          </p>
-        </div>
-
-        <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
-          Submit Application
-        </button>
-      </form>
+    <div style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
+      <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '0.75rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', width: '100%', maxWidth: '550px', padding: '2.5rem' }}>
+        {isPending ? (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#0066CC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                <path d="M9 12l2 2 4-4"></path>
+              </svg>
+            </div>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1E293B', marginBottom: '1rem' }}>Application Submitted</h1>
+            <p style={{ color: '#64748B', lineHeight: '1.6' }}>
+              Awaiting Admin Verification. Your documents have been uploaded and are under review.
+            </p>
+          </div>
+        ) : isRejected ? (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+            </div>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#EF4444', marginBottom: '1rem' }}>Application Denied</h1>
+            <p style={{ color: '#64748B', lineHeight: '1.6' }}>
+              Unfortunately, your application to become an organiser was denied. You cannot apply again until <strong>{nextApplyDate?.toLocaleDateString()}</strong>.
+            </p>
+          </div>
+        ) : (
+          <ApplicationForm submitAction={submitOrganiserApplication as (fd: FormData) => Promise<void>} />
+        )}
+      </div>
     </div>
   );
 }
