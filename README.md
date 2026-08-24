@@ -1,21 +1,34 @@
-# Olympiad Portal
+# Olympiad Portal - Getting Started
 
-COMS3011A Project 5 — Next.js (TypeScript) + Drizzle ORM.
+## Project Overview
+The Olympiad Portal is a comprehensive platform designed to facilitate the management and execution of academic olympiads. It provides dedicated interfaces for organizers, educators, and students to streamline registration, test administration, and performance analytics.
 
-## Structure
+## Prerequisites
+Before you begin, ensure you have the following installed on your system:
+- **Node.js**
+- **Git**
 
-- `src/app/` — Next.js App Router, split into (organiser), (educator), (student) route groups + api/
-- `src/domain/` — framework-agnostic business logic (round lifecycle, marking, standings, etc.)
-- `src/lib/` — infra: db, auth, storage, queue, scheduler, logging
-- `src/components/` — shared + per-portal UI
-- `tests/` — domain, api, e2e
+## Local Setup
+To get a local copy of the code up and running, execute the following commands in your terminal:
 
-## Setup
-
+```bash
+git clone https://github.com/your-username/olympiad-portal-repo.git
+cd olympiad-portal-repo
 ```
+
+## Running the Frontend
+To set up and run the Next.js frontend application, execute:
+
+```bash
 npm install
-cp .env.local.example .env.local   # fill in DATABASE_URL
-npm run db:generate
-npm run db:migrate
 npm run dev
+```
+
+## Viewing the Documentation
+Comprehensive technical documentation is available via Docusaurus. To view it locally, run:
+
+```bash
+cd Documentation
+npm install
+npm run start
 ```

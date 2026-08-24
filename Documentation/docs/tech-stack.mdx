@@ -1,5 +1,14 @@
 # Tech Stack
 
+## Core Technologies
+
+- **Next.js (Front-End Only)**: Chosen strictly as our front-end React framework. We leverage its powerful routing and server-side rendering (SSR) to deliver a highly performant and SEO-friendly user interface. To adhere to a non-monolithic architecture, we are not using Next.js API routes for our core business logic.
+- **Tailwind CSS**: Chosen for styling because its utility-first approach allows for rapid, responsive UI development. It ensures a consistent design system and reduces the need to write and maintain custom CSS files.
+- **Framer Motion**: Selected for animations due to its simple, declarative API. It makes it easy to add fluid, performant animations and complex UI transitions to our React components, providing a highly interactive user experience.
+- **Supabase (Database & Auth Only)**: Chosen strictly to host our open-source PostgreSQL database and to manage user Authentication (as relying on established authentication libraries is a strict project requirement). We are not using its auto-generated API endpoints for our core application logic.
+- **Express.js (Node.js)**: Chosen as our lightweight framework to build the decoupled, hand-written REST API required by the project brief. It allows us to keep our entire stack in JavaScript/TypeScript while strictly separating our frontend Next.js application from our backend business logic and Supabase database interactions.
+
+
 ## Code Quality Tooling
 
 We use ESLint and Prettier for code quality and formatting. These tools enforce a consistent style across our multi-developer team and catch syntax regressions early.
