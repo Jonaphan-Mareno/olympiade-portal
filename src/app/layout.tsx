@@ -3,6 +3,9 @@ import './globals.css';
 export const metadata = {
   title: 'Olympiad Portal',
   description: 'Manage and participate in olympiads seamlessly.',
+  icons: {
+    icon: '/images/logo-BIG.jpg',
+  },
 };
 
 export default function RootLayout({

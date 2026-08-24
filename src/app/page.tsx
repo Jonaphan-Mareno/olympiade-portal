@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { login } from '@/app/auth/actions';
 import { SubmitButton } from '@/components/SubmitButton';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +72,12 @@ export default function LoginPage() {
       `}} />
 
       {/* Left Panel */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', padding: '2rem' }}>
+      <motion.div 
+        initial={{ x: '-100vw' }} 
+        animate={{ x: 0 }} 
+        transition={{ duration: 0.5, ease: 'easeInOut' }}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', padding: '2rem' }}
+      >
         
         {/* Form Container */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -124,10 +130,28 @@ export default function LoginPage() {
             </form>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Right Panel */}
-      <div style={{ flex: 1, backgroundColor: '#0066CC', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+      <motion.div 
+        initial={{ x: '100vw' }} 
+        animate={{ x: 0 }} 
+        transition={{ duration: 0.5, ease: 'easeInOut' }}
+        style={{ flex: 1, backgroundColor: '#0066CC', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', position: 'relative' }}
+      >
+        
+        {/* Layered Vertical Wave Divider */}
+        <div style={{ position: 'absolute', top: 0, bottom: 0, left: '-149px', width: '150px', zIndex: 10, pointerEvents: 'none' }}>
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height: '100%', display: 'block' }}>
+            {/* Lightest Back Wave */}
+            <path d="M100,0 C20,25 90,75 30,100 L100,100 L100,0 Z" fill="#0066CC" opacity="0.3" />
+            {/* Mid Layer Wave */}
+            <path d="M100,0 C50,30 70,60 50,100 L100,100 L100,0 Z" fill="#0066CC" opacity="0.6" />
+            {/* Solid Front Wave */}
+            <path d="M100,0 C70,40 90,70 70,100 L100,100 L100,0 Z" fill="#0066CC" />
+          </svg>
+        </div>
+
         <div style={{ maxWidth: '500px', width: '100%', textAlign: 'center', color: '#FFFFFF', display: 'flex', flexDirection: 'column', maxHeight: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'center', width: '100%', marginBottom: '2rem', flexShrink: 1, minHeight: 0 }}>
             <img src="/images/logo-reverted.jpg" alt="Olympia Logo" style={{ maxHeight: '350px', height: '100%', width: 'auto', objectFit: 'contain' }} />
@@ -139,7 +163,7 @@ export default function LoginPage() {
             Seamlessly manage olympiad schedules, distribute papers, and automate marking for educators and students.
           </p>
         </div>
-      </div>
+      </motion.div>
 
     </div>
   );

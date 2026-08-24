@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export function getAuthRedirect(pathname: string, user: { id: string } | null) {
-  const publicPaths = new Set(['/', '/login', '/signup'])
+  const publicPaths = new Set(['/', '/signup'])
   const protectedPrefixes = ['/dashboard', '/student', '/educator', '/organiser', '/results', '/sitting']
 
   if (user && publicPaths.has(pathname)) {
@@ -10,11 +10,11 @@ export function getAuthRedirect(pathname: string, user: { id: string } | null) {
   }
 
   if (!user && protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
-    return '/login'
+    return '/'
   }
 
   if (!user && pathname === '/dashboard') {
-    return '/login'
+    return '/'
   }
 
   return null

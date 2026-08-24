@@ -249,3 +249,55 @@ a:hover {
   font-size: 0.875rem;
   text-align: center;
 }
+
+/* Custom utilities for the dashboard */
+.btn-brand-blue {
+  background-color: #0066CC;
+  color: white;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: background-color 0.2s;
+  font-family: inherit;
+  font-size: 1rem;
+}
+.btn-brand-blue:hover {
+  background-color: #004C99;
+}
+
+.text-link-blue {
+  color: #0066CC;
+  font-weight: 600;
+  font-size: 0.875rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  margin-top: 0.5rem;
+  font-family: inherit;
+}
+.text-link-blue:hover {
+  text-decoration: underline;
+}
+
+.text-link-danger {
+  color: #EF4444;
+  font-weight: 500;
+  font-size: 0.75rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 0.25rem;
+  font-family: inherit;
+}
+.text-link-danger:hover {
+  color: #B91C1C;
+}

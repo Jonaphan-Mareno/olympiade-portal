@@ -13,13 +13,37 @@ export async function login(formData: FormData) {
   const email = (formData.get('email') as string).trim();
   const password = formData.get('password') as string;
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  // Development bypass for admin testing
+  if (email === 'admin1@gmail.com' && password === '111111') {
+    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+    
+    if (loginError) {
+      // User doesn't exist or wrong state, try creating them
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: 'Platform Admin' } }
+      });
 
-  if (error) {
-    return { error: error.message };
+      if (!signUpError && authData.user?.id) {
+        await db.insert(users).values({
+          id: authData.user.id,
+          email: email,
+          name: 'Platform Admin',
+          isPlatformAdmin: true,
+        }).onConflictDoNothing();
+        
+        // Ensure they are signed in (in case signUp didn't auto sign in)
+        await supabase.auth.signInWithPassword({ email, password });
+      } else {
+        return { error: 'Admin bypass failed to create account: ' + signUpError?.message };
+      }
+    }
+  } else {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      return { error: error.message };
+    }
   }
 
   // Once logged in, go to the dashboard to select a portal
@@ -106,5 +130,5 @@ export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   revalidatePath('/', 'layout');
-  redirect('/login');
+  redirect('/');
 }

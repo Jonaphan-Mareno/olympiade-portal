@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { logout } from '@/app/auth/actions';
 import Link from 'next/link';
 import { db } from '@/lib/db';
-import { users, memberships } from '@/lib/db/schema';
+import { users, memberships, organiserApplications } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +18,10 @@ export default async function DashboardPage() {
 
   const [dbUser] = await db.select().from(users).where(eq(users.id, user.id));
   const isAdmin = dbUser?.isPlatformAdmin === true;
+
+  if (isAdmin) {
+    redirect('/admin/dashboard');
+  }
 
   // Check if user has educator memberships
   const educatorMemberships = await db
@@ -38,6 +42,18 @@ export default async function DashboardPage() {
       eq(memberships.role, 'student'),
     ));
   const isStudent = studentMemberships.length > 0;
+
+  // Check if user is an unverified organiser
+  const [application] = await db
+    .select()
+    .from(organiserApplications)
+    .where(eq(organiserApplications.userId, user.id));
+  
+  const hasOtherRoles = isAdmin || isEducator || isStudent;
+  
+  if (!hasOtherRoles) {
+    redirect('/organiser/dashboard');
+  }
 
   return (
     <div className="container" style={{ paddingTop: '4rem' }}>
