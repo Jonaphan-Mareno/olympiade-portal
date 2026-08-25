@@ -6,6 +6,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { submitOrganiserApplication } from '../actions';
 import CreatePortalSection from '@/components/organiser/CreatePortalSection';
 import ApplicationForm from './ApplicationForm';
+import Link from 'next/link';
 
 export default async function OrganiserDashboardPage() {
   const supabase = await createClient();
@@ -195,55 +196,45 @@ export default async function OrganiserDashboardPage() {
                 {userPortals.map((p) => {
                   const portalSchoolList = schoolsByPortal.get(p.id) ?? [];
                   return (
-                    <div
+                    <Link 
+                      href={`/organiser/olympiads/${p.id}`} 
                       key={p.id}
-                      style={{
-                        padding: '1.5rem',
-                        border: '1px solid #E2E8F0',
-                        borderRadius: '0.5rem',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
+                      style={{ textDecoration: 'none' }}
                     >
-                      <div>
-                        <h3
-                          style={{
-                            fontSize: '1.25rem',
-                            fontWeight: '600',
-                            color: '#1E293B',
-                            margin: '0 0 0.25rem 0',
-                          }}
-                        >
-                          {p.name}
-                        </h3>
-                        <span style={{ fontSize: '0.85rem', color: '#64748B' }}>
-                          {portalSchoolList.length} Participating Schools
-                        </span>
-                      </div>
-                      <span
+                      <div
+                        className="hover:border-blue-300 hover:shadow-md transition-all duration-200 bg-white"
                         style={{
-                          fontSize: '0.75rem',
-                          fontWeight: '600',
-                          padding: '0.25rem 0.75rem',
-                          borderRadius: '9999px',
-                          background:
-                            p.status === 'approved'
-                              ? '#DCFCE7'
-                              : p.status === 'rejected'
-                                ? '#FEE2E2'
-                                : '#F1F5F9',
-                          color:
-                            p.status === 'approved'
-                              ? '#166534'
-                              : p.status === 'rejected'
-                                ? '#991B1B'
-                                : '#475569',
+                          padding: '1.5rem',
+                          border: '1px solid #E2E8F0',
+                          borderRadius: '0.5rem',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          cursor: 'pointer', // Adds a pointer finger on hover
                         }}
                       >
-                        {p.status.toUpperCase()}
-                      </span>
-                    </div>
+                        <div>
+                          <h3 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1E293B', margin: '0 0 0.25rem 0' }}>
+                            {p.name}
+                          </h3>
+                          <span style={{ fontSize: '0.85rem', color: '#64748B' }}>
+                            {portalSchoolList.length} Participating Schools
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            padding: '0.25rem 0.75rem',
+                            borderRadius: '9999px',
+                            background: p.status === 'approved' ? '#DCFCE7' : p.status === 'rejected' ? '#FEE2E2' : '#F1F5F9',
+                            color: p.status === 'approved' ? '#166534' : p.status === 'rejected' ? '#991B1B' : '#475569',
+                          }}
+                        >
+                          {p.status.toUpperCase()}
+                        </span>
+                      </div>
+                    </Link>
                   );
                 })}
               </div>
