@@ -1,0 +1,36 @@
+---
+sidebar_position: 1
+---
+
+# Development Plan
+
+## Overview
+While our System Design outlines our architecture and our Roadmap dictates our timeline, this Development Plan defines the engineering strategies, risk management, and testing protocols our team will utilize to safely deliver the Olympiad Portal.
+
+## 1. Environment Strategy
+To ensure code stability and protect the main branch, we utilize a strict multi-environment strategy:
+* **Local Environment:** Developers run the Next.js frontend and Drizzle ORM locally. This environment points to a separate, isolated Supabase development project to ensure test data does not pollute production.
+* **Staging Environment (dev branch):** All completed features are merged here via Pull Requests. This environment acts as our integration testing ground where we run QA checks before a sprint release.
+* **Production Environment (main branch):** The highly restricted, live version of the portal. Code is only pushed here at the end of a sprint after passing all CI/CD pipelines and peer reviews.
+
+## 2. Testing & Quality Assurance Plan
+We are implementing a layered testing approach to ensure the integrity of the automated marking engine and user data:
+* **Linting & Formatting:** Enforced automatically via ESLint and Prettier on every Git commit to maintain a unified codebase.
+* **Manual QA & Peer Review:** No code is merged into `dev` without a secondary team member reviewing the Pull Request for logic errors and UI consistency.
+* **Component Testing:** Core Next.js UI components (especially the testing interface) will undergo isolated testing to ensure state is maintained during browser refreshes.
+
+## 3. Deployment & CI/CD Strategy
+We rely on an automated pipeline to handle our delivery process, minimizing human error:
+1. A developer pushes code to their feature branch and opens a Pull Request.
+2. **Gitea Actions (CI)** intercepts the PR, automatically installing dependencies and running build tests.
+3. If the pipeline fails, the PR is blocked from merging.
+4. If successful, and approved by a peer, the code is merged into `dev` (and eventually `main` for release).
+
+## 4. Risk Management & Mitigation
+We have identified the following core technical risks and our planned mitigations:
+* **Risk: Database Connection Failures during a live Olympiad.**
+  * *Mitigation:* The frontend assessment interface is designed to cache answers locally in the browser's session storage. If the connection drops, the answers are preserved and automatically re-synced to the server once the connection is restored.
+* **Risk: Scope Creep and Deadline Misses.**
+  * *Mitigation:* Strict adherence to our Agile Scrum methodology. Any feature not critical to the core assessment workflow is flagged as a "Stretch Goal" (e.g., dynamic question banks) and deferred to Sprint 3 to protect Milestone deadlines.
+* **Risk: Monolithic Entanglement.**
+  * *Mitigation:* Utilizing Domain-Driven Design (DDD). We strictly police our Pull Requests to ensure UI components never directly import Drizzle ORM schemas, maintaining our logical decoupling.

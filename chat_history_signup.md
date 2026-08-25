@@ -721,7 +721,6 @@ Completed At: 2026-08-16T15:15:11Z
     			The command completed successfully.
     			Output:
 
-
 added 1 package, and audited 215 packages in 3s
 
 44 packages are looking for funding

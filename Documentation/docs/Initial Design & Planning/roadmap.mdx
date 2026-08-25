@@ -1,0 +1,27 @@
+# Development Roadmap
+
+## Roadmap Overview
+
+The Olympiad Portal follows a structured, three-phase Agile delivery model. The progression transitions from foundational Next.js scaffolding and Supabase authentication to a logically decoupled domain-driven architecture, culminating in an advanced hybrid-assessment engine.
+
+## Sprint 1: Foundation, MVP & Core Workflows (Completed)
+
+- **Infrastructure & CI/CD:** Initialized the full-stack Next.js repository with Drizzle ORM, automated ESLint, and Prettier quality-control pipelines.
+- **Design System:** Finalized the `Inter` typography, `#2563EB` branding, and interactive UI component library.
+- **Role Management & Onboarding:** Implemented complete access control and invite/claim workflows for Organizers, Educators, and Students (US-01 to US-05, US-09 to US-14).
+- **Portal & Round Setup:** Built out the functionality for organizers to schedule rounds and upload question papers/memos (US-06 to US-08).
+- **Documentation:** Deployed the Docusaurus site detailing our logically decoupled architecture and agile methodology.
+
+## Sprint 2: Execution & Hybrid Assessment (Upcoming)
+
+- **Live Online Sittings:** Building the secure testing interface featuring student-specific timers, automated state-saving during execution, and connection-resumption logic.
+- **Hybrid Marking Engine:** Developing Next.js Server Actions to automatically grade multiple-choice submissions while queueing non-MCQ submissions for human marking and moderation passes.
+- **Round Progression:** Implementing qualifying thresholds to automatically carry forward successful entrants to subsequent rounds.
+- **Analytics & Standings:** Publishing real-time standings per school and per entrant, accessible via role-specific dashboards.
+
+## Sprint 3: System Integrity & Advanced Features (Future)
+
+- **Event-Driven Automations:** Building configurable trigger/action rules for automated school notifications (round reminders, result releases) with pre-live testing capabilities.
+- **Concurrency & Time Integrity (Advanced):** Enforcing strict server-side clock evaluation for all deadlines, mitigating race conditions for last-second submissions, and ensuring idempotent submission recording.
+- **Dynamic Assessments (Stretch Goal):** Implementing reusable question banks, variant paper generation, and dynamic difficulty calculations based on entrant performance.
+- **Multi-Tenancy & Auditing (Stretch Goal):** Expanding the architecture to support concurrent, multi-timezone Olympiads under a single organizer, backed by comprehensive system-action event logging.
