@@ -1,32 +1,27 @@
----
-sidebar_position: 2
----
-
 # Development Roadmap
 
 ## Roadmap Overview
 
-The Olympiad Portal project is broken down into three main phases (Sprints) to incrementally deliver value to the client, ensuring a structured progression from foundational infrastructure to advanced features.
+The Olympiad Portal follows a structured, three-phase Agile delivery model. The progression transitions from foundational Next.js scaffolding and Supabase authentication to a logically decoupled domain-driven architecture, culminating in an advanced hybrid-assessment engine.
 
-## Sprint 1: Foundation & MVP (Current)
+## Sprint 1: Foundation, MVP & Core Workflows (Completed)
 
-This initial sprint focused on establishing the groundwork for the project:
-- **Repository Infrastructure:** Setting up the codebase structure and foundational configuration.
-- **CI/CD Setup:** Implementing continuous integration and deployment pipelines.
-- **UI/UX Design Systems:** Creating the core visual language and reusable component library.
-- **Core Flows:** Building the Authentication and Organizer onboarding flows to secure the application and allow initial user registration.
+- **Infrastructure & CI/CD:** Initialized the full-stack Next.js repository with Drizzle ORM, automated ESLint, and Prettier quality-control pipelines.
+- **Design System:** Finalized the `Inter` typography, `#2563EB` branding, and interactive UI component library.
+- **Role Management & Onboarding:** Implemented complete access control and invite/claim workflows for Organizers, Educators, and Students (US-01 to US-05, US-09 to US-14).
+- **Portal & Round Setup:** Built out the functionality for organizers to schedule rounds and upload question papers/memos (US-06 to US-08).
+- **Documentation:** Deployed the Docusaurus site detailing our logically decoupled architecture and agile methodology.
 
-## Sprint 2: Core Application Logic (Upcoming)
+## Sprint 2: Execution & Hybrid Assessment (Upcoming)
 
-The next focus is building out the decoupled backend and connecting our frontend interfaces:
-- **Decoupled API:** Developing the hand-written Express.js API to handle all business logic.
-- **Database Integration:** Connecting the frontend forms to the PostgreSQL database for persistent data storage.
-- **Educator Dashboard:** Implementing the dashboard for educators to access and download past papers.
-- **Olympiad Management:** Building the "Create Olympiad" data mutations to allow organizers to manage events.
+- **Live Online Sittings:** Building the secure testing interface featuring student-specific timers, automated state-saving during execution, and connection-resumption logic.
+- **Hybrid Marking Engine:** Developing Next.js Server Actions to automatically grade multiple-choice submissions while queueing non-MCQ submissions for human marking and moderation passes.
+- **Round Progression:** Implementing qualifying thresholds to automatically carry forward successful entrants to subsequent rounds.
+- **Analytics & Standings:** Publishing real-time standings per school and per entrant, accessible via role-specific dashboards.
 
-## Sprint 3: Advanced Features & Polish (Future)
+## Sprint 3: System Integrity & Advanced Features (Future)
 
-The final sprint will focus on advanced functionality and system readiness:
-- **Automated Marking:** Implementing automated multiple-choice marking for Olympiad submissions.
-- **Analytics:** Developing school leaderboard analytics to track and display performance.
-- **Final Polish:** Conducting final system testing, bug fixing, and optimization before the final project hand-in.
+- **Event-Driven Automations:** Building configurable trigger/action rules for automated school notifications (round reminders, result releases) with pre-live testing capabilities.
+- **Concurrency & Time Integrity (Advanced):** Enforcing strict server-side clock evaluation for all deadlines, mitigating race conditions for last-second submissions, and ensuring idempotent submission recording.
+- **Dynamic Assessments (Stretch Goal):** Implementing reusable question banks, variant paper generation, and dynamic difficulty calculations based on entrant performance.
+- **Multi-Tenancy & Auditing (Stretch Goal):** Expanding the architecture to support concurrent, multi-timezone Olympiads under a single organizer, backed by comprehensive system-action event logging.
