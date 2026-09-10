@@ -3,7 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import SignOutButton from '@/app/organiser/SignOutButton';
 
-export default function StudentLayout({ children }: { children: ReactNode }) {
+export default function EducatorLayout({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
@@ -27,7 +27,7 @@ export default function StudentLayout({ children }: { children: ReactNode }) {
         }}
       >
         <Link
-          href="/results"
+          href="/educator/dashboard"
           style={{
             textDecoration: 'none',
             display: 'flex',

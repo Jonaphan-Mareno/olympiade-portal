@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { memberships, portals, schools } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
-import { logout } from '@/app/auth/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,35 +44,37 @@ export default async function ResultsPage() {
   const portalMap = new Map(portalRows.map((p) => [p.id, p]));
   const schoolMap = new Map(schoolRows.map((s) => [s.id, s]));
 
+  const displayName = user.user_metadata?.full_name || user.email;
+  const firstName = displayName?.split(' ')[0] || 'Student';
+
   return (
-    <div className="container" style={{ paddingTop: '4rem' }}>
-      <div className="glass-panel" style={{ padding: '2rem' }}>
-        <div
+    <div
+      style={{
+        minHeight: '100vh',
+        backgroundColor: '#F8FAFC',
+        padding: '2rem 1rem',
+      }}
+    >
+      <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+        <h1
           style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
+            fontSize: '2.25rem',
+            fontWeight: 'bold',
+            color: '#0F172A',
+            marginBottom: '0.5rem',
+          }}
+        >
+          Student Dashboard
+        </h1>
+        <p
+          style={{
+            fontSize: '1.1rem',
+            color: '#64748B',
             marginBottom: '2rem',
           }}
         >
-          <div>
-            <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>
-              Student Dashboard
-            </h1>
-            <p style={{ color: 'var(--text-secondary)' }}>
-              Welcome, {user.email}
-            </p>
-          </div>
-          <form action={logout}>
-            <button
-              className="btn btn-secondary"
-              type="submit"
-              style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
-            >
-              Sign Out
-            </button>
-          </form>
-        </div>
+          Welcome, {firstName}
+        </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {studentMemberships.map((m) => {
@@ -82,8 +83,13 @@ export default async function ResultsPage() {
             return (
               <div
                 key={m.id}
-                className="glass-card"
-                style={{ padding: '1.25rem' }}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '0.75rem',
+                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                  padding: '1.25rem',
+                }}
               >
                 <div
                   style={{
@@ -93,23 +99,23 @@ export default async function ResultsPage() {
                     marginBottom: '0.5rem',
                   }}
                 >
-                  <h3 style={{ fontSize: '1.1rem' }}>
+                  <h3
+                    style={{
+                      fontSize: '1.1rem',
+                      fontWeight: '600',
+                      color: '#1E293B',
+                    }}
+                  >
                     {portal?.name ?? 'Portal'}
                   </h3>
                   <span
                     style={{
                       fontSize: '0.75rem',
+                      fontWeight: '600',
                       padding: '0.25rem 0.75rem',
-                      borderRadius: 'var(--radius-sm)',
-                      background:
-                        m.status === 'accepted'
-                          ? 'rgba(16, 185, 129, 0.1)'
-                          : 'rgba(255, 255, 255, 0.05)',
-                      color:
-                        m.status === 'accepted'
-                          ? 'var(--success-color)'
-                          : 'var(--text-secondary)',
-                      border: `1px solid ${m.status === 'accepted' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.1)'}`,
+                      borderRadius: '9999px',
+                      background: m.status === 'accepted' ? '#DCFCE7' : '#F1F5F9',
+                      color: m.status === 'accepted' ? '#166534' : '#475569',
                     }}
                   >
                     {m.status}
@@ -120,8 +126,8 @@ export default async function ResultsPage() {
                     style={{
                       fontSize: '0.9rem',
                       paddingLeft: '0.75rem',
-                      borderLeft: '2px solid var(--primary-color)',
-                      color: 'var(--text-primary)',
+                      borderLeft: '2px solid #0066CC',
+                      color: '#475569',
                     }}
                   >
                     {school.name}
@@ -134,7 +140,7 @@ export default async function ResultsPage() {
 
         <p
           style={{
-            color: 'var(--text-secondary)',
+            color: '#64748B',
             marginTop: '2rem',
             fontSize: '0.9rem',
           }}

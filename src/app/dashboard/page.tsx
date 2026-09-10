@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { logout } from '@/app/auth/actions';
 import Link from 'next/link';
+import Image from 'next/image';
+import SignOutButton from '@/app/organiser/SignOutButton';
 import { db } from '@/lib/db';
 import { users, memberships, organiserApplications } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -56,175 +57,213 @@ export default async function DashboardPage() {
     redirect('/organiser/dashboard');
   }
 
+  const displayName =
+    dbUser?.name || user.user_metadata?.full_name || user.email;
+  const firstName = displayName?.split(' ')[0] || 'User';
+
+  const cardLinkStyle = {
+    display: 'inline-block',
+    backgroundColor: '#0066CC',
+    color: '#FFFFFF',
+    border: 'none',
+    borderRadius: '0.375rem',
+    padding: '0.5rem 1rem',
+    fontSize: '0.875rem',
+    fontWeight: '500',
+    textDecoration: 'none',
+    cursor: 'pointer',
+  } as const;
+
   return (
-    <div className="container" style={{ paddingTop: '4rem' }}>
-      <div className="glass-panel" style={{ padding: '2rem' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#F8FAFC',
+      }}
+    >
+      <header
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderBottom: '1px solid #E2E8F0',
+          padding: '1rem 2rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          position: 'sticky',
+          top: 0,
+          zIndex: 50,
+        }}
+      >
         <div
           style={{
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            marginBottom: '2rem',
+            alignItems: 'center',
+            gap: '0.5rem',
           }}
         >
-          <div>
-            <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>
-              Dashboard
-            </h1>
-            <p style={{ color: 'var(--text-secondary)' }}>
-              Welcome back, {user.email}!
-            </p>
-          </div>
-          <form action={logout}>
-            <button
-              className="btn btn-secondary"
-              type="submit"
-              style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
-            >
-              Sign Out
-            </button>
-          </form>
+          <Image
+            src="/images/logo-BIG-v2.jpg"
+            alt="Olympia Logo"
+            width={32}
+            height={32}
+            style={{ objectFit: 'contain' }}
+          />
+          <span
+            style={{
+              color: '#0066CC',
+              fontWeight: 'bold',
+              fontSize: '1.25rem',
+            }}
+          >
+            Olympia
+          </span>
         </div>
 
+        <SignOutButton />
+      </header>
+      <main style={{ flex: 1 }}>
         <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-            gap: '1.5rem',
+            padding: '3rem 1rem',
           }}
         >
-          {isAdmin && (
-            <div
-              className="glass-card"
+          <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+            <h1
               style={{
-                padding: '1.5rem',
-                border: '1px solid var(--primary-color)',
-              }}
-            >
-              <h2
-                style={{
-                  fontSize: '1.25rem',
-                  marginBottom: '0.5rem',
-                  color: 'var(--primary-color)',
-                }}
-              >
-                Admin View
-              </h2>
-              <p
-                style={{
-                  color: 'var(--text-secondary)',
-                  fontSize: '0.9rem',
-                  marginBottom: '1rem',
-                }}
-              >
-                Review and approve or deny Organiser applications.
-              </p>
-              <Link
-                href="/admin/dashboard"
-                className="btn btn-primary"
-                style={{ display: 'inline-block' }}
-              >
-                Go to Admin Portal
-              </Link>
-            </div>
-          )}
-
-          {isEducator && (
-            <div
-              className="glass-card"
-              style={{
-                padding: '1.5rem',
-                border: '1px solid var(--success-color)',
-              }}
-            >
-              <h2
-                style={{
-                  fontSize: '1.25rem',
-                  marginBottom: '0.5rem',
-                  color: 'var(--success-color)',
-                }}
-              >
-                Educator View
-              </h2>
-              <p
-                style={{
-                  color: 'var(--text-secondary)',
-                  fontSize: '0.9rem',
-                  marginBottom: '1rem',
-                }}
-              >
-                Manage your classes, view submissions, and track student
-                progress.
-              </p>
-              <Link
-                href="/educator/dashboard"
-                className="btn btn-primary"
-                style={{ display: 'inline-block' }}
-              >
-                Go to Educator Portal
-              </Link>
-            </div>
-          )}
-
-          {isStudent && (
-            <div className="glass-card" style={{ padding: '1.5rem' }}>
-              <h2
-                style={{
-                  fontSize: '1.25rem',
-                  marginBottom: '0.5rem',
-                  color: 'var(--text-primary)',
-                }}
-              >
-                Student View
-              </h2>
-              <p
-                style={{
-                  color: 'var(--text-secondary)',
-                  fontSize: '0.9rem',
-                  marginBottom: '1rem',
-                }}
-              >
-                View your results, submissions, and upcoming rounds.
-              </p>
-              <Link
-                href="/results"
-                className="btn btn-secondary"
-                style={{ display: 'inline-block' }}
-              >
-                Go to Results
-              </Link>
-            </div>
-          )}
-
-          <div className="glass-card" style={{ padding: '1.5rem' }}>
-            <h2
-              style={{
-                fontSize: '1.25rem',
+                fontSize: '2.25rem',
+                fontWeight: 'bold',
+                color: '#0F172A',
                 marginBottom: '0.5rem',
-                color: 'var(--primary-color)',
               }}
             >
-              Organiser View
-            </h2>
+              Dashboard
+            </h1>
             <p
               style={{
-                color: 'var(--text-secondary)',
-                fontSize: '0.9rem',
-                marginBottom: '1rem',
+                fontSize: '1.1rem',
+                color: '#64748B',
+                marginBottom: '2rem',
               }}
             >
-              Manage your Olympiads, create rounds, and view applications.
+              Welcome back, {firstName}!
             </p>
-            <Link
-              href="/organiser/dashboard"
-              className="btn btn-secondary"
-              style={{ display: 'inline-block' }}
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                gap: '1.5rem',
+              }}
             >
-              Go to Organiser Portal
-            </Link>
+              {isEducator && (
+                <div
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '0.75rem',
+                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+                    padding: '1.5rem',
+                  }}
+                >
+                  <h2
+                    style={{
+                      fontSize: '1.25rem',
+                      fontWeight: '600',
+                      color: '#1E293B',
+                      marginBottom: '0.5rem',
+                    }}
+                  >
+                    Educator View
+                  </h2>
+                  <p
+                    style={{
+                      color: '#64748B',
+                      fontSize: '0.9rem',
+                      marginBottom: '1rem',
+                    }}
+                  >
+                    Manage your classes, view submissions, and track student
+                    progress.
+                  </p>
+                  <Link href="/educator/dashboard" style={cardLinkStyle}>
+                    Go to Educator Portal
+                  </Link>
+                </div>
+              )}
+
+              {isStudent && (
+                <div
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '0.75rem',
+                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+                    padding: '1.5rem',
+                  }}
+                >
+                  <h2
+                    style={{
+                      fontSize: '1.25rem',
+                      fontWeight: '600',
+                      color: '#1E293B',
+                      marginBottom: '0.5rem',
+                    }}
+                  >
+                    Student View
+                  </h2>
+                  <p
+                    style={{
+                      color: '#64748B',
+                      fontSize: '0.9rem',
+                      marginBottom: '1rem',
+                    }}
+                  >
+                    View your results, submissions, and upcoming rounds.
+                  </p>
+                  <Link href="/results" style={cardLinkStyle}>
+                    Go to Results
+                  </Link>
+                </div>
+              )}
+
+              <div
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '0.75rem',
+                  boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+                  padding: '1.5rem',
+                }}
+              >
+                <h2
+                  style={{
+                    fontSize: '1.25rem',
+                    fontWeight: '600',
+                    color: '#1E293B',
+                    marginBottom: '0.5rem',
+                  }}
+                >
+                  Organiser View
+                </h2>
+                <p
+                  style={{
+                    color: '#64748B',
+                    fontSize: '0.9rem',
+                    marginBottom: '1rem',
+                  }}
+                >
+                  Manage your Olympiads, create rounds, and view applications.
+                </p>
+                <Link href="/organiser/dashboard" style={cardLinkStyle}>
+                  Go to Organiser Portal
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
