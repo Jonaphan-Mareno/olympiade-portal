@@ -55,7 +55,9 @@ export const schools = pgTable('schools', {
 
 export const portals = pgTable('portals', {
   id: uuid('id').primaryKey().defaultRandom(),
-  ownerUserId: uuid('owner_user_id').references(() => users.id),
+  // SET NULL so deleting a user doesn't destroy portals other people depend on
+  ownerUserId: uuid('owner_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
   name: text('name').notNull(),
   status: text('status', {
     enum: ['pending', 'approved', 'rejected'],
@@ -67,7 +69,8 @@ export const memberships = pgTable(
   'memberships',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id').references(() => users.id), // Nullable until account is claimed
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' }), // Nullable until account is claimed; removed with the user
     portalId: uuid('portal_id')
       .references(() => portals.id, { onDelete: 'cascade' })
       .notNull(),

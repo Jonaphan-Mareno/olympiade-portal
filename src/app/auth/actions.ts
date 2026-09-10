@@ -60,6 +60,29 @@ export async function login(formData: FormData) {
     }
   }
 
+  // Credentials may still exist in Supabase Auth even though the account was
+  // deleted from the app (e.g. its public.users row was removed via Table
+  // Editor). Block these "ghost" accounts instead of letting them sign in and
+  // land in the organiser portal.
+  const {
+    data: { user: authedUser },
+  } = await supabase.auth.getUser();
+
+  if (authedUser) {
+    const [profile] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, authedUser.id));
+
+    if (!profile) {
+      await supabase.auth.signOut();
+      return {
+        error:
+          'This account no longer exists. Please contact the administrator if you believe this is a mistake.',
+      };
+    }
+  }
+
   // Once logged in, go to the dashboard to select a portal
   revalidatePath('/', 'layout');
   redirect('/dashboard');
