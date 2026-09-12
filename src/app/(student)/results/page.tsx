@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { memberships, portals, schools } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,7 +82,8 @@ export default async function ResultsPage() {
             const portal = portalMap.get(m.portalId);
             const school = m.schoolId ? schoolMap.get(m.schoolId) : null;
             return (
-              <div
+              <Link
+                href={`/results/${m.portalId}`}
                 key={m.id}
                 style={{
                   backgroundColor: '#FFFFFF',
@@ -89,6 +91,10 @@ export default async function ResultsPage() {
                   borderRadius: '0.75rem',
                   boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                   padding: '1.25rem',
+                  textDecoration: 'none',
+                  display: 'block',
+                  transition: 'all 0.2s',
+                  color: 'inherit'
                 }}
               >
                 <div
@@ -133,20 +139,10 @@ export default async function ResultsPage() {
                     {school.name}
                   </div>
                 )}
-              </div>
+              </Link>
             );
           })}
         </div>
-
-        <p
-          style={{
-            color: '#64748B',
-            marginTop: '2rem',
-            fontSize: '0.9rem',
-          }}
-        >
-          Results and submissions will appear here once rounds are available.
-        </p>
       </div>
     </div>
   );
