@@ -2,11 +2,12 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
-import { rounds, questionPapers, questions } from '@/lib/db/schema';
+import { rounds, questions, questionPapers, examSittings } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 
-export async function createRound(formData: FormData) {
+export async function updateRound(formData: FormData) {
   const supabase = await createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
@@ -14,58 +15,45 @@ export async function createRound(formData: FormData) {
 
   // Extract Form Data
   const portalId = formData.get('portalId') as string;
+  const roundId = formData.get('roundId') as string;
   const name = formData.get('name') as string;
   const orderIndex = parseInt(formData.get('orderIndex') as string, 10);
   const opensAt = formData.get('opensAt') as string;
   const closesAt = formData.get('closesAt') as string;
   const deliveryMethod = formData.get('deliveryMethod') as 'paper' | 'online';
 
-  // Insert the Round
-  const [newRound] = await db.insert(rounds).values({
-    portalId,
+  // Update the Round
+  await db.update(rounds).set({
     name,
     orderIndex,
-    deliveryMethod,
     opensAt: new Date(opensAt),
     closesAt: new Date(closesAt),
-  }).returning({ id: rounds.id });
+  }).where(eq(rounds.id, roundId));
 
-  if (!newRound) throw new Error('Failed to create round');
-
-  if (deliveryMethod === 'paper') {
-    const questionPaperFile = formData.get('questionPaper') as File;
-    const answerKeyFile = formData.get('answerKey') as File; // Now it's a PDF memo
-
-    // Upload Question Paper PDF
-    const fileExtension = questionPaperFile.name.split('.').pop();
-    const uniqueFileName = `papers/${crypto.randomUUID()}.${fileExtension}`;
+  if (deliveryMethod === 'online') {
+    // Check if any student has started the exam
+    const paper = await db.select().from(questionPapers).where(eq(questionPapers.roundId, roundId)).limit(1);
     
-    const { error: uploadError } = await supabase.storage
-      .from('round-documents')
-      .upload(uniqueFileName, questionPaperFile, { contentType: 'application/pdf' });
-      
-    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-    
-    const { data: publicUrlData } = supabase.storage
-      .from('round-documents')
-      .getPublicUrl(uniqueFileName);
+    let hasLiveSittings = false;
+    if (paper && paper.length > 0) {
+      const sittings = await db.select().from(examSittings).where(eq(examSittings.questionPaperId, paper[0].id)).limit(1);
+      hasLiveSittings = sittings.length > 0;
+    }
 
-    // Upload Answer Key Memo PDF (skipping explicit storage code for brevity, will store the url if needed, for now just inserting the paper)
-    // Actually, I'll reuse questionPapers logic here
-    await db.insert(questionPapers).values({
-      roundId: newRound.id,
-      fileUrl: publicUrlData.publicUrl,
-      answerKeyJson: null, // no longer JSON
-      isMultipleChoice: false, 
-    });
-  } else {
-    // Online Test Delivery
+    if (hasLiveSittings) {
+      throw new Error('This round cannot be edited because students have already begun their attempts.');
+    }
+
     const questionsDataStr = formData.get('questionsData') as string;
     const questionsArray = JSON.parse(questionsDataStr || '[]');
     
+    // Delete existing questions
+    await db.delete(questions).where(eq(questions.roundId, roundId));
+
+    // Re-insert new questions
     if (questionsArray.length > 0) {
       const inserts = await Promise.all(questionsArray.map(async (q: any) => {
-        let imageUrl: string | null = null;
+        let imageUrl: string | null = q.imageUrl || null;
         const imageFile = formData.get(`image_${q.id}`) as File | null;
         
         if (imageFile && imageFile.size > 0) {
@@ -87,7 +75,7 @@ export async function createRound(formData: FormData) {
         }
         
         return {
-          roundId: newRound.id,
+          roundId: roundId,
           questionType: q.type,
           prompt: q.prompt,
           imageUrl,
@@ -96,7 +84,7 @@ export async function createRound(formData: FormData) {
           correctAnswer: q.correctAnswer || null,
         };
       }));
-      
+
       await db.insert(questions).values(inserts);
     }
   }

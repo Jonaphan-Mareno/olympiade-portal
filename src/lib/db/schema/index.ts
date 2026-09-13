@@ -97,6 +97,7 @@ export const rounds = pgTable('rounds', {
     .notNull(),
   name: text('name').notNull(),
   orderIndex: integer('order_index').notNull(),
+  deliveryMethod: text('delivery_method', { enum: ['online', 'paper'] }).default('paper').notNull(),
   opensAt: timestamp('opens_at', { withTimezone: true }).notNull(),
   closesAt: timestamp('closes_at', { withTimezone: true }).notNull(),
   qualifyingThreshold: numeric('qualifying_threshold'),
@@ -110,6 +111,7 @@ export const questionPapers = pgTable('question_papers', {
   fileUrl: text('file_url'),
   isMultipleChoice: boolean('is_multiple_choice').default(false),
   answerKeyJson: jsonb('answer_key_json'),
+  durationMinutes: integer('duration_minutes').default(60),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
@@ -147,3 +149,50 @@ export const results = pgTable('results', {
     enum: ['auto_marked', 'queued_for_marker', 'moderated', 'remark_requested'],
   }),
 });
+
+export const examSittings = pgTable('exam_sittings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  studentMembershipId: uuid('student_membership_id')
+    .references(() => memberships.id, { onDelete: 'cascade' })
+    .notNull(),
+  questionPaperId: uuid('question_paper_id')
+    .references(() => questionPapers.id, { onDelete: 'cascade' })
+    .notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  endedAt: timestamp('ended_at', { withTimezone: true }),
+  status: text('status', { enum: ['active', 'submitted', 'abandoned'] })
+    .default('active')
+    .notNull(),
+});
+
+export const questions = pgTable('questions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  roundId: uuid('round_id')
+    .references(() => rounds.id, { onDelete: 'cascade' })
+    .notNull(),
+  questionType: text('question_type', {
+    enum: ['single_choice', 'multiple_choice', 'true_false', 'matching', 'free_text']
+  }).notNull(),
+  prompt: text('prompt').notNull(),
+  imageUrl: text('image_url'),
+  options: jsonb('options'),
+  correctAnswer: jsonb('correct_answer'),
+  marks: integer('marks').notNull(),
+});
+
+export const studentAnswers = pgTable('student_answers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sittingId: uuid('sitting_id')
+    .references(() => examSittings.id, { onDelete: 'cascade' })
+    .notNull(),
+  questionId: uuid('question_id')
+    .references(() => questions.id, { onDelete: 'cascade' }),
+  questionNumber: integer('question_number'),
+  answerValue: text('answer_value').notNull(),
+  manualScore: numeric('manual_score'),
+  educatorFeedback: text('educator_feedback'),
+  savedAt: timestamp('saved_at', { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  unq: unique().on(t.sittingId, t.questionId),
+}));
+
