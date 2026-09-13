@@ -92,7 +92,6 @@ export default async function OrganiserDashboardPage() {
           userName={user.user_metadata?.full_name?.split(' ')[0] || 'Organiser'}
           userInitial={(user.user_metadata?.full_name?.charAt(0) || user.email?.charAt(0) || '?').toUpperCase()}
         />
-
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem 1rem' }}>
           {/* Action Area (Your Olympiads) */}
           <div className="mt-2">

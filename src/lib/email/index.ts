@@ -1,14 +1,64 @@
 import nodemailer from 'nodemailer';
 
-// Cache the test account so we don't create a new one every time
+// Cache the transporter so we don't create a new one every time
 let cachedTransporter: nodemailer.Transporter | null = null;
+
+function getSmtpConfig() {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  // Real SMTP is only used when all credentials are provided (e.g. Brevo:
+  // SMTP_HOST=smtp-relay.brevo.com, SMTP_PORT=587)
+  if (host && user && pass) {
+    const port = parseInt(process.env.SMTP_PORT || '587', 10) || 587;
+    return {
+      host,
+      port,
+      // Port 465 uses implicit TLS; other ports upgrade via STARTTLS
+      secure: process.env.SMTP_SECURE === 'true' || port === 465,
+      auth: { user, pass },
+    };
+  }
+
+  return null;
+}
 
 async function getTransporter(): Promise<nodemailer.Transporter> {
   if (cachedTransporter) return cachedTransporter;
 
-  // For local development, use Ethereal (fake SMTP that captures emails)
+  const smtpConfig = getSmtpConfig();
+
+  if (smtpConfig) {
+    if (!process.env.EMAIL_FROM) {
+      console.warn(
+        'EMAIL_FROM is not set — using the default sender address. Most SMTP ' +
+          'providers (e.g. Brevo) reject senders that are not verified, so set ' +
+          'EMAIL_FROM to your verified sender address.'
+      );
+    }
+
+    cachedTransporter = nodemailer.createTransport({
+      host: smtpConfig.host,
+      port: smtpConfig.port,
+      secure: smtpConfig.secure,
+      auth: {
+        user: smtpConfig.auth.user,
+        pass: smtpConfig.auth.pass,
+      },
+    });
+
+    return cachedTransporter;
+  }
+
+  // No SMTP credentials configured — fall back to Ethereal
+  // (fake SMTP that captures emails for preview during development)
   const testAccount = await nodemailer.createTestAccount();
 
+  console.warn(
+    'SMTP_HOST / SMTP_USER / SMTP_PASS are not set — sending via an Ethereal ' +
+      'test account. Emails are NOT actually delivered, preview links only.'
+  );
   console.log('--- Ethereal Test Email Account ---');
   console.log(`  User:     ${testAccount.user}`);
   console.log(`  Pass:     ${testAccount.pass}`);
@@ -37,13 +87,18 @@ export async function sendInviteEmail(params: {
   role?: string;
 }): Promise<{ previewUrl?: string }> {
   const role = params.role ?? 'educator';
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  // Strip trailing slashes so links stay correct whether or not the env var has one
+  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000').replace(
+    /\/+$/,
+    ''
+  );
   const inviteLink = `${baseUrl}/signup?inviteToken=${params.inviteToken}`;
+  const from = process.env.EMAIL_FROM || '"Olympiad Portal" <noreply@olympiad-portal.local>';
 
   const transporter = await getTransporter();
 
   const info = await transporter.sendMail({
-    from: '"Olympiad Portal" <noreply@olympiad-portal.local>',
+    from,
     to: params.to,
     subject: `You've been invited to join ${params.portalName}`,
     html: `
@@ -64,7 +119,10 @@ export async function sendInviteEmail(params: {
 
   const previewUrl = nodemailer.getTestMessageUrl(info) as string | undefined;
   if (previewUrl) {
+    // Ethereal fallback — log the preview link
     console.log(`Invite email preview: ${previewUrl}`);
+  } else {
+    console.log(`Invite email sent to ${params.to} (message id: ${info.messageId})`);
   }
 
   return { previewUrl };
