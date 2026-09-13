@@ -31,6 +31,6 @@ We have identified the following core technical risks and our planned mitigation
 * **Risk: Database Connection Failures during a live Olympiad.**
   * *Mitigation:* The frontend assessment interface is designed to cache answers locally in the browser's session storage. If the connection drops, the answers are preserved and automatically re-synced to the server once the connection is restored.
 * **Risk: Scope Creep and Deadline Misses.**
-  * *Mitigation:* Strict adherence to our Agile Scrum methodology. Any feature not critical to the core assessment workflow is flagged as a "Stretch Goal" (e.g., dynamic question banks) and deferred to Sprint 3 to protect Milestone deadlines.
+  * *Mitigation:* Strict adherence to our Agile Scrum methodology. Any feature not critical to the core assessment workflow is flagged as a "Stretch Goal" (e.g., dynamic question banks) and deferred to Sprint 3 to protect MilestoneS deadlines.
 * **Risk: Monolithic Entanglement.**
   * *Mitigation:* Utilizing Domain-Driven Design (DDD). We strictly police our Pull Requests to ensure UI components never directly import Drizzle ORM schemas, maintaining our logical decoupling.
