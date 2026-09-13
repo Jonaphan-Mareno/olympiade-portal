@@ -21,7 +21,7 @@ export default function HeroBanner({ userName = 'there', userInitial = '?' }: He
 
           {/* Text Content */}
           <div className="flex flex-col">
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight drop-shadow-sm mb-2">
+            <h1 className="font-serif text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight drop-shadow-sm mb-2">
               Welcome back, {userName}
             </h1>
             <p className="text-blue-50 text-sm md:text-base font-medium opacity-90 drop-shadow-sm">

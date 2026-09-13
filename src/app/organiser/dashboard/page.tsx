@@ -7,6 +7,7 @@ import { submitOrganiserApplication } from '../actions';
 import CreatePortalSection from '@/components/organiser/CreatePortalSection';
 import ApplicationForm from './ApplicationForm';
 import Link from 'next/link';
+import HeroBanner from '@/components/ui/HeroBanner';
 
 export default async function OrganiserDashboardPage() {
   const supabase = await createClient();
@@ -84,81 +85,17 @@ export default async function OrganiserDashboardPage() {
         style={{
           minHeight: '100vh',
           backgroundColor: '#F8FAFC',
-          padding: '2rem 1rem',
         }}
       >
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          {/* Welcome Banner */}
-          <div
-            className="bg-[url('/images/banner.png')] bg-cover bg-center"
-            style={{
-              backgroundImage: "url('/images/banner.png')",
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              borderRadius: '1rem',
-              padding: '3rem 2rem 5rem 2rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '1.5rem',
-              marginBottom: '0',
-            }}
-          >
-            {/* Placeholder Profile Picture */}
-            <div
-              className="border-4 border-white/20"
-              style={{
-                width: '80px',
-                height: '80px',
-                borderRadius: '50%',
-                backgroundColor: '#FFFFFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                border: '4px solid rgba(255, 255, 255, 0.2)',
-              }}
-            >
-              <span style={{ fontSize: '2rem', color: '#0066CC' }}>
-                {user.email?.charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <div>
-              <h1
-                className="text-white"
-                style={{
-                  fontSize: '2.5rem',
-                  fontWeight: 'bold',
-                  color: '#FFFFFF',
-                  margin: 0,
-                }}
-              >
-                Welcome back,{' '}
-                {user.user_metadata?.full_name?.split(' ')[0] || 'Organiser'}
-              </h1>
-              <p
-                className="text-slate-100"
-                style={{
-                  color: '#F1F5F9',
-                  fontSize: '1.1rem',
-                  marginTop: '0.5rem',
-                }}
-              >
-                Here is what's happening with your Olympiads today.
-              </p>
-            </div>
-          </div>
+        {/* Welcome Banner */}
+        <HeroBanner
+          userName={user.user_metadata?.full_name?.split(' ')[0] || 'Organiser'}
+          userInitial={(user.user_metadata?.full_name?.charAt(0) || user.email?.charAt(0) || '?').toUpperCase()}
+        />
 
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem 1rem' }}>
           {/* Action Area (Your Olympiads) */}
-          <div
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: '0.75rem',
-              padding: '2rem',
-              border: '1px solid #E2E8F0',
-              boxShadow: '0 1px 3px 0 rgba(0,0,0,0.1)',
-              marginTop: '4rem',
-            }}
-          >
+          <div className="mt-2">
             <div
               style={{
                 display: 'flex',
@@ -168,14 +105,7 @@ export default async function OrganiserDashboardPage() {
                 marginBottom: '1.5rem',
               }}
             >
-              <h2
-                style={{
-                  fontSize: '1.5rem',
-                  fontWeight: 'bold',
-                  color: '#0F172A',
-                  margin: 0,
-                }}
-              >
+              <h2 className="font-serif text-3xl md:text-4xl text-blue-950 font-bold m-0">
                 Your Olympiads
               </h2>
               {userPortals.length > 0 && (
@@ -186,55 +116,38 @@ export default async function OrganiserDashboardPage() {
             {userPortals.length === 0 ? (
               <CreatePortalSection isEmpty={true} />
             ) : (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '1rem',
-                }}
-              >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {userPortals.map((p) => {
                   const portalSchoolList = schoolsByPortal.get(p.id) ?? [];
                   return (
-                    <Link 
-                      href={`/organiser/olympiads/${p.id}`} 
+                    <div 
                       key={p.id}
-                      style={{ textDecoration: 'none' }}
+                      className="hover:border-blue-300 hover:shadow-md transition-all duration-200 bg-white"
+                      style={{
+                        padding: '1.5rem',
+                        border: '1px solid #E2E8F0',
+                        borderRadius: '0.5rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
                     >
-                      <div
-                        className="hover:border-blue-300 hover:shadow-md transition-all duration-200 bg-white"
-                        style={{
-                          padding: '1.5rem',
-                          border: '1px solid #E2E8F0',
-                          borderRadius: '0.5rem',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          cursor: 'pointer', // Adds a pointer finger on hover
-                        }}
-                      >
-                        <div>
-                          <h3 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1E293B', margin: '0 0 0.25rem 0' }}>
+                      <div>
+                        <Link href={`/organiser/olympiads/${p.id}`} style={{ textDecoration: 'none' }}>
+                          <h3 className="hover:text-blue-600 transition-colors" style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1E293B', margin: '0 0 0.25rem 0' }}>
                             {p.name}
                           </h3>
-                          <span style={{ fontSize: '0.85rem', color: '#64748B' }}>
-                            {portalSchoolList.length} Participating Schools
-                          </span>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: '0.75rem',
-                            fontWeight: '600',
-                            padding: '0.25rem 0.75rem',
-                            borderRadius: '9999px',
-                            background: p.status === 'approved' ? '#DCFCE7' : p.status === 'rejected' ? '#FEE2E2' : '#F1F5F9',
-                            color: p.status === 'approved' ? '#166534' : p.status === 'rejected' ? '#991B1B' : '#475569',
-                          }}
-                        >
-                          {p.status.toUpperCase()}
+                        </Link>
+                        <span style={{ fontSize: '0.85rem', color: '#64748B' }}>
+                          {portalSchoolList.length} Participating Schools
                         </span>
                       </div>
-                    </Link>
+                      <Link href={`/organiser/olympiads/${p.id}`}>
+                        <span className="text-slate-900 border border-slate-900 hover:bg-slate-50 px-4 py-1.5 rounded-md text-sm font-medium transition-colors">
+                          Edit
+                        </span>
+                      </Link>
+                    </div>
                   );
                 })}
               </div>
