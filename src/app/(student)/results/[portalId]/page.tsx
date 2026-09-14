@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
-import { memberships, portals, schools, rounds, questionPapers, examSittings } from '@/lib/db/schema';
+import { memberships, portals, schools, rounds, questionPapers, examSittings, submissions, results } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import RoundTabs from './RoundTabs';
 import Link from 'next/link';
@@ -82,10 +82,13 @@ export default async function PortalRoundsPage({
       ))
     : [];
 
+  const resultRows = portalRounds.length ? await db.select({ roundId: submissions.roundId, resultId: results.id, resultStatus: results.status, score: results.score }).from(submissions).innerJoin(results, eq(results.submissionId, submissions.id)).where(and(eq(submissions.studentMembershipId, membership.id), inArray(submissions.roundId, portalRounds.map(r => r.id)))) : [];
+
   const roundView = portalRounds.map((round) => {
     const paper = paperRows.find((p) => p.roundId === round.id);
     const sitting = paper ? sittingRows.find((s) => s.questionPaperId === paper.id && s.status !== 'abandoned') : undefined;
-    return { ...round, durationMinutes: paper?.durationMinutes ?? 60, sittingId: sitting?.id ?? null, sittingStatus: sitting?.status ?? null };
+    const result = resultRows.find(r => r.roundId === round.id);
+    return { ...round, durationMinutes: paper?.durationMinutes ?? 60, sittingId: sitting?.id ?? null, sittingStatus: sitting?.status ?? null, resultId: result?.resultId ?? null, resultStatus: result?.resultStatus ?? null, resultScore: result?.score ?? null };
   });
 
   return (
@@ -149,7 +152,7 @@ export default async function PortalRoundsPage({
           Status: {membership.status}
         </div>
 
-        <RoundTabs rounds={roundView} />
+        <RoundTabs rounds={roundView} portalId={portalId} />
       </div>
     </div>
   );

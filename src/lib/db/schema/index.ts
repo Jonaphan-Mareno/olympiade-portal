@@ -190,6 +190,28 @@ export const questions = pgTable('questions', {
   marks: integer('marks').notNull(),
 });
 
+export const remarkRequests = pgTable(
+  'remark_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    resultId: uuid('result_id')
+      .references(() => results.id, { onDelete: 'cascade' })
+      .notNull()
+      .unique(),
+    reason: text('reason').notNull(),
+    status: text('status', { enum: ['pending', 'reviewed'] })
+      .default('pending')
+      .notNull(),
+    requestedAt: timestamp('requested_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewedByMembershipId: uuid('reviewed_by_membership_id').references(
+      () => memberships.id
+    ),
+  }
+);
+
 export const studentAnswers = pgTable(
   'student_answers',
   {
