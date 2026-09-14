@@ -47,7 +47,8 @@ export default async function EducatorDashboardPage() {
   const portalMap = new Map(portalRows.map((p) => [p.id, p]));
   const schoolMap = new Map(schoolRows.map((s) => [s.id, s]));
 
-  // Fetch students for each school
+  // Fetch students for each school — scoped to the membership's portal so a
+  // school row shared across olympiads (legacy data) never leaks participants
   const studentMemberships =
     schoolIds.length > 0
       ? await db
@@ -56,18 +57,20 @@ export default async function EducatorDashboardPage() {
           .where(
             and(
               inArray(memberships.schoolId, schoolIds),
+              inArray(memberships.portalId, portalIds),
               eq(memberships.role, 'student')
             )
           )
       : [];
 
-  // Group students by school
+  // Group students per (portal, school) pair
   const studentsBySchool = new Map<string, typeof studentMemberships>();
   for (const s of studentMemberships) {
     if (!s.schoolId) continue;
-    const list = studentsBySchool.get(s.schoolId) ?? [];
+    const key = `${s.portalId}:${s.schoolId}`;
+    const list = studentsBySchool.get(key) ?? [];
     list.push(s);
-    studentsBySchool.set(s.schoolId, list);
+    studentsBySchool.set(key, list);
   }
 
   const displayName = user.user_metadata?.full_name || user.email;
@@ -111,7 +114,9 @@ export default async function EducatorDashboardPage() {
               ? schoolMap.get(membership.schoolId)
               : null;
             const schoolStudents = membership.schoolId
-              ? (studentsBySchool.get(membership.schoolId) ?? [])
+              ? (studentsBySchool.get(
+                  `${membership.portalId}:${membership.schoolId}`
+                ) ?? [])
               : [];
 
             return (

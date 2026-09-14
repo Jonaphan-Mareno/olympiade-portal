@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
 import { users, memberships } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
@@ -81,6 +81,25 @@ export async function login(formData: FormData) {
           'This account no longer exists. Please contact the administrator if you believe this is a mistake.',
       };
     }
+  }
+
+  // A user may create their account without ever clicking an invite link.
+  // Accept any pending invites addressed to this email so they land in every
+  // olympiad they were invited to (teachers commonly join several).
+  if (authedUser?.email) {
+    await db
+      .update(memberships)
+      .set({
+        userId: authedUser.id,
+        status: 'accepted',
+        claimedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(memberships.invitedEmail, authedUser.email.toLowerCase()),
+          eq(memberships.status, 'invited')
+        )
+      );
   }
 
   // Once logged in, go to the dashboard to select a portal
@@ -159,6 +178,23 @@ export async function signup(formData: FormData) {
         }
       }
     }
+
+    // 4. Auto-accept this email's other pending invites too, so someone
+    // invited to multiple olympiads before creating an account joins all
+    // of them on first signup — not just the one whose link they clicked.
+    await db
+      .update(memberships)
+      .set({
+        userId: userId,
+        status: 'accepted',
+        claimedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(memberships.invitedEmail, email.toLowerCase()),
+          eq(memberships.status, 'invited')
+        )
+      );
   } catch (dbError: any) {
     console.error('Database insertion error:', dbError);
     return {

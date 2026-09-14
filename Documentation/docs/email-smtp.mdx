@@ -49,7 +49,49 @@ Step by step:
 
 ### Error handling
 
-Email delivery is intentionally non-blocking: each invite send is wrapped in its own `try/catch`, so one failed recipient is logged server-side and never aborts the remaining inserts or invites. Emails are currently sent inline within the Server Actions — there is no queue or retry mechanism yet, which is a known limitation to revisit as email volume grows.
+Email delivery is intentionally non-blocking: each invite send is wrapped in its own `try/catch`, so one failed recipient is logged server-side and never aborts the remaining inserts or invites. The automated reminder emails go further: every send is logged in the `notification_log` table with a `sent`/`failed` status, and failed sends are retried on the next scheduler sweep.
+
+## Automated Reminder Emails
+
+Besides invitations, the portal actively chases schools and entrants. A **scheduler sweep** (`sweep()` in `src/domain/rounds/round-scheduler.ts`) runs every hour — invoked by Vercel Cron via `vercel.json` — and derives every round's lifecycle state from its timestamps (`scheduled → open → closed → released`, see `src/domain/rounds/round-state-machine.ts`). For each round it decides whether a reminder is due, and the **notification engine** (`src/domain/notifications/automation-engine.ts`) resolves the recipients and sends the emails through the shared `sendEmail()` helper:
+
+| Trigger                                                                                                  | Who is emailed                                     | Content                                                                                                           |
+| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Round opens soon (default: 7 days before)                                                                | Educators only                                     | Opening/closing times, delivery method                                                                            |
+| Round closes soon (default: 3 days before; configurable down to hours, e.g. a final "1 hour left" nudge) | Educators only                                     | Closing time (as "X days" or "about N hours" left) plus the school's own submission progress ("3 of 5 submitted") |
+| Submissions overdue (default: 2 days after close)                                                        | Educators of schools with missing submissions only | Which entrants' submissions never arrived                                                                         |
+| Results published (organiser action, see below)                                                          | Educators **and** entrants                         | Educators get a school-level summary; each entrant who submitted gets their own score and feedback                |
+
+The "results are out" emails are triggered primarily by the organiser: once a round has closed, the round management page shows a **Publish Results** button. Publishing stamps `rounds.results_published_at` and immediately emails both audiences. The sweep then acts as a safety net, retrying any failed sends for a bounded window (default: 14 days).
+
+### Frequency and the hourly schedule
+
+The sweep runs **hourly**, which is what makes hour-level reminder windows meaningful: with `REMINDER_CLOSING_WINDOW_HOURS=1`, the closing reminder goes out on the last hourly sweep before the deadline — between 0 and 60 minutes ahead. Because sends are deduplicated (see below), the higher frequency never causes duplicate emails; a reminder simply fires on the first sweep that sees the round inside its window.
+
+:::warning Vercel Hobby plan
+
+Vercel's Hobby tier only allows cron jobs to run **once per day**. If your deployment fails or the cron is rejected with the hourly schedule, either upgrade to Pro, or run the sweep from any external scheduler (system cron, GitHub Actions, …) with `curl -H "Authorization: Bearer $CRON_SECRET" https://<your-app>/api/webhooks/round-scheduler` — on a once-daily schedule, hour-level windows degrade gracefully: the reminder fires on that day's single sweep if the round is inside its window at that moment.
+
+:::
+
+### Idempotency
+
+Every automated email is deduplicated per `(kind, round, recipient)` by the unique constraint on `notification_log`, so running the sweep repeatedly — hourly cron, manual triggers, overlapping invocations — never double-sends. A failed send is retried on the next sweep; a successful one is never repeated.
+
+### Manual triggering
+
+The sweep can be run out of band for testing:
+
+```bash
+# With CRON_SECRET set (production):
+curl -X POST https://olympiad-portal-eta.vercel.app/api/webhooks/round-scheduler \
+  -H "Authorization: Bearer $CRON_SECRET"
+
+# Locally (endpoint is open while CRON_SECRET is unset):
+curl http://localhost:3000/api/webhooks/round-scheduler
+```
+
+The response is a JSON report of what was sent, skipped and failed per round.
 
 ## Environment Variables
 
@@ -67,7 +109,17 @@ All email configuration lives in `.env.local` (never commit real keys):
 
 :::note
 
-"Required" here means required for live delivery. Without `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` the app still works — invites simply fall back to Ethereal and are not actually sent.
+The reminder-specific variables below tune the automated sweep. "Required" for the first six means required for live delivery; without `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` the app still works — all emails simply fall back to Ethereal and are not actually sent.
+
+| Variable                        | Required   | Description                                                                                                                                             |
+| ------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CRON_SECRET`                   | Production | Bearer token required to invoke `/api/webhooks/round-scheduler`. Vercel Cron supplies it automatically; leave unset locally to keep it open.            |
+| `REMINDER_OPENING_WINDOW_DAYS`  | No         | Days before `opensAt` that the opening reminder goes out (default `7`).                                                                                 |
+| `REMINDER_OPENING_WINDOW_HOURS` | No         | Extra hours added to `REMINDER_OPENING_WINDOW_DAYS` (default `0`) — e.g. `days=0, hours=2` sends the opening reminder 2 hours before the round opens.   |
+| `REMINDER_CLOSING_WINDOW_DAYS`  | No         | Days before `closesAt` that the closing reminder goes out (default `3`).                                                                                |
+| `REMINDER_CLOSING_WINDOW_HOURS` | No         | Extra hours added to `REMINDER_CLOSING_WINDOW_DAYS` (default `0`) — e.g. `days=0, hours=1` turns the closing reminder into a final "1 hour left" nudge. |
+| `REMINDER_OVERDUE_AFTER_DAYS`   | No         | Days after `closesAt` that the overdue follow-up goes out (default `2`).                                                                                |
+| `REMINDER_RESULTS_CATCHUP_DAYS` | No         | How long the sweep retries failed "results are out" sends after publication (default `14`).                                                             |
 
 :::
 
@@ -90,9 +142,9 @@ EMAIL_FROM="Olympiad Portal" <you@example.com>
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 ```
 
-## Gotchas
+### Gotchas
 
 - **Unverified senders are rejected.** If `EMAIL_FROM` is missing, the module logs a warning and falls back to a placeholder address (`noreply@olympiad-portal.local`) that Brevo will refuse.
-- **Daily quota.** The Brevo free tier allows 300 emails per day; a large portal-creation batch can approach this limit.
-- **Ethereal is silent.** While credentials are absent, everything appears to work — watch the server console for the `Invite email preview:` URL to inspect the captured messages.
-- **Emails are fire-and-log.** Failures are logged, not surfaced to the user, and are not retried automatically.
+- **Daily quota.** The Brevo free tier allows 300 emails per day; a large portal-creation batch or a results release can approach this limit. The reminder sweep caps sends at one email per recipient per reminder kind per round.
+- **Ethereal is silent.** While credentials are absent, everything appears to work — watch the server console for the `Email preview:` URLs to inspect the captured messages.
+- **Reminder emails are logged and retried.** Failures are recorded in `notification_log` with `status='failed'` and retried on the next hourly sweep; invitations remain fire-and-log.

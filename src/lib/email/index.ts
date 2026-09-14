@@ -79,6 +79,37 @@ async function getTransporter(): Promise<nodemailer.Transporter> {
   return cachedTransporter;
 }
 
+export async function sendEmail(params: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<{ previewUrl?: string }> {
+  const from =
+    process.env.EMAIL_FROM ||
+    '"Olympiad Portal" <noreply@olympiad-portal.local>';
+
+  const transporter = await getTransporter();
+
+  const info = await transporter.sendMail({
+    from,
+    to: params.to,
+    subject: params.subject,
+    html: params.html,
+  });
+
+  const previewUrl = nodemailer.getTestMessageUrl(info) as string | undefined;
+  if (previewUrl) {
+    // Ethereal fallback — log the preview link
+    console.log(`Email preview for ${params.to}: ${previewUrl}`);
+  } else {
+    console.log(
+      `Email sent to ${params.to} (subject: "${params.subject}", message id: ${info.messageId})`
+    );
+  }
+
+  return { previewUrl };
+}
+
 export async function sendInviteEmail(params: {
   to: string;
   portalName: string;
@@ -92,14 +123,8 @@ export async function sendInviteEmail(params: {
     process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
   ).replace(/\/+$/, '');
   const inviteLink = `${baseUrl}/signup?inviteToken=${params.inviteToken}`;
-  const from =
-    process.env.EMAIL_FROM ||
-    '"Olympiad Portal" <noreply@olympiad-portal.local>';
 
-  const transporter = await getTransporter();
-
-  const info = await transporter.sendMail({
-    from,
+  const info = await sendEmail({
     to: params.to,
     subject: `You've been invited to join ${params.portalName}`,
     html: `
@@ -118,15 +143,5 @@ export async function sendInviteEmail(params: {
     `,
   });
 
-  const previewUrl = nodemailer.getTestMessageUrl(info) as string | undefined;
-  if (previewUrl) {
-    // Ethereal fallback — log the preview link
-    console.log(`Invite email preview: ${previewUrl}`);
-  } else {
-    console.log(
-      `Invite email sent to ${params.to} (message id: ${info.messageId})`
-    );
-  }
-
-  return { previewUrl };
+  return info;
 }

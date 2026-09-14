@@ -26,10 +26,13 @@ function emptyEntry(): SchoolEntry {
   };
 }
 
-async function fetchSchools(q: string): Promise<SchoolSuggestion[]> {
+async function fetchSchools(
+  q: string,
+  portalId: string
+): Promise<SchoolSuggestion[]> {
   if (q.trim().length < 2) return [];
   const res = await fetch(
-    `/api/schools/search?q=${encodeURIComponent(q.trim())}`
+    `/api/schools/search?q=${encodeURIComponent(q.trim())}&portalId=${encodeURIComponent(portalId)}`
   );
   if (!res.ok) return [];
   return res.json();
@@ -73,7 +76,7 @@ export default function InviteSchoolForm({ portalId }: { portalId: string }) {
     if (existing) clearTimeout(existing);
 
     const timer = setTimeout(async () => {
-      const results = await fetchSchools(value);
+      const results = await fetchSchools(value, portalId);
       setEntries((prev) =>
         prev.map((e, i) =>
           i === index

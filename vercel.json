@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/webhooks/round-scheduler",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
