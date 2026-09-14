@@ -1,0 +1,13 @@
+# Tech Stack
+
+## Core Technologies
+
+- **Next.js (App Router & Server Actions)**: Chosen as our core meta-framework. We leverage its powerful routing and server-side rendering to deliver a highly performant user interface. To adhere to a non-monolithic architecture, we employ strict Logical Decoupling (Domain-Driven Design). The Next.js presentation layer communicates with our isolated domain logic strictly via Server Actions and internal API routes, ensuring UI components never directly access the database.
+- **Drizzle ORM**: Chosen as our lightweight, type-safe Data Access Layer. It allows us to interact with our PostgreSQL database securely from our isolated business logic layer, ensuring our queries are strictly typed, highly performant, and structurally separated from the front-end.
+- **Supabase (Database & Auth)**: Chosen strictly to host our PostgreSQL database and to manage secure Role-Based Access Control (RBAC) user authentication. We utilize its Storage buckets for PDF blob hosting, ensuring our primary database remains highly optimized.
+- **Tailwind CSS**: Chosen for styling because its utility-first approach allows for rapid, responsive UI development. It ensures a consistent design system and reduces the need to write and maintain custom CSS files.
+- **Framer Motion**: Selected for animations due to its simple, declarative API. It makes it easy to add fluid, performant animations and complex UI transitions to our React components, providing a highly interactive user experience.
+
+## Code Quality Tooling
+
+We use ESLint and Prettier for code quality and formatting, integrated directly into our automated CI/CD pipeline via Gitea Actions. These tools enforce a consistent style across our multi-developer team, automatically catch syntax regressions on every pull request, and ensure high codebase integrity.
