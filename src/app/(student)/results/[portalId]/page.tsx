@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
-import { memberships, portals, schools, rounds } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { memberships, portals, schools, rounds, questionPapers, examSittings } from '@/lib/db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import RoundTabs from './RoundTabs';
 import Link from 'next/link';
 
@@ -69,6 +69,25 @@ export default async function PortalRoundsPage({
   // Sort by orderIndex
   portalRounds.sort((a, b) => a.orderIndex - b.orderIndex);
 
+  const onlineRounds = portalRounds.filter((r) => r.deliveryMethod === 'online');
+  const paperRows = onlineRounds.length
+    ? await db.select().from(questionPapers)
+        .where(inArray(questionPapers.roundId, onlineRounds.map((r) => r.id)))
+    : [];
+  const paperIds = paperRows.map((p) => p.id);
+  const sittingRows = paperIds.length
+    ? await db.select().from(examSittings).where(and(
+        eq(examSittings.studentMembershipId, membership.id),
+        inArray(examSittings.questionPaperId, paperIds)
+      ))
+    : [];
+
+  const roundView = portalRounds.map((round) => {
+    const paper = paperRows.find((p) => p.roundId === round.id);
+    const sitting = paper ? sittingRows.find((s) => s.questionPaperId === paper.id && s.status !== 'abandoned') : undefined;
+    return { ...round, durationMinutes: paper?.durationMinutes ?? 60, sittingId: sitting?.id ?? null, sittingStatus: sitting?.status ?? null };
+  });
+
   return (
     <div
       style={{
@@ -130,7 +149,7 @@ export default async function PortalRoundsPage({
           Status: {membership.status}
         </div>
 
-        <RoundTabs rounds={portalRounds} />
+        <RoundTabs rounds={roundView} />
       </div>
     </div>
   );

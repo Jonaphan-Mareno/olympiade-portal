@@ -28,6 +28,7 @@ export async function updateRound(formData: FormData) {
   const opensAt = formData.get('opensAt') as string;
   const closesAt = formData.get('closesAt') as string;
   const deliveryMethod = formData.get('deliveryMethod') as 'paper' | 'online';
+  const durationMinutes = Math.max(1, parseInt((formData.get('durationMinutes') as string) || '60', 10));
 
   // Update the Round
   await db
@@ -42,7 +43,7 @@ export async function updateRound(formData: FormData) {
 
   if (deliveryMethod === 'online') {
     // Check if any student has started the exam
-    const paper = await db
+    let paper = await db
       .select()
       .from(questionPapers)
       .where(eq(questionPapers.roundId, roundId))
@@ -62,6 +63,13 @@ export async function updateRound(formData: FormData) {
       throw new Error(
         'This round cannot be edited because students have already begun their attempts.'
       );
+    }
+
+    if (paper.length === 0) {
+      await db.insert(questionPapers).values({ roundId, durationMinutes });
+      paper = await db.select().from(questionPapers).where(eq(questionPapers.roundId, roundId)).limit(1);
+    } else {
+      await db.update(questionPapers).set({ durationMinutes }).where(eq(questionPapers.id, paper[0].id));
     }
 
     const questionsDataStr = formData.get('questionsData') as string;

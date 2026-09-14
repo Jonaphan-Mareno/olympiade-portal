@@ -60,6 +60,7 @@ export default async function ManageRoundPage({
     .slice(0, 16);
 
   let hasLiveSittings = false;
+  let durationMinutes = 60;
   if (round.deliveryMethod === 'online') {
     const paper = await db
       .select()
@@ -67,6 +68,7 @@ export default async function ManageRoundPage({
       .where(eq(questionPapers.roundId, roundId))
       .limit(1);
     if (paper && paper.length > 0) {
+      durationMinutes = paper[0].durationMinutes ?? 60;
       const sittings = await db
         .select()
         .from(examSittings)
@@ -159,6 +161,14 @@ export default async function ManageRoundPage({
                   className="w-full p-3 border border-slate-300 rounded-md text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
+              {round.deliveryMethod === 'online' && (
+                <div className="md:col-span-1">
+                  <label className="block text-sm font-semibold text-slate-900 mb-2" htmlFor="durationMinutes">
+                    Test Time Limit (minutes)
+                  </label>
+                  <input type="number" id="durationMinutes" name="durationMinutes" min="1" max="1440" required defaultValue={durationMinutes} className="w-full p-3 border border-slate-300 rounded-md text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                </div>
+              )}
               <div className="md:col-span-1">
                 <label
                   className="block text-sm font-semibold text-slate-900 mb-2"

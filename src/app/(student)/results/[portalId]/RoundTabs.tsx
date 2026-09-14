@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 type Round = {
   id: string;
@@ -8,147 +9,48 @@ type Round = {
   opensAt: Date | null;
   closesAt: Date | null;
   qualifyingThreshold: string | null;
+  deliveryMethod: 'online' | 'paper';
+  durationMinutes: number | null;
+  sittingId: string | null;
+  sittingStatus: 'active' | 'submitted' | 'abandoned' | null;
 };
 
 export default function RoundTabs({ rounds }: { rounds: Round[] }) {
-  const [selectedRoundId, setSelectedRoundId] = useState<string | null>(
-    rounds.length > 0 ? rounds[0].id : null
-  );
+  const [selectedRoundId, setSelectedRoundId] = useState<string | null>(rounds[0]?.id ?? null);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState('');
+  const router = useRouter();
 
-  if (rounds.length === 0) {
-    return (
-      <p
-        style={{
-          color: '#64748B',
-          fontSize: '1rem',
-          fontStyle: 'italic',
-          marginTop: '2rem',
-        }}
-      >
-        There are currently no rounds available for this Olympiad.
-      </p>
-    );
+  if (!rounds.length) return <p className="text-slate-500 italic mt-8">There are currently no rounds available for this Olympiad.</p>;
+  const selectedRound = rounds.find((r) => r.id === selectedRoundId)!;
+  const now = new Date();
+  const opened = selectedRound.opensAt ? now >= new Date(selectedRound.opensAt) : false;
+  const closed = selectedRound.closesAt ? now > new Date(selectedRound.closesAt) : false;
+  const canStart = selectedRound.deliveryMethod === 'online' && opened && !closed && selectedRound.sittingStatus !== 'submitted';
+
+  async function startOrResume() {
+    setStarting(true); setError('');
+    try {
+      if (selectedRound.sittingId) return router.push(`/sitting/${selectedRound.sittingId}`);
+      const res = await fetch('/api/student/sitting/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roundId: selectedRound.id }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Unable to start test');
+      router.push(`/sitting/${data.sittingId}`);
+    } catch (e: any) { setError(e.message); setStarting(false); }
   }
 
-  const selectedRound = rounds.find((r) => r.id === selectedRoundId);
-
   return (
-    <div style={{ marginTop: '2rem' }}>
-      <div
-        style={{
-          display: 'flex',
-          gap: '1rem',
-          borderBottom: '1px solid #E2E8F0',
-          paddingBottom: '0.5rem',
-          overflowX: 'auto',
-          marginBottom: '2rem',
-        }}
-      >
-        {rounds.map((round) => (
-          <button
-            key={round.id}
-            onClick={() => setSelectedRoundId(round.id)}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor:
-                selectedRoundId === round.id ? '#0066CC' : 'transparent',
-              color: selectedRoundId === round.id ? '#FFFFFF' : '#475569',
-              border: 'none',
-              borderRadius: '0.375rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              transition: 'all 0.2s',
-            }}
-          >
-            {round.name}
-          </button>
-        ))}
+    <div className="mt-8">
+      <div className="flex gap-3 border-b border-slate-200 pb-2 overflow-x-auto mb-5">
+        {rounds.map((round) => <button key={round.id} onClick={() => { setSelectedRoundId(round.id); setError(''); }} className={`px-4 py-2 rounded-md font-semibold whitespace-nowrap ${selectedRoundId === round.id ? 'bg-blue-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>{round.name}</button>)}
       </div>
-
-      {selectedRound && (
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            padding: '1.5rem',
-            borderRadius: '0.75rem',
-            border: '1px solid #E2E8F0',
-            boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-          }}
-        >
-          <h2
-            style={{
-              fontSize: '1.5rem',
-              fontWeight: 'bold',
-              color: '#1E293B',
-              marginBottom: '1.5rem',
-            }}
-          >
-            {selectedRound.name} Details
-          </h2>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-              gap: '1.5rem',
-              fontSize: '1rem',
-              color: '#475569',
-            }}
-          >
-            <div>
-              <strong
-                style={{
-                  display: 'block',
-                  color: '#334155',
-                  marginBottom: '0.5rem',
-                  fontSize: '0.9rem',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                Opens At
-              </strong>
-              {selectedRound.opensAt
-                ? new Date(selectedRound.opensAt).toLocaleString()
-                : 'Not set'}
-            </div>
-            <div>
-              <strong
-                style={{
-                  display: 'block',
-                  color: '#334155',
-                  marginBottom: '0.5rem',
-                  fontSize: '0.9rem',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                Closes At
-              </strong>
-              {selectedRound.closesAt
-                ? new Date(selectedRound.closesAt).toLocaleString()
-                : 'Not set'}
-            </div>
-            {selectedRound.qualifyingThreshold && (
-              <div>
-                <strong
-                  style={{
-                    display: 'block',
-                    color: '#334155',
-                    marginBottom: '0.5rem',
-                    fontSize: '0.9rem',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
-                >
-                  Qualifying Threshold
-                </strong>
-                {selectedRound.qualifyingThreshold}
-              </div>
-            )}
-          </div>
+      <div className="bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+          <div><p className="text-xs font-bold text-blue-700 uppercase tracking-wide">{selectedRound.deliveryMethod === 'online' ? 'Online test' : 'Paper round'}</p><h2 className="text-2xl font-bold text-slate-900 mt-1">{selectedRound.name}</h2><p className="text-slate-600 mt-2">Opens: {selectedRound.opensAt ? new Date(selectedRound.opensAt).toLocaleString() : 'Not set'}</p><p className="text-slate-600">Closes: {selectedRound.closesAt ? new Date(selectedRound.closesAt).toLocaleString() : 'Not set'}</p>{selectedRound.deliveryMethod === 'online' && <p className="text-slate-600">Time limit: {selectedRound.durationMinutes ?? 60} minutes</p>}</div>
+          {selectedRound.deliveryMethod === 'online' && <div className="md:text-right"><span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${selectedRound.sittingStatus === 'submitted' ? 'bg-green-100 text-green-700' : selectedRound.sittingId ? 'bg-amber-100 text-amber-700' : canStart ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{selectedRound.sittingStatus === 'submitted' ? 'Submitted' : selectedRound.sittingId ? 'In progress' : canStart ? 'Ready' : closed ? 'Closed' : 'Not open'}</span><div className="mt-3"><button disabled={!canStart || starting} onClick={startOrResume} className="bg-blue-700 hover:bg-blue-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold px-5 py-2.5 rounded-md">{starting ? 'Opening…' : selectedRound.sittingId ? 'Resume test' : 'Start test'}</button></div></div>}
         </div>
-      )}
+        {error && <div className="mt-5 bg-red-50 border border-red-200 text-red-800 p-3 rounded-md text-sm">{error}</div>}
+      </div>
     </div>
   );
 }
