@@ -1,0 +1,21 @@
+---
+sidebar_position: 1
+---
+
+# Git Methodology
+
+## Pre-Commit Formatting
+
+Before making a commit, developers must run `npm run format` to ensure a uniform code style across the entire codebase.
+
+## Evolution of Commit Structure
+
+When the project began, the team utilized descriptive, natural-language commit messages (e.g., "Added page structure"). This approach allowed for rapid prototyping and flexibility during the early stages. However, as the project scaled and the commit history grew, these messages became difficult to parse. To address this, the team officially transitioned to enforcing **Conventional Commits** (e.g., `feat(dashboard): ...`, `fix(navbar): ...`) for standardized history tracking and easier code reviews.
+
+## Branching Strategy Pivot
+
+Initially, the team attempted to use a strict Feature Branching strategy. We quickly discovered that because early UI components and architectural features were tightly coupled across multiple pages, this strategy resulted in massive and complex merge conflicts. Recognizing this inefficiency, the team adapted and pivoted to a **main and dev branch** workflow.
+
+## Pull Requests
+
+In our current workflow, all active work is pushed directly to the `dev` branch. Once a sprint goal is met, a Pull Request is opened to merge `dev` into `main`. This PR requires a peer review to ensure that all members are actively contributing and that the codebase remains stable.

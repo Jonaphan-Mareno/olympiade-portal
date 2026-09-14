@@ -1,0 +1,47 @@
+## Active Sprint Board
+
+View our live Gitea Kanban Board Here= https://sdp.ms.wits.ac.za/edgecaserunners/Olympiad-Portal/projects/29
+
+## Sprint 1 Goals (Foundation & MVP)
+
+- Initialize the full-stack Next.js repository and Drizzle ORM infrastructure.
+- Finalize the UI/UX design system and map out component structures.
+- Complete the Initial Design & Dev Plan documentation (Milestone 1).
+
+## Sprint 1 Delivered Work
+
+- **UI/UX Design:** High-fidelity Figma mockups and low-fidelity marker wireframes successfully completed and embedded into the documentation.
+- **Architecture:** Domain-Driven Design logically decoupled architecture formally verified and documented with Mermaid.js flowcharts.
+- **Methodology:** Scrum framework and Git branching strategies established and documented.
+- **Developer Experience:** Docusaurus deployed locally and root repository README populated with local setup instructions.
+
+## Completed User Stories (Sprint 1)
+
+### Organiser
+
+- **US-01:** As an organiser, I want to create a new portal (olympiad), so that I have a dedicated space to run its rounds, schools, and results.
+- **US-02:** As an organiser, I want to add a school by name to my portal, so that it's registered in the database and can be linked to educators and entrants.
+- **US-03:** As an organiser, I want to add an educator to my portal, so that they can manage their school's entrants and submissions.
+- **US-04:** As an organiser, when I add an educator who already has an account on the site, I want them added directly to my portal, so that no unnecessary invite step slows things down.
+- **US-05:** As an organiser, when I add an educator who does not yet have an account, I want the system to send them an invite email, so that they can join the site and be linked to my portal once they sign up.
+- **US-06:** As an organiser, I want to create a round within my portal with its relevant details (name, opening time, closing time), so that it's scheduled correctly against the lifecycle engine.
+- **US-07:** As an organiser, I want to upload the question paper for a round, so that it becomes available to educators once the round opens.
+- **US-08:** As an organiser, I want to upload the memo for a round, so that submissions can be automarked against it.
+
+### Educator
+
+- **US-09:** As an invited educator, I want to claim my account (via the invite email), so that I'm linked to the correct organiser's portal and school.
+- **US-10:** As an educator, I want to add a student to my school's entrant list, so that they can participate in rounds.
+- **US-11:** As an educator, when I add a student who already has an account on the site, I want them added directly to my school's entrant list, so that no unnecessary invite step slows things down.
+- **US-12:** As an educator, when I add a student who does not yet have an account, I want the system to send them an invite email, so that they can join the site and be linked to my school once they sign up.
+
+### Student
+
+- **US-13:** As an invited student, I want to claim my account (via the invite email), so that I'm linked to the correct school and educator.
+- **US-14:** As a student with a claimed account but no active rounds or results yet, I want to see an empty state view, so that I understand my account is set up correctly and know what to expect once a round is available to me.
+
+## Sprint 1 Retrospective
+
+- **What went well:** Rapid prototyping of the Next.js App Router front-end designs and seamless documentation generation.
+- **Challenges faced:** Configuring the Docusaurus Mermaid plugin required troubleshooting and manual build resets, which temporarily slowed down our documentation pipeline.
+- **Planned Action for Sprint 2:** Allocate dedicated time for CI/CD and tooling configuration earlier in the sprint to prevent build reset bottlenecks, ensuring a smoother integration workflow.

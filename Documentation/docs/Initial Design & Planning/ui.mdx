@@ -1,0 +1,61 @@
+---
+sidebar_position: 3
+---
+
+# UI Design
+
+## Brand Design Identity (The Wave)
+
+The core brand identity of the Olympiad Portal revolves around a custom **"organic wave motif."** This wave design explicitly breaks away from traditional, rigid SaaS grids to establish a bespoke brand feel. It is utilized functionally and aesthetically as a visual divider on our split-screen Authentication layouts and acts as the custom SVG edge for the off-canvas Framer Motion drawers.
+
+## Typography System
+
+The application uses **Inter** (falling back to standard system sans-serif fonts) as the global typography to maximize legibility for our data-dense dashboards.
+
+The typographic hierarchy is structured as follows:
+
+- **Headings**: Utilize bold weights (700) to establish a clear visual hierarchy and structure.
+- **Body Text & Data Tables**: Utilize regular weights (400) to ensure high readability and reduce eye strain when scanning dense information.
+
+## Exact Color Palette
+
+| Color Name             | Hex Code  | Usage                                                                            |
+| :--------------------- | :-------- | :------------------------------------------------------------------------------- |
+| **Primary Brand Blue** | `#2563EB` | Used for primary buttons, active states, focus rings, and the brand wave.        |
+| **Surface White**      | `#FFFFFF` | Used for dashboard cards, the off-canvas drawer background, and form containers. |
+| **Background Base**    | `#F9FAFB` | Used for the global app background to provide depth behind white surface cards.  |
+| **Text Primary**       | `#111827` | Used for main headings and critical data.                                        |
+| **Text Secondary**     | `#4B5563` | Used for subtitles, form labels, and table headers.                              |
+
+## Component Mapping & Layouts
+
+- **Authentication & Onboarding (`/signup`, `/login`)**: Utilizes a split-screen layout. One half features the brand wave and onboarding context to reinforce brand identity; the other half isolates the form inputs to reduce cognitive load and maximize conversion.
+- **Organizer Dashboard**: Abandons standard rigid metric cards in favor of a clean, list-based view anchored by a fixed Welcome Banner.
+- **Interactive Drawers**: The "Create New Olympiad" and "Add School" workflows utilize `framer-motion` to slide in an off-canvas side drawer, ensuring users are not redirected to a new page and maintaining their spatial context.
+- **Dynamic Form Elements**: Educator/Teacher input fields feature dynamic, state-driven "chips." This allows organizers to visually add, review, or remove multiple email addresses before submission.
+
+## Design Assets & Lifecycle
+
+To document our complete UI/UX planning phase, our original design files (low-fidelity sketches and high-fidelity mockups) are embedded below for review:
+
+### Low-Fidelity Wireframes
+
+<iframe
+  src="/olympia-wireframes.pdf"
+  width="100%"
+  height="700px"
+  style={{
+    border: '1px solid #e5e7eb',
+    borderRadius: '8px',
+    marginBottom: '2rem',
+  }}
+></iframe>
+
+### High-Fidelity Mockups
+
+<iframe
+  src="/olympia-mockup.pdf"
+  width="100%"
+  height="700px"
+  style={{ border: '1px solid #e5e7eb', borderRadius: '8px' }}
+></iframe>

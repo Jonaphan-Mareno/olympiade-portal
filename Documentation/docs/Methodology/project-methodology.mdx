@@ -1,0 +1,43 @@
+---
+sidebar_position: 2
+---
+
+# Project Methodology
+
+## 1. Methodology Motivation
+
+The Olympiad Portal is a multi-faceted system requiring distinct dashboards for Organizers, Educators, and Schools. Because these user requirements are complex and likely to evolve based on ongoing client feedback, a rigid Waterfall approach is unsuitable. Instead, we have adopted an **Agile Scrum** methodology. This allows us to rapidly prototype user interfaces, present them during regular stakeholder meetings, and pivot immediately if the client requests changes.
+
+Furthermore, we deliberately chose Gitea's native project boards over external tools like Notion. This keeps our task tracking tightly coupled with our codebase, reducing context-switching and ensuring every task is directly linked to a commit.
+
+## 2. Roles & Responsibilities
+
+To ensure clear ownership and efficient delivery, we define our team structure as follows:
+
+- **Development Team**: The group operates as a self-organizing, cross-functional engineering team. All members are responsible for designing, developing, testing, and reviewing features collaboratively.
+- **Client / Product Owner**: Our assigned university tutor acts as the Client and Product Owner. They provide high-level requirements, guide feature completeness, and offer critical feedback on project milestones.
+
+## 3. Agile Ceremonies & Workflow
+
+Our team operates on a continuous **2-week Sprint cycle** utilizing the following key ceremonies:
+
+- **Sprint Planning**: At the start of our 2-week sprints, we evaluate the Product Backlog, pull prioritized issues into the Sprint Backlog, and assign developers based on capacity and domain expertise.
+- **Weekly Syncs**: Rather than daily standups, the team holds comprehensive weekly synchronous meetings. During these sessions, we discuss and clear blockers, conduct PR reviews, and plan integration steps for the upcoming week.
+- **Sprint Reviews**: Occurring at major project milestones (e.g., Sprint 1 delivery), we present functional increments and MVP features to our Client for feedback and validation.
+
+## 4. Task Traceability & Evidence
+
+Our Gitea Kanban board serves as our single source of truth for all work. The board structure tracks issues through: _Product Backlog_ → _Sprint Backlog_ → _In Progress_ → _Review & Testing_ → _Done_.
+
+- **Traceability**: Every Pull Request and commit must strictly reference a specific Gitea Issue number (e.g., `Closes #12`). This ensures full transparency between code changes and product requirements.
+- **Evidence**: Primary evidence of our active Agile methodology can be seen in our live team velocity on the Gitea board and the unbroken chain of peer-reviewed Pull Requests linked directly to feature cards.
+
+## 5. Definition of Done (DoD)
+
+To maintain high code quality and consistency, a feature must meet our strict Definition of Done before it can be moved to the 'Done' column on our project board:
+
+- [ ] **Implementation Complete**: The code is fully implemented and fulfills all Acceptance Criteria outlined in the original Gitea Issue.
+- [ ] **Code Formatting**: The code passes automated formatting checks (using `npm run format` via Prettier/ESLint).
+- [ ] **Pull Request Created**: A Pull Request has been opened against the `dev` branch.
+- [ ] **Peer Reviewed**: At least one other team member has reviewed and approved the Pull Request.
+- [ ] **Design Alignment**: The User Interface matches the agreed-upon design system (Tailwind/brand assets).
