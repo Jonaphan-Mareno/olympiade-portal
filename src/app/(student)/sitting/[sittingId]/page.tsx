@@ -1,7 +1,13 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
-import { examSittings, questionPapers, rounds, studentAnswers, questions } from '@/lib/db/schema';
+import {
+  examSittings,
+  questionPapers,
+  rounds,
+  studentAnswers,
+  questions,
+} from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import ExamInterface from '@/components/student/ExamInterface';
 
@@ -11,7 +17,9 @@ export default async function SittingPage({
   params: Promise<{ sittingId: string }>;
 }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     redirect('/login');

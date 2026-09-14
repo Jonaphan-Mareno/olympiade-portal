@@ -9,13 +9,15 @@ import { revalidatePath } from 'next/cache';
 
 export async function deleteOlympiad(portalId: string) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     throw new Error('Unauthorized');
   }
 
-  // We should enforce that the user is the owner, or is a platform admin, but 
+  // We should enforce that the user is the owner, or is a platform admin, but
   // for now we'll just check that they own it.
   const [portal] = await db
     .select()

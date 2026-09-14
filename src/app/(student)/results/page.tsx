@@ -94,7 +94,7 @@ export default async function ResultsPage() {
                   textDecoration: 'none',
                   display: 'block',
                   transition: 'all 0.2s',
-                  color: 'inherit'
+                  color: 'inherit',
                 }}
               >
                 <div
@@ -120,7 +120,8 @@ export default async function ResultsPage() {
                       fontWeight: '600',
                       padding: '0.25rem 0.75rem',
                       borderRadius: '9999px',
-                      background: m.status === 'accepted' ? '#DCFCE7' : '#F1F5F9',
+                      background:
+                        m.status === 'accepted' ? '#DCFCE7' : '#F1F5F9',
                       color: m.status === 'accepted' ? '#166534' : '#475569',
                     }}
                   >

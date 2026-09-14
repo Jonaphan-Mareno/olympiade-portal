@@ -1,11 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import {
-  schools,
-  memberships,
-  users,
-} from '@/lib/db/schema';
+import { schools, memberships, users } from '@/lib/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';

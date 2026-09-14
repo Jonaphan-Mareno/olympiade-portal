@@ -182,10 +182,7 @@ export default function InviteSchoolForm({ portalId }: { portalId: string }) {
                 <label className="block font-serif text-xl font-bold text-slate-900 mb-2">
                   School Name
                 </label>
-                <div
-                  className="relative"
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <div className="relative" onClick={(e) => e.stopPropagation()}>
                   <input
                     className="w-full border border-slate-300 rounded-md p-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white"
                     type="text"
@@ -243,7 +240,16 @@ export default function InviteSchoolForm({ portalId }: { portalId: string }) {
                           onClick={() => removeTeacherEmail(index, ei)}
                           className="hover:bg-blue-200 rounded-full p-0.5 transition-colors flex items-center justify-center outline-none"
                         >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                           </svg>
@@ -302,7 +308,16 @@ export default function InviteSchoolForm({ portalId }: { portalId: string }) {
           onClick={addSchool}
           className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-semibold transition-colors text-sm"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>

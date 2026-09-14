@@ -56,8 +56,9 @@ export const schools = pgTable('schools', {
 export const portals = pgTable('portals', {
   id: uuid('id').primaryKey().defaultRandom(),
   // SET NULL so deleting a user doesn't destroy portals other people depend on
-  ownerUserId: uuid('owner_user_id')
-    .references(() => users.id, { onDelete: 'set null' }),
+  ownerUserId: uuid('owner_user_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
   name: text('name').notNull(),
   status: text('status', {
     enum: ['pending', 'approved', 'rejected'],
@@ -69,8 +70,7 @@ export const memberships = pgTable(
   'memberships',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
-      .references(() => users.id, { onDelete: 'cascade' }), // Nullable until account is claimed; removed with the user
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }), // Nullable until account is claimed; removed with the user
     portalId: uuid('portal_id')
       .references(() => portals.id, { onDelete: 'cascade' })
       .notNull(),
@@ -97,7 +97,9 @@ export const rounds = pgTable('rounds', {
     .notNull(),
   name: text('name').notNull(),
   orderIndex: integer('order_index').notNull(),
-  deliveryMethod: text('delivery_method', { enum: ['online', 'paper'] }).default('paper').notNull(),
+  deliveryMethod: text('delivery_method', { enum: ['online', 'paper'] })
+    .default('paper')
+    .notNull(),
   opensAt: timestamp('opens_at', { withTimezone: true }).notNull(),
   closesAt: timestamp('closes_at', { withTimezone: true }).notNull(),
   qualifyingThreshold: numeric('qualifying_threshold'),
@@ -158,7 +160,9 @@ export const examSittings = pgTable('exam_sittings', {
   questionPaperId: uuid('question_paper_id')
     .references(() => questionPapers.id, { onDelete: 'cascade' })
     .notNull(),
-  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
   endedAt: timestamp('ended_at', { withTimezone: true }),
   status: text('status', { enum: ['active', 'submitted', 'abandoned'] })
     .default('active')
@@ -171,7 +175,13 @@ export const questions = pgTable('questions', {
     .references(() => rounds.id, { onDelete: 'cascade' })
     .notNull(),
   questionType: text('question_type', {
-    enum: ['single_choice', 'multiple_choice', 'true_false', 'matching', 'free_text']
+    enum: [
+      'single_choice',
+      'multiple_choice',
+      'true_false',
+      'matching',
+      'free_text',
+    ],
   }).notNull(),
   prompt: text('prompt').notNull(),
   imageUrl: text('image_url'),
@@ -180,19 +190,25 @@ export const questions = pgTable('questions', {
   marks: integer('marks').notNull(),
 });
 
-export const studentAnswers = pgTable('student_answers', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  sittingId: uuid('sitting_id')
-    .references(() => examSittings.id, { onDelete: 'cascade' })
-    .notNull(),
-  questionId: uuid('question_id')
-    .references(() => questions.id, { onDelete: 'cascade' }),
-  questionNumber: integer('question_number'),
-  answerValue: text('answer_value').notNull(),
-  manualScore: numeric('manual_score'),
-  educatorFeedback: text('educator_feedback'),
-  savedAt: timestamp('saved_at', { withTimezone: true }).defaultNow().notNull(),
-}, (t) => ({
-  unq: unique().on(t.sittingId, t.questionId),
-}));
-
+export const studentAnswers = pgTable(
+  'student_answers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sittingId: uuid('sitting_id')
+      .references(() => examSittings.id, { onDelete: 'cascade' })
+      .notNull(),
+    questionId: uuid('question_id').references(() => questions.id, {
+      onDelete: 'cascade',
+    }),
+    questionNumber: integer('question_number'),
+    answerValue: text('answer_value').notNull(),
+    manualScore: numeric('manual_score'),
+    educatorFeedback: text('educator_feedback'),
+    savedAt: timestamp('saved_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    unq: unique().on(t.sittingId, t.questionId),
+  })
+);

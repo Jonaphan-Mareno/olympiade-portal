@@ -170,7 +170,10 @@ export default function LoginPage() {
               </div>
 
               <div style={{ marginTop: '0.5rem' }}>
-                <SubmitButton pendingText="Signing In..." className="login-btn bg-blue-900 hover:bg-blue-800 text-white font-semibold transition-colors">
+                <SubmitButton
+                  pendingText="Signing In..."
+                  className="login-btn bg-blue-900 hover:bg-blue-800 text-white font-semibold transition-colors"
+                >
                   Sign In
                 </SubmitButton>
               </div>

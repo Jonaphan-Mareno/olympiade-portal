@@ -8,8 +8,10 @@ import { revalidatePath } from 'next/cache';
 
 export async function createRound(formData: FormData) {
   const supabase = await createClient();
-  
-  const { data: { user } } = await supabase.auth.getUser();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
   // Extract Form Data
@@ -21,14 +23,17 @@ export async function createRound(formData: FormData) {
   const deliveryMethod = formData.get('deliveryMethod') as 'paper' | 'online';
 
   // Insert the Round
-  const [newRound] = await db.insert(rounds).values({
-    portalId,
-    name,
-    orderIndex,
-    deliveryMethod,
-    opensAt: new Date(opensAt),
-    closesAt: new Date(closesAt),
-  }).returning({ id: rounds.id });
+  const [newRound] = await db
+    .insert(rounds)
+    .values({
+      portalId,
+      name,
+      orderIndex,
+      deliveryMethod,
+      opensAt: new Date(opensAt),
+      closesAt: new Date(closesAt),
+    })
+    .returning({ id: rounds.id });
 
   if (!newRound) throw new Error('Failed to create round');
 
@@ -39,13 +44,15 @@ export async function createRound(formData: FormData) {
     // Upload Question Paper PDF
     const fileExtension = questionPaperFile.name.split('.').pop();
     const uniqueFileName = `papers/${crypto.randomUUID()}.${fileExtension}`;
-    
+
     const { error: uploadError } = await supabase.storage
       .from('round-documents')
-      .upload(uniqueFileName, questionPaperFile, { contentType: 'application/pdf' });
-      
+      .upload(uniqueFileName, questionPaperFile, {
+        contentType: 'application/pdf',
+      });
+
     if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-    
+
     const { data: publicUrlData } = supabase.storage
       .from('round-documents')
       .getPublicUrl(uniqueFileName);
@@ -56,47 +63,51 @@ export async function createRound(formData: FormData) {
       roundId: newRound.id,
       fileUrl: publicUrlData.publicUrl,
       answerKeyJson: null, // no longer JSON
-      isMultipleChoice: false, 
+      isMultipleChoice: false,
     });
   } else {
     // Online Test Delivery
     const questionsDataStr = formData.get('questionsData') as string;
     const questionsArray = JSON.parse(questionsDataStr || '[]');
-    
+
     if (questionsArray.length > 0) {
-      const inserts = await Promise.all(questionsArray.map(async (q: any) => {
-        let imageUrl: string | null = null;
-        const imageFile = formData.get(`image_${q.id}`) as File | null;
-        
-        if (imageFile && imageFile.size > 0) {
-          const fileExtension = imageFile.name.split('.').pop() || 'png';
-          const uniqueFileName = `${crypto.randomUUID()}.${fileExtension}`;
-          
-          const { error: uploadError } = await supabase.storage
-            .from('question-images')
-            .upload(uniqueFileName, imageFile, { contentType: imageFile.type });
-            
-          if (!uploadError) {
-            const { data } = supabase.storage
+      const inserts = await Promise.all(
+        questionsArray.map(async (q: any) => {
+          let imageUrl: string | null = null;
+          const imageFile = formData.get(`image_${q.id}`) as File | null;
+
+          if (imageFile && imageFile.size > 0) {
+            const fileExtension = imageFile.name.split('.').pop() || 'png';
+            const uniqueFileName = `${crypto.randomUUID()}.${fileExtension}`;
+
+            const { error: uploadError } = await supabase.storage
               .from('question-images')
-              .getPublicUrl(uniqueFileName);
-            imageUrl = data.publicUrl;
-          } else {
-            console.error('Failed to upload image:', uploadError);
+              .upload(uniqueFileName, imageFile, {
+                contentType: imageFile.type,
+              });
+
+            if (!uploadError) {
+              const { data } = supabase.storage
+                .from('question-images')
+                .getPublicUrl(uniqueFileName);
+              imageUrl = data.publicUrl;
+            } else {
+              console.error('Failed to upload image:', uploadError);
+            }
           }
-        }
-        
-        return {
-          roundId: newRound.id,
-          questionType: q.type,
-          prompt: q.prompt,
-          imageUrl,
-          marks: q.marks,
-          options: q.options || null,
-          correctAnswer: q.correctAnswer || null,
-        };
-      }));
-      
+
+          return {
+            roundId: newRound.id,
+            questionType: q.type,
+            prompt: q.prompt,
+            imageUrl,
+            marks: q.marks,
+            options: q.options || null,
+            correctAnswer: q.correctAnswer || null,
+          };
+        })
+      );
+
       await db.insert(questions).values(inserts);
     }
   }

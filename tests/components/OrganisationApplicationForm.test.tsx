@@ -15,8 +15,12 @@ describe('OrganisationApplicationForm', () => {
 
   it('renders closed initially', () => {
     render(<OrganisationApplicationForm />);
-    expect(screen.getByText('Submit organiser application')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Organisation Name')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Submit organiser application')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('Organisation Name')
+    ).not.toBeInTheDocument();
   });
 
   it('opens form when clicked', () => {
@@ -30,6 +34,8 @@ describe('OrganisationApplicationForm', () => {
     render(<OrganisationApplicationForm />);
     fireEvent.click(screen.getByText('Submit organiser application'));
     fireEvent.click(screen.getByText('Cancel'));
-    expect(screen.queryByLabelText('Organisation Name')).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('Organisation Name')
+    ).not.toBeInTheDocument();
   });
 });

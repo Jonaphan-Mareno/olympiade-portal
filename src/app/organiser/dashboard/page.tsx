@@ -90,9 +90,15 @@ export default async function OrganiserDashboardPage() {
         {/* Welcome Banner */}
         <HeroBanner
           userName={user.user_metadata?.full_name?.split(' ')[0] || 'Organiser'}
-          userInitial={(user.user_metadata?.full_name?.charAt(0) || user.email?.charAt(0) || '?').toUpperCase()}
+          userInitial={(
+            user.user_metadata?.full_name?.charAt(0) ||
+            user.email?.charAt(0) ||
+            '?'
+          ).toUpperCase()}
         />
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem 1rem' }}>
+        <div
+          style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem 1rem' }}
+        >
           {/* Action Area (Your Olympiads) */}
           <div className="mt-2">
             <div
@@ -119,7 +125,7 @@ export default async function OrganiserDashboardPage() {
                 {userPortals.map((p) => {
                   const portalSchoolList = schoolsByPortal.get(p.id) ?? [];
                   return (
-                    <div 
+                    <div
                       key={p.id}
                       className="hover:border-blue-300 hover:shadow-md transition-all duration-200 bg-white"
                       style={{
@@ -132,8 +138,19 @@ export default async function OrganiserDashboardPage() {
                       }}
                     >
                       <div>
-                        <Link href={`/organiser/olympiads/${p.id}`} style={{ textDecoration: 'none' }}>
-                          <h3 className="hover:text-blue-600 transition-colors" style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1E293B', margin: '0 0 0.25rem 0' }}>
+                        <Link
+                          href={`/organiser/olympiads/${p.id}`}
+                          style={{ textDecoration: 'none' }}
+                        >
+                          <h3
+                            className="hover:text-blue-600 transition-colors"
+                            style={{
+                              fontSize: '1.25rem',
+                              fontWeight: '600',
+                              color: '#1E293B',
+                              margin: '0 0 0.25rem 0',
+                            }}
+                          >
                             {p.name}
                           </h3>
                         </Link>

@@ -171,7 +171,9 @@ export default function InviteStudentsForm({
             fontFamily: 'inherit',
             transition: 'all 0.2s',
           }}
-          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#EFF6FF')}
+          onMouseOver={(e) =>
+            (e.currentTarget.style.backgroundColor = '#EFF6FF')
+          }
           onMouseOut={(e) =>
             (e.currentTarget.style.backgroundColor = 'transparent')
           }
