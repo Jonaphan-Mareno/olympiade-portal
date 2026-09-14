@@ -1,10 +1,18 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
-import { memberships, portals, schools, rounds } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import {
+  memberships,
+  portals,
+  schools,
+  rounds,
+  submissions,
+  results as resultsTable,
+} from '@/lib/db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import RoundTabs from './RoundTabs';
 import Link from 'next/link';
+import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +77,58 @@ export default async function PortalRoundsPage({
   // Sort by orderIndex
   portalRounds.sort((a, b) => a.orderIndex - b.orderIndex);
 
+  // The entrant's own submission + result per round, shown once results are
+  // released (the organiser triggers the release, which also emails the entrant)
+  const roundIds = portalRounds.map((r) => r.id);
+  const mySubmissions =
+    roundIds.length > 0
+      ? await db
+          .select({
+            roundId: submissions.roundId,
+            status: submissions.status,
+            score: resultsTable.score,
+            feedback: resultsTable.feedback,
+          })
+          .from(submissions)
+          .leftJoin(resultsTable, eq(resultsTable.submissionId, submissions.id))
+          .where(
+            and(
+              inArray(submissions.roundId, roundIds),
+              eq(submissions.studentMembershipId, membership.id)
+            )
+          )
+      : [];
+
+  const myResultByRound = new Map(
+    mySubmissions.map((s) => [
+      s.roundId,
+      {
+        submitted: s.status === 'submitted',
+        score: s.score,
+        feedback: s.feedback,
+      },
+    ])
+  );
+
+  const roundsWithResults = portalRounds.map((round) => {
+    const mine = myResultByRound.get(round.id);
+    return {
+      id: round.id,
+      name: round.name,
+      opensAt: round.opensAt,
+      closesAt: round.closesAt,
+      qualifyingThreshold: round.qualifyingThreshold,
+      state: deriveRoundState(round),
+      myResult: round.resultsPublishedAt
+        ? {
+            submitted: mine?.submitted ?? false,
+            score: mine?.score ?? null,
+            feedback: mine?.feedback ?? null,
+          }
+        : null,
+    };
+  });
+
   return (
     <div
       style={{
@@ -130,7 +190,7 @@ export default async function PortalRoundsPage({
           Status: {membership.status}
         </div>
 
-        <RoundTabs rounds={portalRounds} />
+        <RoundTabs rounds={roundsWithResults} />
       </div>
     </div>
   );

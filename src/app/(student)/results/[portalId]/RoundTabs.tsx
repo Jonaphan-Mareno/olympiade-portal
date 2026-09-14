@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { RoundState } from '@/domain/rounds/round-state-machine';
 
 type Round = {
   id: string;
@@ -8,7 +9,42 @@ type Round = {
   opensAt: Date | null;
   closesAt: Date | null;
   qualifyingThreshold: string | null;
+  state: RoundState;
+  // Own result, present only once the round's results have been released
+  myResult: {
+    submitted: boolean;
+    score: string | null;
+    feedback: string | null;
+  } | null;
 };
+
+const STATE_STYLES: Record<RoundState, { background: string; color: string }> =
+  {
+    scheduled: { background: '#F1F5F9', color: '#475569' },
+    open: { background: '#DCFCE7', color: '#166534' },
+    closed: { background: '#FEF3C7', color: '#92400E' },
+    released: { background: '#DBEAFE', color: '#1E40AF' },
+  };
+
+function StateBadge({ state }: { state: RoundState }) {
+  const styles = STATE_STYLES[state];
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        fontSize: '0.75rem',
+        fontWeight: 600,
+        padding: '0.25rem 0.75rem',
+        borderRadius: '9999px',
+        marginLeft: '0.75rem',
+        verticalAlign: 'middle',
+        ...styles,
+      }}
+    >
+      {state}
+    </span>
+  );
+}
 
 export default function RoundTabs({ rounds }: { rounds: Round[] }) {
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(
@@ -85,6 +121,7 @@ export default function RoundTabs({ rounds }: { rounds: Round[] }) {
             }}
           >
             {selectedRound.name} Details
+            <StateBadge state={selectedRound.state} />
           </h2>
           <div
             style={{
@@ -147,6 +184,69 @@ export default function RoundTabs({ rounds }: { rounds: Round[] }) {
               </div>
             )}
           </div>
+
+          {selectedRound.myResult && (
+            <div
+              style={{
+                marginTop: '2rem',
+                padding: '1.25rem',
+                borderRadius: '0.75rem',
+                border: '1px solid #DBEAFE',
+                backgroundColor: '#F0F7FF',
+              }}
+            >
+              <strong
+                style={{
+                  display: 'block',
+                  color: '#1E40AF',
+                  marginBottom: '0.75rem',
+                  fontSize: '0.9rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                Your Result
+              </strong>
+              {selectedRound.myResult.submitted ? (
+                selectedRound.myResult.score ? (
+                  <div>
+                    <p style={{ margin: '0 0 0.5rem', fontSize: '1.25rem' }}>
+                      Score:{' '}
+                      <strong style={{ color: '#1E293B' }}>
+                        {selectedRound.myResult.score}
+                      </strong>
+                    </p>
+                    {selectedRound.qualifyingThreshold && (
+                      <p style={{ margin: '0 0 0.5rem', color: '#475569' }}>
+                        Qualifying threshold:{' '}
+                        {selectedRound.qualifyingThreshold}
+                      </p>
+                    )}
+                    {selectedRound.myResult.feedback && (
+                      <p
+                        style={{
+                          margin: 0,
+                          color: '#475569',
+                          borderLeft: '3px solid #93C5FD',
+                          paddingLeft: '0.75rem',
+                        }}
+                      >
+                        {selectedRound.myResult.feedback}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p style={{ margin: 0, color: '#475569' }}>
+                    Your submission is still being marked — check back soon.
+                  </p>
+                )
+              ) : (
+                <p style={{ margin: 0, color: '#475569' }}>
+                  No submission was received from you for this round.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

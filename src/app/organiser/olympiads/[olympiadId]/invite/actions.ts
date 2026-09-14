@@ -2,11 +2,15 @@
 
 import { db } from '@/lib/db';
 import { schools, memberships, users } from '@/lib/db/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { sendInviteEmail } from '@/lib/email';
+
+// Thrown when a school picked from the autocomplete belongs to a different
+// portal; letting it through would leak participants across olympiads.
+class InvalidSchoolError extends Error {}
 
 export async function sendInvitations(portalId: string, formData: FormData) {
   const supabase = await createClient();
@@ -70,10 +74,15 @@ export async function sendInvitations(portalId: string, formData: FormData) {
           // Use an existing school
           schoolId = entry.existingId;
           const [existingSchool] = await tx
-            .select({ name: schools.name })
+            .select({ name: schools.name, portalId: schools.portalId })
             .from(schools)
             .where(eq(schools.id, entry.existingId));
-          schoolName = existingSchool?.name ?? entry.newName;
+          if (!existingSchool || existingSchool.portalId !== portalId) {
+            // Rolls the whole transaction back: no memberships may point at
+            // another olympiad's school row.
+            throw new InvalidSchoolError();
+          }
+          schoolName = existingSchool.name;
         } else {
           // Create a new school
           const [newSchool] = await tx
@@ -94,33 +103,77 @@ export async function sendInvitations(portalId: string, formData: FormData) {
           for (const email of uniqueEmails) {
             const existingUserId = existingUserMap.get(email);
 
-            if (existingUserId) {
-              // Educator already has an account - link them directly
-              await tx.insert(memberships).values({
-                userId: existingUserId,
-                portalId,
-                schoolId,
-                role: 'educator',
-                status: 'accepted',
-                invitedEmail: email,
-              });
-            } else {
-              // No account yet - create invite and track for email
-              const [membership] = await tx
-                .insert(memberships)
-                .values({
+            // A membership is unique per (portal, invited email): re-inviting
+            // an address that is already a member of this portal must not
+            // crash the whole transaction.
+            const [existingMembership] = await tx
+              .select()
+              .from(memberships)
+              .where(
+                and(
+                  eq(memberships.portalId, portalId),
+                  eq(memberships.invitedEmail, email)
+                )
+              );
+
+            if (existingMembership?.status === 'accepted') {
+              // Already a member of this portal — nothing to do.
+              continue;
+            }
+
+            if (!existingMembership) {
+              if (existingUserId) {
+                // Educator already has an account - link them directly
+                await tx.insert(memberships).values({
+                  userId: existingUserId,
                   portalId,
                   schoolId,
                   role: 'educator',
-                  status: 'invited',
+                  status: 'accepted',
                   invitedEmail: email,
+                });
+              } else {
+                // No account yet - create invite and track for email
+                const [membership] = await tx
+                  .insert(memberships)
+                  .values({
+                    portalId,
+                    schoolId,
+                    role: 'educator',
+                    status: 'invited',
+                    invitedEmail: email,
+                  })
+                  .returning();
+
+                invitesToSend.push({
+                  email,
+                  schoolName,
+                  inviteToken: membership.inviteToken!,
+                });
+              }
+            } else if (existingUserId) {
+              // Pending invite, but the account now exists — link and accept
+              await tx
+                .update(memberships)
+                .set({
+                  userId: existingUserId,
+                  schoolId,
+                  status: 'accepted',
+                  claimedAt: new Date(),
                 })
-                .returning();
+                .where(eq(memberships.id, existingMembership.id));
+            } else {
+              // Pending invite, still no account — re-send the original
+              // token, refreshed to point at this school
+              await tx
+                .update(memberships)
+                .set({ schoolId })
+                .where(eq(memberships.id, existingMembership.id));
 
               invitesToSend.push({
                 email,
                 schoolName,
-                inviteToken: membership.inviteToken!,
+                inviteToken: existingMembership.inviteToken!,
               });
             }
           }
@@ -142,6 +195,12 @@ export async function sendInvitations(portalId: string, formData: FormData) {
       }
     }
   } catch (err: any) {
+    if (err instanceof InvalidSchoolError) {
+      return {
+        error:
+          'One of the selected schools does not belong to this olympiad. Pick it from the suggestions or enter it as a new school.',
+      };
+    }
     console.error('Failed to send invitations:', err);
     return { error: 'Failed to send invitations. Please try again.' };
   }

@@ -11,6 +11,8 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import QuestionBuilder from '@/components/organiser/QuestionBuilder';
 import { updateRound } from './actions';
+import { deriveRoundState } from '@/domain/rounds/round-state-machine';
+import PublishResultsButton from './PublishResultsButton';
 
 export default async function ManageRoundPage({
   params,
@@ -33,6 +35,8 @@ export default async function ManageRoundPage({
   if (!round) {
     return <div>Round not found.</div>;
   }
+
+  const roundState = deriveRoundState(round);
 
   const dbQuestions = await db
     .select()
@@ -87,9 +91,31 @@ export default async function ManageRoundPage({
           >
             &larr; Back to Olympiad
           </Link>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            Manage Round
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">
+              Manage Round
+            </h1>
+            <span
+              style={{
+                display: 'inline-block',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                padding: '0.25rem 0.75rem',
+                borderRadius: '9999px',
+              }}
+              className={
+                roundState === 'scheduled'
+                  ? 'bg-slate-100 text-slate-700'
+                  : roundState === 'open'
+                    ? 'bg-green-100 text-green-800'
+                    : roundState === 'closed'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-blue-100 text-blue-800'
+              }
+            >
+              {roundState}
+            </span>
+          </div>
           <p className="text-slate-600 text-lg">
             Update round details and edit questions.
           </p>
@@ -213,6 +239,37 @@ export default async function ManageRoundPage({
               </>
             )}
           </div>
+
+          {/* Section 3: Results publication */}
+          {(roundState === 'closed' || roundState === 'released') && (
+            <div className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-200">
+              <h2 className="text-xl font-bold text-slate-900 mb-2 border-b border-slate-100 pb-3">
+                Results
+              </h2>
+              {roundState === 'released' ? (
+                <p className="text-slate-700">
+                  Results were published on{' '}
+                  <strong>
+                    {round.resultsPublishedAt?.toLocaleString() ?? 'unknown'}
+                  </strong>
+                  . Educators and entrants have been notified; any failed sends
+                  are retried automatically by the daily reminder sweep.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-slate-700">
+                    This round has closed. Publishing the results emails every
+                    educator a school-level summary and every entrant who
+                    submitted their own result.
+                  </p>
+                  <PublishResultsButton
+                    portalId={olympiadId}
+                    roundId={roundId}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-end pt-4">
             <button

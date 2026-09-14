@@ -43,6 +43,13 @@
       "when": 1789328874406,
       "tag": "0005_regular_leper_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789400815577,
+      "tag": "0006_yellow_onslaught",
+      "breakpoints": true
     }
   ]
 }
