@@ -55,13 +55,16 @@ export default function CreatePortalSection({
           </p>
           <button
             onClick={() => setShowDrawer(true)}
-            className="bg-amber-500 hover:bg-amber-600 text-white font-semibold border-none shadow-sm transition-colors px-4 py-2 rounded-md"
+            className="bg-blue-900 hover:bg-blue-800 text-white font-semibold border-none shadow-sm transition-colors px-4 py-2 rounded-md"
           >
             Create New Olympiad
           </button>
         </div>
       ) : (
-        <button onClick={() => setShowDrawer(true)} className="bg-amber-500 hover:bg-amber-600 text-white font-semibold border-none shadow-sm transition-colors px-4 py-2 rounded-md">
+        <button
+          onClick={() => setShowDrawer(true)}
+          className="bg-blue-900 hover:bg-blue-800 text-white font-semibold border-none shadow-sm transition-colors px-4 py-2 rounded-md"
+        >
           Create New Olympiad
         </button>
       )}

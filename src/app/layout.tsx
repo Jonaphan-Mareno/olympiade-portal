@@ -1,4 +1,8 @@
 import './globals.css';
+import { Inter, Lora } from 'next/font/google';
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const lora = Lora({ subsets: ['latin'], variable: '--font-lora' });
 
 export const metadata = {
   title: 'Olympiad Portal',
@@ -14,8 +18,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className={`${inter.variable} ${lora.variable}`}>
+      <body className="font-sans antialiased bg-white overscroll-y-none">
+        {children}
+      </body>
     </html>
   );
 }

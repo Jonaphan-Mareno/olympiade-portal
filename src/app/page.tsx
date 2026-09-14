@@ -66,21 +66,18 @@ export default function LoginPage() {
         }
 
         /* Button Overrides */
-        .btn-primary.login-btn { 
-          background: #0066CC !important; 
-          color: #FFFFFF !important; 
+        .login-btn { 
+          background: #1e3a8a !important;
+          color: white !important;
           border: none !important; 
           border-radius: 4px !important; 
           padding: 0.75rem 1.5rem !important; 
-          font-weight: 600 !important; 
-          cursor: pointer !important; 
-          transition: background-color 0s !important; 
           width: 100% !important; 
           box-shadow: none !important; 
           transform: none !important;
         }
-        .btn-primary.login-btn:hover { 
-          background: #004C99 !important; 
+        .login-btn:hover {
+          background: #1e40af !important;
         }
       `,
         }}
@@ -110,6 +107,7 @@ export default function LoginPage() {
         >
           <div style={{ width: '100%', maxWidth: '380px' }}>
             <h1
+              className="font-serif"
               style={{
                 fontSize: '2.5rem',
                 fontWeight: 600,
@@ -172,7 +170,10 @@ export default function LoginPage() {
               </div>
 
               <div style={{ marginTop: '0.5rem' }}>
-                <SubmitButton pendingText="Signing In..." className="login-btn">
+                <SubmitButton
+                  pendingText="Signing In..."
+                  className="login-btn bg-blue-900 hover:bg-blue-800 text-white font-semibold transition-colors"
+                >
                   Sign In
                 </SubmitButton>
               </div>
@@ -189,8 +190,8 @@ export default function LoginPage() {
                 </span>
                 <Link
                   href="/signup"
+                  className="text-blue-900 hover:text-blue-800 transition-colors"
                   style={{
-                    color: '#0066CC',
                     textDecoration: 'none',
                     fontWeight: 600,
                   }}
@@ -288,6 +289,7 @@ export default function LoginPage() {
             />
           </div>
           <h2
+            className="font-serif"
             style={{
               fontSize: '3.5rem',
               fontWeight: 700,

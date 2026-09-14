@@ -55,15 +55,15 @@ Email delivery is intentionally non-blocking: each invite send is wrapped in its
 
 All email configuration lives in `.env.local` (never commit real keys):
 
-| Variable | Required | Description |
-| --- | --- | --- |
-| `SMTP_HOST` | Yes | SMTP relay hostname. For Brevo: `smtp-relay.brevo.com`. |
-| `SMTP_PORT` | No | Defaults to `587` (STARTTLS). Use `465` for implicit TLS. |
-| `SMTP_USER` | Yes | The SMTP **Login** value from the Brevo dashboard, e.g. `xxxxxxxx@smtp-brevo.com`. |
-| `SMTP_PASS` | Yes | A generated Brevo **SMTP key** (`xsmtpsib-...`) — not your Brevo account password. |
-| `SMTP_SECURE` | No | Set to `true` to force implicit TLS on any port. |
-| `EMAIL_FROM` | Recommended | Sender address shown to recipients. Must be your Brevo account email or a sender/domain verified in Brevo, otherwise sends are rejected. A display name is supported, e.g. `"Olympiad Portal" <you@example.com>`. |
-| `NEXT_PUBLIC_BASE_URL` | Recommended | Absolute base URL of the deployment, used to build the invitation links (trailing slashes are stripped automatically). |
+| Variable               | Required    | Description                                                                                                                                                                                                       |
+| ---------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SMTP_HOST`            | Yes         | SMTP relay hostname. For Brevo: `smtp-relay.brevo.com`.                                                                                                                                                           |
+| `SMTP_PORT`            | No          | Defaults to `587` (STARTTLS). Use `465` for implicit TLS.                                                                                                                                                         |
+| `SMTP_USER`            | Yes         | The SMTP **Login** value from the Brevo dashboard, e.g. `xxxxxxxx@smtp-brevo.com`.                                                                                                                                |
+| `SMTP_PASS`            | Yes         | A generated Brevo **SMTP key** (`xsmtpsib-...`) — not your Brevo account password.                                                                                                                                |
+| `SMTP_SECURE`          | No          | Set to `true` to force implicit TLS on any port.                                                                                                                                                                  |
+| `EMAIL_FROM`           | Recommended | Sender address shown to recipients. Must be your Brevo account email or a sender/domain verified in Brevo, otherwise sends are rejected. A display name is supported, e.g. `"Olympiad Portal" <you@example.com>`. |
+| `NEXT_PUBLIC_BASE_URL` | Recommended | Absolute base URL of the deployment, used to build the invitation links (trailing slashes are stripped automatically).                                                                                            |
 
 :::note
 

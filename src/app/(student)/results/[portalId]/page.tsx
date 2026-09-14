@@ -79,7 +79,14 @@ export default async function PortalRoundsPage({
     >
       <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
         <div style={{ marginBottom: '2rem' }}>
-          <Link href="/results" style={{ color: '#0066CC', textDecoration: 'none', fontWeight: '500' }}>
+          <Link
+            href="/results"
+            style={{
+              color: '#0066CC',
+              textDecoration: 'none',
+              fontWeight: '500',
+            }}
+          >
             &larr; Back to Dashboard
           </Link>
         </div>
@@ -94,7 +101,7 @@ export default async function PortalRoundsPage({
         >
           {portalResult.name}
         </h1>
-        
+
         {schoolName && (
           <p
             style={{
@@ -106,7 +113,7 @@ export default async function PortalRoundsPage({
             {schoolName}
           </p>
         )}
-        
+
         <div
           style={{
             display: 'inline-block',
@@ -114,9 +121,10 @@ export default async function PortalRoundsPage({
             fontWeight: '600',
             padding: '0.25rem 0.75rem',
             borderRadius: '9999px',
-            background: membership.status === 'accepted' ? '#DCFCE7' : '#F1F5F9',
+            background:
+              membership.status === 'accepted' ? '#DCFCE7' : '#F1F5F9',
             color: membership.status === 'accepted' ? '#166534' : '#475569',
-            marginTop: '0.5rem'
+            marginTop: '0.5rem',
           }}
         >
           Status: {membership.status}

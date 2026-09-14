@@ -22,12 +22,14 @@ describe('SubmitButton', () => {
 
   it('renders pending text and disables button when pending', () => {
     mockUseFormStatus.mockReturnValue({ pending: true });
-    render(<SubmitButton pendingText="Please wait...">Submit Data</SubmitButton>);
+    render(
+      <SubmitButton pendingText="Please wait...">Submit Data</SubmitButton>
+    );
     expect(screen.getByText('Please wait...')).toBeInTheDocument();
     expect(screen.queryByText('Submit Data')).not.toBeInTheDocument();
     expect(screen.getByRole('button')).toBeDisabled();
   });
-  
+
   it('defaults to "Submitting..." if pendingText is not provided', () => {
     mockUseFormStatus.mockReturnValue({ pending: true });
     render(<SubmitButton>Submit Data</SubmitButton>);

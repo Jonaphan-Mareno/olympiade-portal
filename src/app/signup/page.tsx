@@ -70,21 +70,18 @@ function SignupForm() {
         }
 
         /* Button Overrides */
-        .btn-primary.signup-btn { 
-          background: #0066CC !important; 
-          color: #FFFFFF !important; 
+        .signup-btn { 
+          background: #1e3a8a !important;
+          color: white !important;
           border: none !important; 
           border-radius: 4px !important; 
           padding: 0.75rem 1.5rem !important; 
-          font-weight: 600 !important; 
-          cursor: pointer !important; 
-          transition: background-color 0s !important; 
           width: 100% !important; 
           box-shadow: none !important; 
           transform: none !important;
         }
-        .btn-primary.signup-btn:hover { 
-          background: #004C99 !important; 
+        .signup-btn:hover {
+          background: #1e40af !important;
         }
       `,
         }}
@@ -138,6 +135,7 @@ function SignupForm() {
             />
           </div>
           <h2
+            className="font-serif"
             style={{
               fontSize: '3.5rem',
               fontWeight: 700,
@@ -220,6 +218,7 @@ function SignupForm() {
         >
           <div style={{ width: '100%', maxWidth: '380px' }}>
             <h1
+              className="font-serif"
               style={{
                 fontSize: '2.25rem',
                 fontWeight: 700,
@@ -314,7 +313,7 @@ function SignupForm() {
               <div style={{ marginTop: '0.5rem' }}>
                 <SubmitButton
                   pendingText="Creating Account..."
-                  className="signup-btn"
+                  className="signup-btn bg-blue-900 hover:bg-blue-800 text-white font-semibold transition-colors"
                 >
                   {inviteToken ? 'Claim Account' : 'Sign Up as Organiser'}
                 </SubmitButton>
@@ -332,8 +331,8 @@ function SignupForm() {
                 </span>
                 <Link
                   href="/"
+                  className="text-blue-900 hover:text-blue-800 transition-colors"
                   style={{
-                    color: '#0066CC',
                     textDecoration: 'none',
                     fontWeight: 600,
                   }}

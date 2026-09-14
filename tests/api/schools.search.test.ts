@@ -26,10 +26,12 @@ describe('GET /api/schools/search', () => {
 
   it('returns 401 if user is not authenticated', async () => {
     (createClient as any).mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) }
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
     });
 
-    const req = new NextRequest('http://localhost:3000/api/schools/search?q=test');
+    const req = new NextRequest(
+      'http://localhost:3000/api/schools/search?q=test'
+    );
     const res = await GET(req);
 
     expect(res.status).toBe(401);
@@ -37,7 +39,9 @@ describe('GET /api/schools/search', () => {
 
   it('returns empty array if query is missing', async () => {
     (createClient as any).mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: '123' } } }) }
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: '123' } } }),
+      },
     });
 
     const req = new NextRequest('http://localhost:3000/api/schools/search');
@@ -50,7 +54,9 @@ describe('GET /api/schools/search', () => {
 
   it('returns empty array if query length is less than 2', async () => {
     (createClient as any).mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: '123' } } }) }
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: '123' } } }),
+      },
     });
 
     const req = new NextRequest('http://localhost:3000/api/schools/search?q=a');
@@ -63,14 +69,16 @@ describe('GET /api/schools/search', () => {
 
   it('returns search results for valid query', async () => {
     (createClient as any).mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: '123' } } }) }
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: '123' } } }),
+      },
     });
 
-    mockLimit.mockResolvedValue([
-      { id: '1', name: 'Test High School' }
-    ]);
+    mockLimit.mockResolvedValue([{ id: '1', name: 'Test High School' }]);
 
-    const req = new NextRequest('http://localhost:3000/api/schools/search?q=test');
+    const req = new NextRequest(
+      'http://localhost:3000/api/schools/search?q=test'
+    );
     const res = await GET(req);
     const json = await res.json();
 

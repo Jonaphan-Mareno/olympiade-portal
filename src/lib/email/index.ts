@@ -88,12 +88,13 @@ export async function sendInviteEmail(params: {
 }): Promise<{ previewUrl?: string }> {
   const role = params.role ?? 'educator';
   // Strip trailing slashes so links stay correct whether or not the env var has one
-  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000').replace(
-    /\/+$/,
-    ''
-  );
+  const baseUrl = (
+    process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+  ).replace(/\/+$/, '');
   const inviteLink = `${baseUrl}/signup?inviteToken=${params.inviteToken}`;
-  const from = process.env.EMAIL_FROM || '"Olympiad Portal" <noreply@olympiad-portal.local>';
+  const from =
+    process.env.EMAIL_FROM ||
+    '"Olympiad Portal" <noreply@olympiad-portal.local>';
 
   const transporter = await getTransporter();
 
@@ -122,7 +123,9 @@ export async function sendInviteEmail(params: {
     // Ethereal fallback — log the preview link
     console.log(`Invite email preview: ${previewUrl}`);
   } else {
-    console.log(`Invite email sent to ${params.to} (message id: ${info.messageId})`);
+    console.log(
+      `Invite email sent to ${params.to} (message id: ${info.messageId})`
+    );
   }
 
   return { previewUrl };
