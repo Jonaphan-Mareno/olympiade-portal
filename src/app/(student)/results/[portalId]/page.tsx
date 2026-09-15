@@ -190,7 +190,7 @@ export default async function PortalRoundsPage({
     myResult: round.resultsPublishedAt
       ? {
           submitted: mine?.submitted ?? false,
-          score: mine?.score ?? null,
+          score: mine?.score ? Number(mine.score) : null,
           feedback: mine?.feedback ?? null,
         }
       : null,
