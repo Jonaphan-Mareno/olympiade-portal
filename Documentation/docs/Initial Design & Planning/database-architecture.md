@@ -2,6 +2,8 @@
 
 ## Schema Documentation
 
+![Supabase Database Schema](/img/supabase-schema.svg)
+
 Our system uses a strictly normalized PostgreSQL relational database to ensure absolute data integrity between users, educational institutions, and complex Olympiad events. The schema is defined, version-controlled, and managed via **Drizzle ORM**.
 
 ### Core Entities & Relationships
