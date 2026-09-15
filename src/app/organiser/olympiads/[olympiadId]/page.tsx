@@ -1,9 +1,10 @@
 import { db } from '@/lib/db';
-import { portals, rounds, schools } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { memberships, portals, rounds, schools, users } from '@/lib/db/schema';
+import { and, count, eq, inArray } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import DeletePortalButton from './DeletePortalButton';
+import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 
 export default async function OlympiadDetailsPage({
   params,
@@ -35,6 +36,62 @@ export default async function OlympiadDetailsPage({
     .from(schools)
     .where(eq(schools.portalId, portalId))
     .orderBy(schools.createdAt);
+
+  // 3b. Each school's educators (with their account name once claimed) and
+  // student totals, so the list below shows who is actually participating
+  const schoolIds = existingSchools.map((s) => s.id);
+
+  const educatorMemberships =
+    schoolIds.length > 0
+      ? await db
+          .select({
+            id: memberships.id,
+            schoolId: memberships.schoolId,
+            status: memberships.status,
+            invitedEmail: memberships.invitedEmail,
+            userName: users.name,
+          })
+          .from(memberships)
+          .leftJoin(users, eq(memberships.userId, users.id))
+          .where(
+            and(
+              inArray(memberships.schoolId, schoolIds),
+              eq(memberships.portalId, portalId),
+              eq(memberships.role, 'educator')
+            )
+          )
+      : [];
+
+  const studentCountRows =
+    schoolIds.length > 0
+      ? await db
+          .select({ schoolId: memberships.schoolId, total: count() })
+          .from(memberships)
+          .where(
+            and(
+              inArray(memberships.schoolId, schoolIds),
+              eq(memberships.portalId, portalId),
+              eq(memberships.role, 'student')
+            )
+          )
+          .groupBy(memberships.schoolId)
+      : [];
+
+  const educatorsBySchool = new Map<
+    string,
+    (typeof educatorMemberships)[number][]
+  >();
+  for (const educator of educatorMemberships) {
+    if (!educator.schoolId) continue;
+    const list = educatorsBySchool.get(educator.schoolId) ?? [];
+    list.push(educator);
+    educatorsBySchool.set(educator.schoolId, list);
+  }
+
+  const studentsBySchool = new Map<string, number>();
+  for (const row of studentCountRows) {
+    if (row.schoolId) studentsBySchool.set(row.schoolId, row.total);
+  }
 
   return (
     <div className="min-h-screen bg-white font-sans">
@@ -86,30 +143,54 @@ export default async function OlympiadDetailsPage({
               </div>
             ) : (
               <div className="flex flex-col">
-                {existingRounds.map((round, idx) => (
-                  <div
-                    key={round.id}
-                    className={`flex flex-row justify-between items-center py-6 px-8 md:px-10 border-b border-slate-200 rounded-none ${
-                      idx % 2 === 0 ? 'bg-blue-50/50' : 'bg-blue-900/5'
-                    }`}
-                  >
-                    <div>
-                      <h3 className="font-serif text-xl font-bold text-slate-900 m-0 mb-1">
-                        Round {round.orderIndex}: {round.name}
-                      </h3>
-                      <p className="text-sm text-slate-600 m-0">
-                        Opens: {round.opensAt.toLocaleString()} | Closes:{' '}
-                        {round.closesAt.toLocaleString()}
-                      </p>
-                    </div>
-                    <Link
-                      href={`/organiser/olympiads/${portalId}/rounds/${round.id}`}
-                      className="text-slate-900 no-underline text-sm font-semibold hover:text-blue-600 transition-colors"
+                {existingRounds.map((round, idx) => {
+                  const state = deriveRoundState(round);
+                  return (
+                    <div
+                      key={round.id}
+                      className={`flex flex-row justify-between items-center py-6 px-8 md:px-10 border-b border-slate-200 rounded-none ${
+                        idx % 2 === 0 ? 'bg-blue-50/50' : 'bg-blue-900/5'
+                      }`}
                     >
-                      Manage &rarr;
-                    </Link>
-                  </div>
-                ))}
+                      <div>
+                        <h3 className="font-serif text-xl font-bold text-slate-900 m-0 mb-1">
+                          Round {round.orderIndex}: {round.name}{' '}
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              fontSize: '0.7rem',
+                              fontWeight: 600,
+                              padding: '0.15rem 0.6rem',
+                              borderRadius: '9999px',
+                              verticalAlign: 'middle',
+                            }}
+                            className={
+                              state === 'scheduled'
+                                ? 'bg-slate-100 text-slate-700'
+                                : state === 'open'
+                                  ? 'bg-green-100 text-green-800'
+                                  : state === 'closed'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-blue-100 text-blue-800'
+                            }
+                          >
+                            {state}
+                          </span>
+                        </h3>
+                        <p className="text-sm text-slate-600 m-0">
+                          Opens: {round.opensAt.toLocaleString()} | Closes:{' '}
+                          {round.closesAt.toLocaleString()}
+                        </p>
+                      </div>
+                      <Link
+                        href={`/organiser/olympiads/${portalId}/rounds/${round.id}`}
+                        className="text-slate-900 no-underline text-sm font-semibold hover:text-blue-600 transition-colors"
+                      >
+                        Manage &rarr;
+                      </Link>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -137,26 +218,75 @@ export default async function OlympiadDetailsPage({
               </div>
             ) : (
               <div className="flex flex-col">
-                {existingSchools.map((school, idx) => (
-                  <div
-                    key={school.id}
-                    className={`flex flex-row justify-between items-center py-6 px-8 md:px-10 border-b border-slate-200 rounded-none ${
-                      idx % 2 === 0 ? 'bg-blue-50/50' : 'bg-slate-900/5'
-                    }`}
-                  >
-                    <div>
-                      <h3 className="font-serif text-xl font-bold text-slate-900 m-0 mb-1">
-                        {school.name}
-                      </h3>
-                      <p className="text-sm text-slate-600 m-0">
-                        Added:{' '}
-                        {school.createdAt
-                          ? school.createdAt.toLocaleDateString()
-                          : 'Unknown'}
-                      </p>
+                {existingSchools.map((school, idx) => {
+                  const educators = educatorsBySchool.get(school.id) ?? [];
+                  const studentTotal = studentsBySchool.get(school.id) ?? 0;
+                  return (
+                    <div
+                      key={school.id}
+                      className={`flex flex-row justify-between items-center py-6 px-8 md:px-10 border-b border-slate-200 rounded-none ${
+                        idx % 2 === 0 ? 'bg-blue-50/50' : 'bg-slate-900/5'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <h3 className="font-serif text-xl font-bold text-slate-900 m-0 mb-2">
+                          {school.name}
+                        </h3>
+
+                        {/* Educators invited for this school */}
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {educators.length === 0 ? (
+                            <span className="text-sm text-slate-500 italic">
+                              No educator linked yet
+                            </span>
+                          ) : (
+                            educators.map((educator) => (
+                              <span
+                                key={educator.id}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-sm ${
+                                  educator.status === 'accepted'
+                                    ? 'bg-green-50 border-green-200 text-green-800'
+                                    : 'bg-slate-50 border-slate-200 text-slate-600'
+                                }`}
+                              >
+                                {educator.invitedEmail}
+                                {educator.userName &&
+                                  educator.userName !==
+                                    educator.invitedEmail && (
+                                    <span className="text-xs text-slate-400">
+                                      {educator.userName}
+                                    </span>
+                                  )}
+                                {educator.status !== 'accepted' && (
+                                  <span className="text-[0.65rem] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    pending
+                                  </span>
+                                )}
+                              </span>
+                            ))
+                          )}
+                        </div>
+
+                        <p className="text-xs text-slate-500 m-0">
+                          Added:{' '}
+                          {school.createdAt
+                            ? school.createdAt.toLocaleDateString()
+                            : 'Unknown'}
+                        </p>
+                      </div>
+
+                      {/* Student head-count for this school */}
+                      <div className="text-right shrink-0 ml-6">
+                        <span className="font-serif text-2xl font-bold text-slate-900">
+                          {studentTotal}
+                        </span>
+                        <span className="block text-xs text-slate-500 uppercase tracking-wide">
+                          student{studentTotal === 1 ? '' : 's'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

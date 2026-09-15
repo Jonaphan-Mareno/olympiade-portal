@@ -103,6 +103,9 @@ export const rounds = pgTable('rounds', {
   opensAt: timestamp('opens_at', { withTimezone: true }).notNull(),
   closesAt: timestamp('closes_at', { withTimezone: true }).notNull(),
   qualifyingThreshold: numeric('qualifying_threshold'),
+  // Set when the organiser releases the round's results (state -> 'released');
+  // drives the "results are out" emails to educators and entrants
+  resultsPublishedAt: timestamp('results_published_at', { withTimezone: true }),
 });
 
 export const questionPapers = pgTable('question_papers', {
@@ -210,5 +213,55 @@ export const studentAnswers = pgTable(
   },
   (t) => ({
     unq: unique().on(t.sittingId, t.questionId),
+  })
+);
+
+// Audit + idempotency log for the automated reminder emails sent by the
+// notification engine (src/domain/notifications/automation-engine.ts).
+// The unique (kind, round, recipient) constraint guarantees each recipient
+// gets at most one email of each kind per round, so the scheduler sweep can
+// run repeatedly (daily cron, manual triggers) without double-sending.
+export const notificationLog = pgTable(
+  'notification_log',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    kind: text('kind', {
+      enum: [
+        // Round opens soon -> educators of every school in the portal
+        'round_opening_reminder',
+        // Round closes soon -> educators of every school in the portal
+        'round_closing_reminder',
+        // Round closed but a school's submissions never arrived -> educators
+        'submission_overdue_followup',
+        // Results released -> school-level summary for educators
+        'results_published_school',
+        // Results released -> own result for each entrant
+        'results_published_entrant',
+      ],
+    }).notNull(),
+    roundId: uuid('round_id')
+      .references(() => rounds.id, { onDelete: 'cascade' })
+      .notNull(),
+    // Membership of the educator (school-level emails) or entrant
+    // (individual result email) the notification was addressed to
+    recipientMembershipId: uuid('recipient_membership_id')
+      .references(() => memberships.id, { onDelete: 'cascade' })
+      .notNull(),
+    recipientEmail: text('recipient_email').notNull(),
+    // Kept for context so reminders can be traced back to a school
+    schoolId: uuid('school_id').references(() => schools.id, {
+      onDelete: 'cascade',
+    }),
+    status: text('status', { enum: ['sent', 'failed'] })
+      .default('sent')
+      .notNull(),
+    sentAt: timestamp('sent_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    unq: unique('notification_log_kind_round_recipient_unique').on(
+      t.kind,
+      t.roundId,
+      t.recipientMembershipId
+    ),
   })
 );

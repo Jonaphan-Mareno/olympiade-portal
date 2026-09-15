@@ -24,3 +24,4 @@ test.describe('Signup flow', () => {
     await expect(page.locator('input[name="inviteToken"]')).toHaveValue('12345');
   });
 });
+

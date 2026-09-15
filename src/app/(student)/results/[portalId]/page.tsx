@@ -1,10 +1,20 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
-import { memberships, portals, schools, rounds } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import {
+  memberships,
+  portals,
+  schools,
+  rounds,
+  submissions,
+  results as resultsTable,
+  questionPapers,
+  examSittings,
+} from '@/lib/db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import RoundTabs from './RoundTabs';
 import Link from 'next/link';
+import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +24,9 @@ export default async function PortalRoundsPage({
   params: Promise<{ portalId: string }>;
 }) {
   const { portalId } = await params;
+
   const supabase = await createClient();
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -51,11 +63,13 @@ export default async function PortalRoundsPage({
   }
 
   let schoolName = null;
+
   if (membership.schoolId) {
     const [schoolResult] = await db
       .select()
       .from(schools)
       .where(eq(schools.id, membership.schoolId));
+
     if (schoolResult) {
       schoolName = schoolResult.name;
     }
@@ -68,6 +82,125 @@ export default async function PortalRoundsPage({
 
   // Sort by orderIndex
   portalRounds.sort((a, b) => a.orderIndex - b.orderIndex);
+
+  // ---------------------------------------------------------------------------
+  // Existing results functionality
+  // ---------------------------------------------------------------------------
+
+  // The entrant's own submission + result per round, shown once results are
+  // released (the organiser triggers the release, which also emails the entrant)
+  const roundIds = portalRounds.map((r) => r.id);
+
+  const mySubmissions =
+    roundIds.length > 0
+      ? await db
+          .select({
+            roundId: submissions.roundId,
+            status: submissions.status,
+            score: resultsTable.score,
+            feedback: resultsTable.feedback,
+          })
+          .from(submissions)
+          .leftJoin(
+            resultsTable,
+            eq(resultsTable.submissionId, submissions.id)
+          )
+          .where(
+            and(
+              inArray(submissions.roundId, roundIds),
+              eq(submissions.studentMembershipId, membership.id)
+            )
+          )
+      : [];
+
+  const myResultByRound = new Map(
+    mySubmissions.map((s) => [
+      s.roundId,
+      {
+        submitted: s.status === 'submitted',
+        score: s.score,
+        feedback: s.feedback,
+      },
+    ])
+  );
+
+  // ---------------------------------------------------------------------------
+  // Online test functionality
+  // ---------------------------------------------------------------------------
+
+  const onlineRounds = portalRounds.filter(
+    (r) => r.deliveryMethod === 'online'
+  );
+
+  const paperRows =
+  onlineRounds.length > 0
+    ? await db
+        .select()
+        .from(questionPapers)
+        .where(
+          inArray(
+            questionPapers.roundId,
+            onlineRounds.map((r) => r.id)
+          )
+        )
+    : [];
+
+  const paperIds = paperRows.map((p) => p.id);
+
+  const sittingRows =
+    paperIds.length > 0
+      ? await db
+          .select()
+          .from(examSittings)
+          .where(
+            and(
+              eq(examSittings.studentMembershipId, membership.id),
+              inArray(examSittings.questionPaperId, paperIds)
+            )
+          )
+      : [];
+
+  // ---------------------------------------------------------------------------
+  // Combine existing results data with online test data
+  // ---------------------------------------------------------------------------
+
+  const roundView = portalRounds.map((round) => {
+  const mine = myResultByRound.get(round.id);
+
+  const paper = paperRows.find(
+    (p) => p.roundId === round.id
+  );
+
+  const sitting = paper
+    ? sittingRows.find(
+        (s) =>
+          s.questionPaperId === paper.id &&
+          s.status !== 'abandoned'
+      )
+    : undefined;
+
+  return {
+    // Keep ALL properties from the original Round object.
+    // This includes deliveryMethod and anything else RoundTabs expects.
+    ...round,
+
+    // Existing results functionality
+    state: deriveRoundState(round),
+
+    myResult: round.resultsPublishedAt
+      ? {
+          submitted: mine?.submitted ?? false,
+          score: mine?.score ?? null,
+          feedback: mine?.feedback ?? null,
+        }
+      : null,
+
+    // Online test functionality
+    durationMinutes: paper?.durationMinutes ?? 60,
+    sittingId: sitting?.id ?? null,
+    sittingStatus: sitting?.status ?? null,
+  };
+});
 
   return (
     <div
@@ -123,14 +256,15 @@ export default async function PortalRoundsPage({
             borderRadius: '9999px',
             background:
               membership.status === 'accepted' ? '#DCFCE7' : '#F1F5F9',
-            color: membership.status === 'accepted' ? '#166534' : '#475569',
+            color:
+              membership.status === 'accepted' ? '#166534' : '#475569',
             marginTop: '0.5rem',
           }}
         >
           Status: {membership.status}
         </div>
 
-        <RoundTabs rounds={portalRounds} />
+        <RoundTabs rounds={roundView} />
       </div>
     </div>
   );
