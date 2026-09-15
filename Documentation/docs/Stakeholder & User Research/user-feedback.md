@@ -38,3 +38,38 @@ Following the UI pivot, we conducted a rapid follow-up survey with the same user
 - **User Quote**: *"The flat, edge-to-edge layout is significantly faster to navigate and feels incredibly professional."*
 
 This pivot serves as our primary, extensive evidence of actively evaluating and integrating user feedback into our core product design.
+
+## Sprint 2: User Feedback (Students & Educators)
+
+During Sprint 2, our focus shifted towards the core functionality of the platform, specifically exam taking (`examSittings`) and user onboarding (`memberships`). We conducted remote usability testing and distributed surveys to a pilot group of 20 students and 5 educators.
+
+### 1. Educator Feedback: Roster Management
+**Feedback:** Educators found that manually inputting student details to invite them to a portal was excessively tedious and error-prone, especially for classes of 30+ students.
+- *Quote:* "I love the clean interface, but I cannot spend 2 hours typing in emails for my entire school. There has to be a faster way."
+- **Pivot (Frontend & Backend):** We completely paused our planned work on advanced reporting to address this critical friction point. We implemented a **CSV Bulk Upload** feature. On the frontend, we added a drag-and-drop file parser using PapaParse that validates emails in the browser. On the backend, we introduced a batch insertion endpoint for the `users` and `memberships` tables, reducing a 2-hour task to under 30 seconds.
+
+### 2. Student Feedback: Exam Navigation and Anxiety
+**Feedback:** During mock `examSittings`, students reported that keeping track of which questions they had answered, skipped, or flagged for review was difficult, leading to test anxiety.
+- *Quote:* "I got to the end of the question paper and couldn't remember which math problem I wanted to double-check. I had to click through every single page again."
+- **Pivot (Frontend):** We redesigned the exam sitting interface to include a persistent, sticky **"Question Navigator" side-panel**. This panel dynamically updates the state of each question (gray for unvisited, blue for answered, and yellow for flagged), allowing students to jump directly to specific questions with a single click.
+
+### 3. Student Feedback: Network Instability
+**Feedback:** Several students experienced minor network drops during testing. When they attempted to submit an answer while disconnected, the app threw an error and their input was lost, causing significant frustration.
+- **Pivot (Frontend & Backend):** We overhauled the `studentAnswers` submission architecture. We introduced a **Local-First Caching Strategy**. As students type or select answers, the data is immediately saved to the browser's `localStorage` or `IndexedDB`. A background sync worker attempts to push to the server. If the network drops, the UI shows a "Working Offline" indicator and quietly syncs the queued answers once the connection is restored, ensuring zero data loss.
+
+## Sprint 2: Stakeholder Feedback (Organisers & University Administration)
+
+Stakeholder feedback in Sprint 2 was gathered via bi-weekly demonstration sessions. The feedback here was largely focused on operational scaling, auditing, and grading efficiency.
+
+### 1. Organiser Feedback: Grading Bottlenecks
+**Feedback:** The initial grading flow required organizers to open a student's `submission`, grade it, and then go back to a list to select the next student. For open-ended questions in large `questionPapers`, this context-switching was deemed unacceptable.
+- *Quote:* "If I have 500 essays to grade for Question 4, I want to read all 500 essays back-to-back. I don't want to see the rest of the student's exam."
+- **Pivot (Frontend):** We pivoted our dashboard roadmap to build a **"Speed Grader" view**. Instead of grouping by student, this view queries the database to group all `studentAnswers` by `questionId`. Organizers can now rapidly cycle through all submissions for a single question using keyboard shortcuts, drastically reducing grading time. 
+
+### 2. University Admin Feedback: Audit Trails and Logs
+**Feedback:** The University Administration expressed concerns regarding the `notificationLog`. As the platform scales, they need to ensure communications (exam reminders, result publications) can be audited if a student claims they were never notified. The current log was a flat, unfilterable list.
+- **Pivot (Backend):** We restructured the `notificationLog` schema to be highly structured. We added indexed columns for `notificationType` (e.g., 'system', 'exam-reminder', 'result-published', 'security') and `deliveryStatus`. We then built an Admin Audit Dashboard that allows university staff to filter millions of logs by date range, user ID, and type in milliseconds, satisfying their strict compliance requirements.
+
+### 3. Organiser Feedback: Granular Access Control
+**Feedback:** The permissions model was too rigid. Stakeholders wanted to invite external university auditors to view `results` and `submissions` to verify fairness, but without giving them full organiser rights to modify data or create new `rounds`.
+- **Pivot (Backend/Database):** We undertook a significant refactor of the Role-Based Access Control (RBAC) system. We updated the `memberships` schema to support custom, granular permission levels within a `portal`. We introduced a new **'Auditor' role** and implemented strict middleware checks on all API routes, ensuring Auditors have read-only access to specific resources, thereby solving a major compliance blocker for the university stakeholders.
