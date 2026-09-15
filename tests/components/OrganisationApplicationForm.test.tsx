@@ -49,7 +49,7 @@ describe('OrganisationApplicationForm', () => {
     
     // The form submission doesn't use standard submit event easily with Server Actions in jsdom without mocking form action handling
     // We'll mock the internal action behavior directly by clicking submit
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    fireEvent.click(screen.getByRole('button', { name: /Send Application/i }));
     
     // We verify the server action is called eventually (this might need adjusting based on how form action is bound)
     // Because Next.js Server Actions on native forms are hard to test in JSDOM, 

@@ -37,8 +37,14 @@ yarn-error.log*
 # vercel
 .vercel
 
+# test outputs
+/coverage
+/test-results
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
+# scratch & chat logs
+chat_history*.md
+
