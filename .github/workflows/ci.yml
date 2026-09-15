@@ -33,15 +33,4 @@ jobs:
           name: code-coverage-report
           path: coverage/
 
-      - name: Trigger Vercel Production Deployment
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        env:
-          VERCEL_ORG_ID: team_A0kVH0DutkXU36FYUh3sAcMz
-          VERCEL_PROJECT_ID: prj_UEBOP3VOvX68CeOVLY0CTAshzgsj
-        run: |
-          if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
-            npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-            npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-            npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-          fi
 
