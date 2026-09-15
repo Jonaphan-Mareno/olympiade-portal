@@ -41,7 +41,7 @@ jobs:
         run: |
           if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
             npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-            npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-            npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+            npx vercel build --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+            npx vercel deploy --prebuilt --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
           fi
 
