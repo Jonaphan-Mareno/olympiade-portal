@@ -99,7 +99,7 @@ const formatDateTime = (dateString: Date | string) => {
             <div className="mt-4">
               {hasResults ? (
                 <Link
-                  href={`/student/olympiads/${portalId}/rounds/${selectedRound.id}/review`}
+                  href={`/results/${portalId}/rounds/${selectedRound.id}/review`}
                   className="inline-block bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-md hover:bg-blue-800"
                 >
                   View Detailed Review
