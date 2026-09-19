@@ -9,6 +9,10 @@ import ApplicationForm from './ApplicationForm';
 import Link from 'next/link';
 import HeroBanner from '@/components/ui/HeroBanner';
 
+// Reads session + live DB data — must never be statically prerendered at
+// build time (CI builds have no database).
+export const dynamic = 'force-dynamic';
+
 export default async function OrganiserDashboardPage() {
   const supabase = await createClient();
   const {

@@ -5,6 +5,10 @@ import { approveApplication, denyApplication } from '../actions';
 import { SubmitButton } from '@/components/SubmitButton';
 import Link from 'next/link';
 
+// Reads live DB data — must never be statically prerendered at build time
+// (CI builds have no database, so a build-time query would fail the build).
+export const dynamic = 'force-dynamic';
+
 export default async function AdminDashboardPage() {
   const pendingApplications = await db
     .select({
