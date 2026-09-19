@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { submitOrganiserApplication } from '@/app/organiser/actions';
+import { SubmitButton } from '@/components/SubmitButton';
 
 export default function OrganisationApplicationForm() {
   const [isOpen, setIsOpen] = useState(false);
@@ -61,9 +62,13 @@ export default function OrganisationApplicationForm() {
       </div>
 
       <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-        <button type="submit" className="btn btn-primary">
+        <SubmitButton
+          pendingText="Sending…"
+          fullWidth={false}
+          className="btn btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+        >
           Send Application
-        </button>
+        </SubmitButton>
         <button
           type="button"
           className="btn btn-secondary"

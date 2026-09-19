@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { inviteStudents } from '@/app/educator/actions';
+import { Spinner } from '@/components/ui/Spinner';
 
 interface InviteStudentsFormProps {
   portalId: string;
@@ -197,6 +198,9 @@ export default function InviteStudentsForm({
           cursor: isPending || emails.length === 0 ? 'not-allowed' : 'pointer',
           fontFamily: 'inherit',
           alignSelf: 'flex-start',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.5rem',
           opacity: isPending || emails.length === 0 ? 0.6 : 1,
           transition: 'background-color 0.2s',
         }}
@@ -211,9 +215,13 @@ export default function InviteStudentsForm({
           }
         }}
       >
-        {isPending
-          ? 'Sending invites...'
-          : `Invite ${emails.length} student${emails.length !== 1 ? 's' : ''}`}
+        {isPending ? (
+          <>
+            <Spinner /> Sending invites...
+          </>
+        ) : (
+          `Invite ${emails.length} student${emails.length !== 1 ? 's' : ''}`
+        )}
       </button>
     </form>
   );

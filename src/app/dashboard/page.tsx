@@ -53,7 +53,11 @@ export default async function DashboardPage() {
 
   const hasOtherRoles = isAdmin || isEducator || isStudent;
 
-  if (!hasOtherRoles) {
+  // Organisers (any application state) land on this hub like every other
+  // signed-in user, so the header logo consistently returns to the main
+  // dashboard. Only brand-new accounts with no roles and no application
+  // are funnelled straight to the organiser application form.
+  if (!hasOtherRoles && !application) {
     redirect('/organiser/dashboard');
   }
 

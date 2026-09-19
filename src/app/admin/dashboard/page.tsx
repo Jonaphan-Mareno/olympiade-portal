@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { organiserApplications, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { approveApplication, denyApplication } from '../actions';
+import { SubmitButton } from '@/components/SubmitButton';
 import Link from 'next/link';
 
 export default async function AdminDashboardPage() {
@@ -123,8 +124,10 @@ export default async function AdminDashboardPage() {
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                   <form action={approveApplication}>
                     <input type="hidden" name="applicationId" value={app.id} />
-                    <button
-                      type="submit"
+                    <SubmitButton
+                      pendingText="Accepting…"
+                      fullWidth={false}
+                      className="disabled:opacity-60 disabled:cursor-not-allowed"
                       style={{
                         backgroundColor: '#0066CC',
                         color: '#FFFFFF',
@@ -137,12 +140,14 @@ export default async function AdminDashboardPage() {
                       }}
                     >
                       Accept
-                    </button>
+                    </SubmitButton>
                   </form>
                   <form action={denyApplication}>
                     <input type="hidden" name="applicationId" value={app.id} />
-                    <button
-                      type="submit"
+                    <SubmitButton
+                      pendingText="Denying…"
+                      fullWidth={false}
+                      className="disabled:opacity-60 disabled:cursor-not-allowed"
                       style={{
                         backgroundColor: 'transparent',
                         color: '#EF4444',
@@ -155,7 +160,7 @@ export default async function AdminDashboardPage() {
                       }}
                     >
                       Deny
-                    </button>
+                    </SubmitButton>
                   </form>
                 </div>
               </div>

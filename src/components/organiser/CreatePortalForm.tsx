@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { createPortal } from '@/app/organiser/actions';
 import SchoolPicker from '@/components/schools/SchoolPicker';
+import { Spinner } from '@/components/ui/Spinner';
 import type { PickedSchool } from '@/lib/schools/types';
 
 type SchoolEntry = {
@@ -313,10 +314,16 @@ export default function CreatePortalForm({
           )}
           <button
             type="submit"
-            className="light-btn btn-blue text-white"
+            className="light-btn btn-blue text-white disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
             disabled={isPending}
           >
-            {isPending ? 'Creating...' : 'Create Portal'}
+            {isPending ? (
+              <>
+                <Spinner /> Creating...
+              </>
+            ) : (
+              'Create Portal'
+            )}
           </button>
         </div>
       </form>

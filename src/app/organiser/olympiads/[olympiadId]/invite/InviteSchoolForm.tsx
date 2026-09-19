@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { sendInvitations } from './actions';
 import Link from 'next/link';
 import SchoolPicker from '@/components/schools/SchoolPicker';
+import { Spinner } from '@/components/ui/Spinner';
 import type { PickedSchool } from '@/lib/schools/types';
 
 type SchoolEntry = {
@@ -234,9 +235,15 @@ export default function InviteSchoolForm({ portalId }: { portalId: string }) {
         <button
           type="submit"
           disabled={isPending}
-          className="bg-blue-900 hover:bg-blue-800 text-white font-bold py-3 px-8 rounded-md transition-colors"
+          className="bg-blue-900 hover:bg-blue-800 disabled:bg-slate-500 disabled:cursor-not-allowed text-white font-bold py-3 px-8 rounded-md transition-colors inline-flex items-center gap-2"
         >
-          {isPending ? 'Sending...' : 'Send Invitations'}
+          {isPending ? (
+            <>
+              <Spinner /> Sending...
+            </>
+          ) : (
+            'Send Invitations'
+          )}
         </button>
       </div>
     </form>

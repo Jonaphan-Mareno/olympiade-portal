@@ -27,7 +27,7 @@ export default function StudentLayout({ children }: { children: ReactNode }) {
         }}
       >
         <Link
-          href="/results"
+          href="/dashboard"
           style={{
             textDecoration: 'none',
             display: 'flex',
