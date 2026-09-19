@@ -11,6 +11,10 @@ import {
 import { eq, inArray } from 'drizzle-orm';
 import Link from 'next/link';
 
+// Reads session + live DB data — must never be statically prerendered at
+// build time (CI builds have no database).
+export const dynamic = 'force-dynamic';
+
 export default async function GradingDashboard() {
   const supabase = await createClient();
   const {
