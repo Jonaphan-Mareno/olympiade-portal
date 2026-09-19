@@ -50,6 +50,13 @@
       "when": 1789400815577,
       "tag": "0006_yellow_onslaught",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789841528511,
+      "tag": "0007_groovy_bishop",
+      "breakpoints": true
     }
   ]
 }

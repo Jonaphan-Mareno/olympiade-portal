@@ -50,6 +50,12 @@ export const schools = pgTable('schools', {
     .references(() => portals.id, { onDelete: 'cascade' })
     .notNull(),
   name: text('name').notNull(),
+  // Where the school was picked from: the SA high-school directory
+  // (src/data/south-african-high-schools.json) or the universities API.
+  // Nullable so rows created before the school picker keep working.
+  type: text('type', { enum: ['high_school', 'university'] }),
+  // nat_emis for high schools, primary domain for universities.
+  externalId: text('external_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 

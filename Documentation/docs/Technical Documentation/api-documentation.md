@@ -13,7 +13,7 @@ The global Next.js middleware (`src/middleware.ts`) **explicitly bypasses** all 
 | Route                                          | Auth            | Mechanism                              |
 | :--------------------------------------------- | :-------------- | :------------------------------------- |
 | `GET /api/health`                              | **None**        | Public — no credentials required       |
-| `GET /api/schools/search`                      | **Required**    | Supabase session cookie                |
+| `GET /api/schools/suggest`                     | **Required**    | Supabase session cookie                |
 | `POST /api/student/sitting/save`               | **Required**    | Supabase session cookie                |
 | `GET /api/student/sitting/sync`                | **Required**    | Supabase session cookie                |
 | `GET` / `POST` `/api/webhooks/round-scheduler` | **Conditional** | `CRON_SECRET` bearer token (see below) |
@@ -50,25 +50,28 @@ curl https://<your-domain>/api/health
 
 ---
 
-### 2. Schools Search
+### 2. Schools Suggest
 
-Used to dynamically search for existing schools when educators are signing up or being invited. This endpoint performs an indexed, case-insensitive search (`ILIKE`) against the database, scoped to a single olympiad portal to prevent cross-portal data leakage.
+Powers the school picker used when organisers create portals and invite schools. Schools are never free-typed: they are picked from one of two curated directories.
 
-- **Endpoint**: `GET /api/schools/search`
+- **`type=high_school`** — searched entirely against a local JSON snapshot of the South African high-school directory (`src/data/south-african-high-schools.json`, ~8 800 schools). No upstream API is called at request time because the source API (api.labs.org.za) is rate limited to ~20 requests/minute; the snapshot is built offline in bulk instead (see below).
+- **`type=university`** — proxied server-side to the free [hipolabs universities API](http://universities.hipolabs.com/search). South African universities are ranked first in the results.
+
+- **Endpoint**: `GET /api/schools/suggest`
 - **Auth Required**: Yes (Supabase session cookie)
-- **Use case**: Autocomplete dropdowns in educator invite forms and signup flows.
+- **Use case**: The `SchoolPicker` combobox in the Create Portal form and the Invite Schools form.
 
 **Query Parameters**
 
-| Parameter  | Type     | Required | Description                                                                   |
-| :--------- | :------- | :------- | :---------------------------------------------------------------------------- |
-| `portalId` | `string` | **Yes**  | The olympiad portal ID to scope the search to. Returns `400` if missing.      |
-| `q`        | `string` | Yes      | The search query. Must be at least 2 characters long; otherwise returns `[]`. |
+| Parameter | Type     | Required | Description                                                                                          |
+| :-------- | :------- | :------- | :--------------------------------------------------------------------------------------------------- |
+| `q`       | `string` | Yes      | The search query. Must be at least 2 characters long; otherwise returns `[]`.                        |
+| `type`    | `string` | **Yes**  | Either `high_school` or `university`. Any other value returns `400`.                                  |
 
 **Example**
 
 ```bash
-curl "https://<your-domain>/api/schools/search?portalId=abc-123&q=springfield" \
+curl "https://<your-domain>/api/schools/suggest?q=pretoria%20boys&type=high_school" \
   -H "Cookie: sb-access-token=<your-supabase-jwt>"
 ```
 
@@ -77,18 +80,34 @@ curl "https://<your-domain>/api/schools/search?portalId=abc-123&q=springfield" \
 ```json
 [
   {
-    "id": "123e4567-e89b-12d3-a456-426614174000",
-    "name": "Springfield High School"
+    "name": "PRETORIA BOYS HIGH SCHOOL",
+    "type": "high_school",
+    "province": "Gauteng",
+    "town": "PRETORIA",
+    "externalId": "700401012"
   }
 ]
 ```
 
+High-school suggestions carry `province`/`town` and the department's `nat_emis` number as `externalId`; university suggestions carry `country` and the university's primary domain as `externalId`. The `externalId` is stored on the `schools` row when the picked school is saved.
+
 **Error Responses**
 
-| Status | Body                                  | Cause                        |
-| :----- | :------------------------------------ | :--------------------------- |
-| `400`  | `{ "error": "portalId is required" }` | Missing `portalId` parameter |
-| `401`  | `{ "error": "Unauthorized" }`         | No valid Supabase session    |
+| Status | Body                                                             | Cause                                    |
+| :----- | :--------------------------------------------------------------- | :--------------------------------------- |
+| `400`  | `{ "error": "type must be \"high_school\" or \"university\"" }` | Missing or invalid `type` parameter      |
+| `401`  | `{ "error": "Unauthorized" }`                                  | No valid Supabase session                |
+| `502`  | `{ "error": "University search is temporarily unavailable…" }` | The hipolabs API failed (universities only) |
+
+**Refreshing the high-school snapshot**
+
+The snapshot is generated by walking the entire api.labs.org.za high-school directory (441 pages at 20 schools per page, rate limited to ~20 requests per minute — about 25 minutes end to end):
+
+```bash
+npm run fetch:schools   # walks api.labs.org.za into src/data/south-african-high-schools.json
+```
+
+The walk checkpoints after every page (`.high-schools.partial.json`), so an interrupted run resumes where it left off instead of starting over. The snapshot is committed to the repository, so this only needs re-running when the directory should be refreshed.
 
 ---
 
@@ -294,7 +313,7 @@ Then pass the token as a cookie on every API call:
 
 ```bash
 # 2. Call an authenticated endpoint
-curl "https://<your-domain>/api/schools/search?portalId=abc-123&q=spring" \
+curl "https://<your-domain>/api/schools/suggest?q=spring&type=high_school" \
   -H "Cookie: sb-access-token=<access_token>"
 ```
 

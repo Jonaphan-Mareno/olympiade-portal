@@ -27,6 +27,12 @@ export default [
         module: "readonly",
         __dirname: "readonly",
         __filename: "readonly",
+        // Standard Node 18+ globals used by the root utility scripts
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        fetch: "readonly",
+        AbortSignal: "readonly",
+        AbortController: "readonly",
       },
     },
   },

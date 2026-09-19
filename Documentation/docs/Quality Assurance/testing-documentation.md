@@ -30,6 +30,7 @@ Our automated testing suite is separated into distinct layers to optimize execut
 * **Key Targets:**
   * **Round State Machine (`src/domain/rounds/round-state-machine.ts`):** Verifies deterministic phase transitions (`draft` $\rightarrow$ `open` $\rightarrow$ `closed` $\rightarrow$ `grading` $\rightarrow$ `released`) based on UTC timestamps and administrative overrides.
   * **Automated Notification Engine (`src/domain/notifications/automation-engine.ts`):** Validates email queue filtering, idempotency constraints, and threshold detection for round opening/closing reminders.
+  * **School Directory Search (`src/lib/schools/`):** Verifies token-based fuzzy matching over the committed South African high-school snapshot (`searchHighSchools`) and the response mapping / error handling of the proxied hipolabs universities API (`searchUniversities`).
 * **Characteristics:** 100% deterministic, executed in $<1$ second.
 
 ---
@@ -43,6 +44,7 @@ Our automated testing suite is separated into distinct layers to optimize execut
 * **Key Test Suites:**
   * `tests/components/OrganisationApplicationForm.test.tsx`: Validates form constraints, file upload size limits, validation state rendering, and submission dispatch.
   * `tests/components/SubmitButton.test.tsx`: Verifies loading spinners, pending states, and disabled button behavior during flight.
+  * `tests/components/schools/SchoolPicker.test.tsx`: Verifies the school-picker combobox — the high school/university type toggle, debounced suggestion fetching, keyboard navigation, and the selected-school state.
 
 ---
 
@@ -53,7 +55,7 @@ Our automated testing suite is separated into distinct layers to optimize execut
   * **Supabase Server Auth:** Mocking `createClient()` to simulate anonymous users, student members, educators, and platform admins.
 * **Key API Test Suites:**
   * `/api/health`: Validates system heartbeat and infrastructure readiness.
-  * `/api/schools/search`: Tests search filtering, debounce handling, and empty-state responses.
+  * `/api/schools/suggest`: Tests school-picker suggestions — `q`/`type` validation, session auth, local high-school snapshot search, and 502 mapping when the universities API is unavailable.
   * `/api/student/sitting/start`: Tests sitting creation, timer initialization, and active sitting conflicts.
   * `/api/student/sitting/save`: Tests real-time answer persistence, payload integrity, and auto-save throttling.
   * `/api/student/sitting/submit`: Validates submission finalization, lock-out enforcement, and auto-marking trigger.
@@ -171,10 +173,14 @@ Testers complete structured user journeys followed by an evaluation survey captu
 | :--- | :--- | :--- |
 | `tests/domain/round-state-machine.test.ts` | Unit | Time-based phase calculation & state transitions |
 | `tests/domain/automation-engine.test.ts` | Unit | Notification queue logic & idempotency |
+| `tests/lib/high-schools.test.ts` | Unit | Token-based fuzzy search over the SA high-school snapshot |
+| `tests/lib/universities.test.ts` | Unit | Hipolabs universities proxy mapping & failure handling |
 | `tests/components/OrganisationApplicationForm.test.tsx` | Component | Form validation, user input, server action dispatch |
 | `tests/components/SubmitButton.test.tsx` | Component | Pending state, button disabling, loading spinners |
+| `tests/components/schools/SchoolPicker.test.tsx` | Component | Combobox type toggle, debounced fetching & keyboard navigation |
 | `tests/api/health.test.ts` | API Integration | System uptime & endpoint availability |
-| `tests/api/schools.search.test.ts` | API Integration | School directory search & query filtering |
+| `tests/api/schools.suggest.test.ts` | API Integration | School picker suggestions, auth, validation & proxy 502 mapping |
+| `tests/app/send-invitations.test.ts` | Server Action | Picked-school parsing, find-or-create of school rows & invite emails |
 | `tests/api/student/sitting.start.test.ts` | API Integration | Exam session initiation & uniqueness constraints |
 | `tests/api/student/sitting.save.test.ts` | API Integration | Answer draft persistence & payload checks |
 | `tests/api/student/sitting.submit.test.ts` | API Integration | Exam completion & submission immutability |
