@@ -313,7 +313,7 @@ function SignupForm() {
               <div style={{ marginTop: '0.5rem' }}>
                 <SubmitButton
                   pendingText="Creating Account..."
-                  className="signup-btn bg-blue-900 hover:bg-blue-800 text-white font-semibold transition-colors"
+                  className="btn btn-primary signup-btn bg-blue-900 hover:bg-blue-800 text-white font-semibold transition-colors"
                 >
                   {inviteToken ? 'Claim Account' : 'Sign Up as Organiser'}
                 </SubmitButton>

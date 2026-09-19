@@ -22,7 +22,7 @@ export default function OrganiserLayout({ children }: { children: ReactNode }) {
         }}
       >
         <Link
-          href="/organiser/dashboard"
+          href="/dashboard"
           style={{
             textDecoration: 'none',
             display: 'flex',

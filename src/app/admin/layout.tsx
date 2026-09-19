@@ -47,7 +47,7 @@ export default async function AdminLayout({
         }}
       >
         <Link
-          href="/admin/dashboard"
+          href="/dashboard"
           style={{
             textDecoration: 'none',
             display: 'flex',

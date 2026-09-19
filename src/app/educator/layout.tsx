@@ -27,7 +27,7 @@ export default function EducatorLayout({ children }: { children: ReactNode }) {
         }}
       >
         <Link
-          href="/educator/dashboard"
+          href="/dashboard"
           style={{
             textDecoration: 'none',
             display: 'flex',

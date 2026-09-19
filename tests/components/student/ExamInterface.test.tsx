@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import ExamInterface from '@/components/student/ExamInterface';
 
 vi.stubGlobal('fetch', vi.fn(() =>
@@ -23,6 +23,14 @@ describe('ExamInterface', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    // Re-establish the default stubbed response so a test that overrides the
+    // implementation (e.g. with a deferred promise) cannot leak into others.
+    (fetch as Mock).mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+    );
   });
 
   it('renders exam title and questions', async () => {
@@ -72,5 +80,70 @@ describe('ExamInterface', () => {
       method: 'POST',
       body: expect.stringContaining('"answerValue":"4"'),
     }));
+  });
+
+  it('requires confirmation in a dialog before finishing the attempt', async () => {
+    let resolveSubmit!: (value: unknown) => void;
+    (fetch as Mock).mockImplementation((url: string) =>
+      url === '/api/student/sitting/submit'
+        ? new Promise<unknown>((resolve) => {
+            resolveSubmit = resolve;
+          })
+        : Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    );
+
+    render(
+      <ExamInterface
+        sittingId="sitting1"
+        durationMinutes={60}
+        startedAt={new Date().toISOString()}
+        initialAnswers={{}}
+        questions={mockQuestions}
+        testTitle="Math Exam"
+      />
+    );
+
+    // Wait for hydration
+    await waitFor(() => {
+      expect(screen.getByText('What is 2+2?')).toBeInTheDocument();
+    });
+
+    // No dialog until the finish button is clicked.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish attempt...' }));
+    expect(screen.getByText('Submit your attempt?')).toBeInTheDocument();
+
+    // Cancelling closes the dialog without submitting anything.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalledWith(
+      '/api/student/sitting/submit',
+      expect.anything()
+    );
+
+    // Confirming submits the attempt and locks the dialog while it is in flight.
+    fireEvent.click(screen.getByRole('button', { name: 'Finish attempt...' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit attempt' }));
+
+    const busyConfirm = await screen.findByRole('button', { name: 'Submitting…' });
+    expect(busyConfirm).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+
+    await act(async () => {
+      resolveSubmit({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    // On success the attempt is finalised and the view switches state.
+    await waitFor(() => {
+      expect(screen.getByText('Submitting attempt...')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/student/sitting/submit',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ sittingId: 'sitting1' }),
+      })
+    );
   });
 });

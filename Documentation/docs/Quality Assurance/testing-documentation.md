@@ -31,7 +31,7 @@ Our automated testing suite is separated into distinct layers to optimize execut
   * **Round State Machine (`src/domain/rounds/round-state-machine.ts`):** Verifies deterministic phase transitions (`draft` $\rightarrow$ `open` $\rightarrow$ `closed` $\rightarrow$ `grading` $\rightarrow$ `released`) based on UTC timestamps and administrative overrides.
   * **Automated Notification Engine (`src/domain/notifications/automation-engine.ts`):** Validates email queue filtering, idempotency constraints, and threshold detection for round opening/closing reminders.
   * **School Directory Search (`src/lib/schools/`):** Verifies token-based fuzzy matching over the committed South African high-school snapshot (`searchHighSchools`) and the response mapping / error handling of the proxied hipolabs universities API (`searchUniversities`).
-* **Characteristics:** 100% deterministic, executed in $<1$ second.
+* **Characteristics:** 100% deterministic, executed in under 1 second.
 
 ---
 
@@ -44,6 +44,9 @@ Our automated testing suite is separated into distinct layers to optimize execut
 * **Key Test Suites:**
   * `tests/components/OrganisationApplicationForm.test.tsx`: Validates form constraints, file upload size limits, validation state rendering, and submission dispatch.
   * `tests/components/SubmitButton.test.tsx`: Verifies loading spinners, pending states, and disabled button behavior during flight.
+  * `tests/components/ui/ConfirmDialog.test.tsx`: Verifies the confirmation modal used for irreversible actions — focus management (safe cancel-first focus, Tab trap), Escape/backdrop dismissal, danger tone styling, and the busy lock that blocks every dismissal route while the confirmed action is running.
+  * `tests/components/ui/PendingButton.test.tsx`: Verifies the double-click guard for one-shot actions outside forms — the button self-disables with a spinner while its `onClick` promise runs, recovers afterwards, and merges external pending flags.
+  * `tests/components/student/ExamInterface.test.tsx`: Verifies exam rendering, answer autosave dispatch, and the finish-attempt flow — submission now requires confirmation through the modal dialog, which stays locked while the attempt is finalised.
   * `tests/components/schools/SchoolPicker.test.tsx`: Verifies the school-picker combobox — the high school/university type toggle, debounced suggestion fetching, keyboard navigation, and the selected-school state.
 
 ---
@@ -177,6 +180,9 @@ Testers complete structured user journeys followed by an evaluation survey captu
 | `tests/lib/universities.test.ts` | Unit | Hipolabs universities proxy mapping & failure handling |
 | `tests/components/OrganisationApplicationForm.test.tsx` | Component | Form validation, user input, server action dispatch |
 | `tests/components/SubmitButton.test.tsx` | Component | Pending state, button disabling, loading spinners |
+| `tests/components/ui/ConfirmDialog.test.tsx` | Component | Confirmation modal: focus trap, Escape/backdrop cancel & busy dismissal lock |
+| `tests/components/ui/PendingButton.test.tsx` | Component | Double-click guard, async pending state & external pending flag |
+| `tests/components/student/ExamInterface.test.tsx` | Component | Exam rendering, answer autosave & finish-attempt confirmation flow |
 | `tests/components/schools/SchoolPicker.test.tsx` | Component | Combobox type toggle, debounced fetching & keyboard navigation |
 | `tests/api/health.test.ts` | API Integration | System uptime & endpoint availability |
 | `tests/api/schools.suggest.test.ts` | API Integration | School picker suggestions, auth, validation & proxy 502 mapping |

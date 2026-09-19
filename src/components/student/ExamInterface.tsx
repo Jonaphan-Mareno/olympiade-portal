@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export interface QuestionData {
   id: string;
@@ -40,6 +41,9 @@ export default function ExamInterface({
   const [shuffledOptions, setShuffledOptions] = useState<Record<string, any>>({});
   const [isHydrated, setIsHydrated] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  // Finish-attempt confirmation modal state.
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const localKey = `exam_answers_${sittingId}`;
 
@@ -215,6 +219,19 @@ export default function ExamInterface({
       return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Confirmed submission from the modal: keeps the dialog locked while the
+  // attempt is finalised, closing it only if submission fails (on success
+  // the whole view switches to the submitted state).
+  const handleConfirmSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      await submitAttempt(false);
+    } finally {
+      setIsSubmitting(false);
+      setConfirmOpen(false);
+    }
   };
 
   if (submitted) {
@@ -420,16 +437,23 @@ export default function ExamInterface({
         <div className="mt-8 flex justify-center">
           <button
             disabled={isSyncing || !isHydrated}
-            onClick={() => {
-              if (window.confirm('Submit your attempt? You will not be able to change your answers afterwards.')) {
-                submitAttempt(false);
-              }
-            }}
+            onClick={() => setConfirmOpen(true)}
             className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold py-2 px-6 rounded transition-colors mr-4 disabled:opacity-50"
           >
             Finish attempt...
           </button>
         </div>
+
+        <ConfirmDialog
+          open={confirmOpen}
+          title="Submit your attempt?"
+          description="You will not be able to change your answers afterwards."
+          confirmLabel="Submit attempt"
+          busyLabel="Submitting…"
+          busy={isSubmitting}
+          onConfirm={handleConfirmSubmit}
+          onCancel={() => setConfirmOpen(false)}
+        />
       </div>
     </div>
   );

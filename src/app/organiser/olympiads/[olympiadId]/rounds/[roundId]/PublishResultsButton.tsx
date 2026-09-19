@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { publishRoundResults } from './actions';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 type PublishOutcome = {
   error?: string;
@@ -18,16 +19,9 @@ export default function PublishResultsButton({
 }) {
   const [isPending, startTransition] = useTransition();
   const [outcome, setOutcome] = useState<PublishOutcome | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handlePublish = () => {
-    const confirmed = window.confirm(
-      'Publish the results for this round? Educators will receive a ' +
-        'school-level summary and every entrant who submitted will be emailed ' +
-        'their own result. This cannot be undone.'
-    );
-
-    if (!confirmed) return;
-
     const formData = new FormData();
     formData.set('portalId', portalId);
     formData.set('roundId', roundId);
@@ -35,18 +29,36 @@ export default function PublishResultsButton({
     startTransition(async () => {
       const result = await publishRoundResults(formData);
       setOutcome(result);
+      setConfirmOpen(false);
     });
   };
 
   return (
     <div>
       <button
-        onClick={handlePublish}
+        onClick={() => setConfirmOpen(true)}
         disabled={isPending}
         className="bg-green-700 hover:bg-green-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-medium px-6 py-2 rounded-md transition-colors"
       >
         {isPending ? 'Publishing & emailing…' : 'Publish Results'}
       </button>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Publish results for this round?"
+        description={
+          <>
+            Educators will receive a school-level summary and every entrant who
+            submitted will be emailed their own result.{' '}
+            <strong>This cannot be undone.</strong>
+          </>
+        }
+        confirmLabel="Publish Results"
+        busyLabel="Publishing & emailing…"
+        busy={isPending}
+        onConfirm={handlePublish}
+        onCancel={() => setConfirmOpen(false)}
+      />
 
       {outcome?.error && (
         <p className="text-sm text-red-700 mt-2" role="alert">

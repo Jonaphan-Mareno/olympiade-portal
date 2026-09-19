@@ -3,6 +3,7 @@
 import { useState, use } from 'react';
 import { createRound } from './actions';
 import QuestionBuilder from '@/components/organiser/QuestionBuilder';
+import { SubmitButton } from '@/components/SubmitButton';
 import Link from 'next/link';
 
 const FileUploadDropzone = ({
@@ -260,12 +261,13 @@ export default function CreateRoundPage({
         {/* Footer Actions */}
         <div className="w-full bg-white py-10 px-4 md:px-8">
           <div className="max-w-5xl mx-auto flex justify-end">
-            <button
-              type="submit"
-              className="w-full md:w-auto bg-blue-900 hover:bg-blue-800 text-white rounded-md py-4 px-10 text-lg font-bold transition-all"
+            <SubmitButton
+              pendingText="Publishing…"
+              fullWidth={false}
+              className="w-full md:w-auto bg-blue-900 hover:bg-blue-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white rounded-md py-4 px-10 text-lg font-bold transition-all"
             >
               Save & Publish Round
-            </button>
+            </SubmitButton>
           </div>
         </div>
       </form>

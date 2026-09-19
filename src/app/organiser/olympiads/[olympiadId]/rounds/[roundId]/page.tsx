@@ -13,6 +13,7 @@ import QuestionBuilder from '@/components/organiser/QuestionBuilder';
 import { updateRound } from './actions';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 import PublishResultsButton from './PublishResultsButton';
+import { SubmitButton } from '@/components/SubmitButton';
 
 export default async function ManageRoundPage({
   params,
@@ -282,13 +283,14 @@ export default async function ManageRoundPage({
           )}
 
           <div className="flex justify-end pt-4">
-            <button
-              type="submit"
+            <SubmitButton
+              pendingText="Saving…"
+              fullWidth={false}
               disabled={hasLiveSittings}
               className="bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed hover:bg-blue-800 text-white border-none rounded-lg py-4 px-10 text-lg font-bold shadow-md transition-all"
             >
               Save Changes
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </div>
