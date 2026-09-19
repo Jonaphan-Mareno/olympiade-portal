@@ -4,7 +4,6 @@ import { db } from '@/lib/db';
 import {
   organiserApplications,
   portals,
-  schools,
   memberships,
   users,
 } from '@/lib/db/schema';
@@ -13,6 +12,8 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { sendInviteEmail } from '@/lib/email';
+import { ensureSchool } from '@/lib/schools/db';
+import { isSchoolType, type PickedSchool } from '@/lib/schools/types';
 
 export async function submitOrganiserApplication(formData: FormData) {
   const supabase = await createClient();
@@ -102,25 +103,24 @@ export async function createPortal(formData: FormData) {
 
   const schoolCount = parseInt(formData.get('schoolCount') as string, 10) || 0;
 
-  // Parse school entries from form data
+  // Parse picked school entries from form data. Schools always come from the
+  // picker (name + type + external id), never from free-typed text.
   const schoolEntries: {
-    existingId: string | null;
-    newName: string;
+    school: PickedSchool;
     teacherEmails: string[];
   }[] = [];
   for (let i = 0; i < schoolCount; i++) {
-    const existingId =
-      (formData.get(`school_existingId_${i}`) as string)?.trim() || null;
-    const newName =
-      (formData.get(`school_newName_${i}`) as string)?.trim() || '';
+    const name = (formData.get(`school_name_${i}`) as string)?.trim() || '';
+    const type = (formData.get(`school_type_${i}`) as string)?.trim() || '';
+    const externalId =
+      (formData.get(`school_externalId_${i}`) as string)?.trim() || null;
     const teacherEmails = formData
       .getAll(`school_teacherEmails_${i}`)
       .map((e) => (e as string).trim().toLowerCase())
       .filter((e) => e.length > 0 && e.includes('@'));
 
-    // Must have either an existing school ID or a new name
-    if (existingId || newName) {
-      schoolEntries.push({ existingId, newName, teacherEmails });
+    if (name && isSchoolType(type)) {
+      schoolEntries.push({ school: { name, type, externalId }, teacherEmails });
     }
   }
 
@@ -154,31 +154,14 @@ export async function createPortal(formData: FormData) {
         })
         .returning();
 
-      // Process each school entry
+      // Process each school entry: find-or-create the portal's row for the
+      // picked school (re-used across entries within this transaction).
       for (const entry of schoolEntries) {
-        let schoolId: string;
-        let schoolName: string;
-
-        if (entry.existingId) {
-          // Use an existing school - look up its name
-          schoolId = entry.existingId;
-          const [existingSchool] = await tx
-            .select({ name: schools.name })
-            .from(schools)
-            .where(eq(schools.id, entry.existingId));
-          schoolName = existingSchool?.name ?? entry.newName;
-        } else {
-          // Create a new school
-          const [newSchool] = await tx
-            .insert(schools)
-            .values({
-              portalId: newPortal.id,
-              name: entry.newName,
-            })
-            .returning();
-          schoolId = newSchool.id;
-          schoolName = newSchool.name;
-        }
+        const { id: schoolId, name: schoolName } = await ensureSchool(
+          tx,
+          newPortal.id,
+          entry.school
+        );
 
         // Create educator memberships
         if (entry.teacherEmails.length > 0) {

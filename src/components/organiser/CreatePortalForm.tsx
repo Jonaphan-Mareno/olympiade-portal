@@ -1,37 +1,22 @@
 'use client';
 
-import { useState, useTransition, useRef, useEffect, useCallback } from 'react';
+import { useState, useTransition } from 'react';
 import { createPortal } from '@/app/organiser/actions';
-
-type SchoolSuggestion = { id: string; name: string };
+import SchoolPicker from '@/components/schools/SchoolPicker';
+import type { PickedSchool } from '@/lib/schools/types';
 
 type SchoolEntry = {
-  query: string;
-  existingId: string | null;
-  suggestions: SchoolSuggestion[];
-  showSuggestions: boolean;
+  school: PickedSchool | null;
   teacherEmails: string[];
   newTeacherEmail: string;
 };
 
 function emptyEntry(): SchoolEntry {
   return {
-    query: '',
-    existingId: null,
-    suggestions: [],
-    showSuggestions: false,
+    school: null,
     teacherEmails: [],
     newTeacherEmail: '',
   };
-}
-
-async function fetchSchools(q: string): Promise<SchoolSuggestion[]> {
-  if (q.trim().length < 2) return [];
-  const res = await fetch(
-    `/api/schools/search?q=${encodeURIComponent(q.trim())}`
-  );
-  if (!res.ok) return [];
-  return res.json();
 }
 
 export default function CreatePortalForm({
@@ -39,69 +24,19 @@ export default function CreatePortalForm({
 }: {
   onClose?: () => void;
 }) {
-  console.log('CreatePortalForm rendered - hot reload test');
   const [entries, setEntries] = useState<SchoolEntry[]>([emptyEntry()]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const searchTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(
-    new Map()
-  );
 
-  // Close suggestions when clicking outside
-  useEffect(() => {
-    function handleClick() {
-      setEntries((prev) => prev.map((e) => ({ ...e, showSuggestions: false })));
-    }
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, []);
-
-  const updateEntry = useCallback(
-    (index: number, patch: Partial<SchoolEntry>) => {
-      setEntries((prev) =>
-        prev.map((e, i) => (i === index ? { ...e, ...patch } : e))
-      );
-    },
-    []
-  );
-
-  function onQueryChange(index: number, value: string) {
-    updateEntry(index, {
-      query: value,
-      existingId: null,
-      showSuggestions: true,
-    });
-
-    // Debounce search
-    const existing = searchTimers.current.get(index);
-    if (existing) clearTimeout(existing);
-
-    const timer = setTimeout(async () => {
-      const results = await fetchSchools(value);
-      setEntries((prev) =>
-        prev.map((e, i) =>
-          i === index
-            ? {
-                ...e,
-                suggestions: results,
-                showSuggestions: results.length > 0,
-              }
-            : e
-        )
-      );
-    }, 250);
-    searchTimers.current.set(index, timer);
-  }
-
-  function selectSuggestion(index: number, suggestion: SchoolSuggestion) {
-    updateEntry(index, {
-      query: suggestion.name,
-      existingId: suggestion.id,
-      suggestions: [],
-      showSuggestions: false,
-    });
-  }
+  const updateEntry = (
+    index: number,
+    patch: Partial<SchoolEntry>
+  ) => {
+    setEntries((prev) =>
+      prev.map((e, i) => (i === index ? { ...e, ...patch } : e))
+    );
+  };
 
   function addSchool() {
     setEntries((prev) => [...prev, emptyEntry()]);
@@ -147,14 +82,16 @@ export default function CreatePortalForm({
     setError(null);
     setSuccess(false);
 
-    // Build structured form data for schools
-    formData.set('schoolCount', String(entries.length));
+    // Build structured form data for schools. Entries without a completed
+    // pick from the school picker are skipped, like empty entries before.
+    const picked = entries.filter((entry) => entry.school);
+    formData.set('schoolCount', String(picked.length));
 
-    entries.forEach((entry, i) => {
-      if (entry.existingId) {
-        formData.set(`school_existingId_${i}`, entry.existingId);
-      } else {
-        formData.set(`school_newName_${i}`, entry.query.trim());
+    picked.forEach((entry, i) => {
+      formData.set(`school_name_${i}`, entry.school!.name);
+      formData.set(`school_type_${i}`, entry.school!.type);
+      if (entry.school!.externalId) {
+        formData.set(`school_externalId_${i}`, entry.school!.externalId);
       }
       entry.teacherEmails.forEach((email) => {
         formData.append(`school_teacherEmails_${i}`, email);
@@ -245,93 +182,15 @@ export default function CreatePortalForm({
                   borderRadius: '0.75rem',
                 }}
               >
-                {/* School name with autocomplete */}
-                <div
-                  style={{ position: 'relative', marginBottom: '0.75rem' }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <input
-                    className="light-input text-slate-900"
-                    type="text"
-                    value={entry.query}
-                    onChange={(e) => onQueryChange(index, e.target.value)}
-                    onFocus={() => {
-                      if (entry.suggestions.length > 0 && !entry.existingId) {
-                        updateEntry(index, { showSuggestions: true });
-                      }
-                    }}
-                    placeholder={`School ${index + 1} — start typing to search existing schools`}
+                {/* School picker (searches the SA high-school directory
+                    and the universities API — no free-typed school names) */}
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <SchoolPicker
+                    value={entry.school}
+                    onChange={(school) => updateEntry(index, { school })}
+                    inputClassName="light-input text-slate-900"
+                    placeholder={`School ${index + 1} — pick from the list`}
                   />
-                  {entry.existingId && (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        right: '0.75rem',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        fontSize: '0.7rem',
-                        padding: '0.15rem 0.5rem',
-                        background: 'rgba(99, 102, 241, 0.15)',
-                        color: 'var(--primary-color)',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid rgba(99, 102, 241, 0.3)',
-                      }}
-                    >
-                      existing
-                    </span>
-                  )}
-                  {/* Suggestions dropdown */}
-                  {entry.showSuggestions &&
-                    entry.suggestions.length > 0 &&
-                    !entry.existingId && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: '100%',
-                          left: 0,
-                          right: 0,
-                          zIndex: 50,
-                          background: '#FFFFFF',
-                          border: '1px solid #E2E8F0',
-                          borderRadius: '0.5rem',
-                          marginTop: '0.25rem',
-                          maxHeight: '200px',
-                          overflowY: 'auto',
-                          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
-                        }}
-                      >
-                        {entry.suggestions.map((s) => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => selectSuggestion(index, s)}
-                            style={{
-                              display: 'block',
-                              width: '100%',
-                              textAlign: 'left',
-                              padding: '0.6rem 1rem',
-                              background: 'transparent',
-                              border: 'none',
-                              color: '#0F172A',
-                              cursor: 'pointer',
-                              fontFamily: 'inherit',
-                              fontSize: '0.9rem',
-                              transition: 'background 0.15s',
-                            }}
-                            onMouseEnter={(e) => {
-                              (e.target as HTMLElement).style.background =
-                                '#F1F5F9';
-                            }}
-                            onMouseLeave={(e) => {
-                              (e.target as HTMLElement).style.background =
-                                'transparent';
-                            }}
-                          >
-                            {s.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                 </div>
 
                 {/* Teacher emails */}

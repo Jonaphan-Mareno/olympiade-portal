@@ -1,105 +1,35 @@
 'use client';
 
-import { useState, useTransition, useRef, useEffect, useCallback } from 'react';
+import { useState, useTransition } from 'react';
 import { sendInvitations } from './actions';
 import Link from 'next/link';
-
-type SchoolSuggestion = { id: string; name: string };
+import SchoolPicker from '@/components/schools/SchoolPicker';
+import type { PickedSchool } from '@/lib/schools/types';
 
 type SchoolEntry = {
-  query: string;
-  existingId: string | null;
-  suggestions: SchoolSuggestion[];
-  showSuggestions: boolean;
+  school: PickedSchool | null;
   teacherEmails: string[];
   newTeacherEmail: string;
 };
 
 function emptyEntry(): SchoolEntry {
   return {
-    query: '',
-    existingId: null,
-    suggestions: [],
-    showSuggestions: false,
+    school: null,
     teacherEmails: [],
     newTeacherEmail: '',
   };
-}
-
-async function fetchSchools(
-  q: string,
-  portalId: string
-): Promise<SchoolSuggestion[]> {
-  if (q.trim().length < 2) return [];
-  const res = await fetch(
-    `/api/schools/search?q=${encodeURIComponent(q.trim())}&portalId=${encodeURIComponent(portalId)}`
-  );
-  if (!res.ok) return [];
-  return res.json();
 }
 
 export default function InviteSchoolForm({ portalId }: { portalId: string }) {
   const [entries, setEntries] = useState<SchoolEntry[]>([emptyEntry()]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const searchTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(
-    new Map()
-  );
 
-  // Close suggestions when clicking outside
-  useEffect(() => {
-    function handleClick() {
-      setEntries((prev) => prev.map((e) => ({ ...e, showSuggestions: false })));
-    }
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, []);
-
-  const updateEntry = useCallback(
-    (index: number, patch: Partial<SchoolEntry>) => {
-      setEntries((prev) =>
-        prev.map((e, i) => (i === index ? { ...e, ...patch } : e))
-      );
-    },
-    []
-  );
-
-  function onQueryChange(index: number, value: string) {
-    updateEntry(index, {
-      query: value,
-      existingId: null,
-      showSuggestions: true,
-    });
-
-    // Debounce search
-    const existing = searchTimers.current.get(index);
-    if (existing) clearTimeout(existing);
-
-    const timer = setTimeout(async () => {
-      const results = await fetchSchools(value, portalId);
-      setEntries((prev) =>
-        prev.map((e, i) =>
-          i === index
-            ? {
-                ...e,
-                suggestions: results,
-                showSuggestions: results.length > 0,
-              }
-            : e
-        )
-      );
-    }, 250);
-    searchTimers.current.set(index, timer);
-  }
-
-  function selectSuggestion(index: number, suggestion: SchoolSuggestion) {
-    updateEntry(index, {
-      query: suggestion.name,
-      existingId: suggestion.id,
-      suggestions: [],
-      showSuggestions: false,
-    });
-  }
+  const updateEntry = (index: number, patch: Partial<SchoolEntry>) => {
+    setEntries((prev) =>
+      prev.map((e, i) => (i === index ? { ...e, ...patch } : e))
+    );
+  };
 
   function addSchool() {
     setEntries((prev) => [...prev, emptyEntry()]);
@@ -144,13 +74,16 @@ export default function InviteSchoolForm({ portalId }: { portalId: string }) {
   async function handleSubmit(formData: FormData) {
     setError(null);
 
-    formData.set('schoolCount', String(entries.length));
+    // Only entries with a completed pick from the school picker are
+    // submitted; typed-but-unpicked text is never saved as a school.
+    const picked = entries.filter((entry) => entry.school);
+    formData.set('schoolCount', String(picked.length));
 
-    entries.forEach((entry, i) => {
-      if (entry.existingId) {
-        formData.set(`school_existingId_${i}`, entry.existingId);
-      } else {
-        formData.set(`school_newName_${i}`, entry.query.trim());
+    picked.forEach((entry, i) => {
+      formData.set(`school_name_${i}`, entry.school!.name);
+      formData.set(`school_type_${i}`, entry.school!.type);
+      if (entry.school!.externalId) {
+        formData.set(`school_externalId_${i}`, entry.school!.externalId);
       }
       entry.teacherEmails.forEach((email) => {
         formData.append(`school_teacherEmails_${i}`, email);
@@ -183,44 +116,13 @@ export default function InviteSchoolForm({ portalId }: { portalId: string }) {
               {/* School Details */}
               <div className="flex-1">
                 <label className="block font-serif text-xl font-bold text-slate-900 mb-2">
-                  School Name
+                  School
                 </label>
-                <div className="relative" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    className="w-full border border-slate-300 rounded-md p-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white"
-                    type="text"
-                    value={entry.query}
-                    onChange={(e) => onQueryChange(index, e.target.value)}
-                    onFocus={() => {
-                      if (entry.suggestions.length > 0 && !entry.existingId) {
-                        updateEntry(index, { showSuggestions: true });
-                      }
-                    }}
-                    placeholder={`e.g. St. Patrick's High School`}
-                  />
-                  {entry.existingId && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[0.7rem] px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-sm border border-indigo-200">
-                      existing
-                    </span>
-                  )}
-                  {/* Suggestions dropdown */}
-                  {entry.showSuggestions &&
-                    entry.suggestions.length > 0 &&
-                    !entry.existingId && (
-                      <div className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-200 rounded-md mt-1 max-h-48 overflow-y-auto shadow-lg">
-                        {entry.suggestions.map((s) => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => selectSuggestion(index, s)}
-                            className="block w-full text-left px-4 py-2 hover:bg-slate-50 text-slate-900 transition-colors"
-                          >
-                            {s.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                </div>
+                <SchoolPicker
+                  value={entry.school}
+                  onChange={(school) => updateEntry(index, { school })}
+                  placeholder="Search South African high schools or universities…"
+                />
               </div>
 
               {/* Teacher emails */}

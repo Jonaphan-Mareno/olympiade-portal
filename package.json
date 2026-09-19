@@ -14,7 +14,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "fetch:schools": "node fetch-high-schools.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

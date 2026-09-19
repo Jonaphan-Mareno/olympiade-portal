@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sendInvitations } from '@/app/organiser/olympiads/[olympiadId]/invite/actions';
 
-// Regression tests for the "duplicate key value violates unique constraint
-// memberships_portal_id_invited_email_key" crash: re-inviting an email that
-// already has a membership in the portal used to INSERT a second row and
-// roll back the whole transaction.
+// Tests for the invite flow with the school picker: schools arrive as
+// picked entries (name + type + external id), are find-or-created within
+// the portal's scope, and educator memberships are de-duplicated per
+// (portal, invited email) instead of crashing on the unique constraint.
 
 // The action runs one users lookup, then a transaction whose queries are
 // served from FIFO queues: every awaited select resolves to the next queued
@@ -80,14 +80,20 @@ vi.mock('@/lib/email', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
 
-function inviteForm(
-  schools: { existingId?: string; newName?: string; teacherEmails: string[] }[]
-): FormData {
+type PickedFormSchool = {
+  name: string;
+  type?: string;
+  externalId?: string;
+  teacherEmails: string[];
+};
+
+function inviteForm(schools: PickedFormSchool[]): FormData {
   const fd = new FormData();
   fd.set('schoolCount', String(schools.length));
   schools.forEach((s, i) => {
-    if (s.existingId) fd.set(`school_existingId_${i}`, s.existingId);
-    if (s.newName) fd.set(`school_newName_${i}`, s.newName);
+    fd.set(`school_name_${i}`, s.name);
+    if (s.type) fd.set(`school_type_${i}`, s.type);
+    if (s.externalId) fd.set(`school_externalId_${i}`, s.externalId);
     for (const email of s.teacherEmails) {
       fd.append(`school_teacherEmails_${i}`, email);
     }
@@ -95,10 +101,16 @@ function inviteForm(
   return fd;
 }
 
-const EXISTING_SCHOOL = {
-  existingId: 'school-1',
+const PICKED_HIGH_SCHOOL = {
+  name: 'Springfield High',
+  type: 'high_school',
+  externalId: '700401012',
   teacherEmails: ['jonteacher@gmail.com'],
 };
+
+function formSchool(overrides: Partial<PickedFormSchool> = {}): PickedFormSchool {
+  return { ...PICKED_HIGH_SCHOOL, ...overrides };
+}
 
 beforeEach(() => {
   h.state.userRows = [];
@@ -108,11 +120,11 @@ beforeEach(() => {
   h.state.sentEmails = [];
 });
 
-describe('sendInvitations (re-invite handling)', () => {
+describe('sendInvitations (picked schools)', () => {
   it('is a no-op when the educator is already an accepted member (regression: duplicate key crash)', async () => {
     h.state.userRows = [[{ id: 'user-jon', email: 'jonteacher@gmail.com' }]];
     h.state.txRows = [
-      [{ name: 'Springfield High', portalId: 'portal-1' }], // school lookup
+      [{ id: 'school-1', name: 'Springfield High', type: 'high_school' }], // school lookup -> exists
       [
         {
           id: 'mem-jon',
@@ -123,10 +135,7 @@ describe('sendInvitations (re-invite handling)', () => {
       ], // membership lookup -> already a member
     ];
 
-    const result = await sendInvitations(
-      'portal-1',
-      inviteForm([EXISTING_SCHOOL])
-    );
+    const result = await sendInvitations('portal-1', inviteForm([formSchool()]));
 
     expect(result).toBeUndefined(); // no error object
     expect(h.state.txInserts).toHaveLength(0);
@@ -137,7 +146,7 @@ describe('sendInvitations (re-invite handling)', () => {
   it('links and accepts a pending invite when the account now exists', async () => {
     h.state.userRows = [[{ id: 'user-2', email: 'jonteacher@gmail.com' }]];
     h.state.txRows = [
-      [{ name: 'Springfield High', portalId: 'portal-1' }],
+      [{ id: 'school-1', name: 'Springfield High', type: 'high_school' }],
       [
         {
           id: 'mem-2',
@@ -148,7 +157,7 @@ describe('sendInvitations (re-invite handling)', () => {
       ],
     ];
 
-    await sendInvitations('portal-1', inviteForm([EXISTING_SCHOOL]));
+    await sendInvitations('portal-1', inviteForm([formSchool()]));
 
     expect(h.state.txInserts).toHaveLength(0);
     expect(h.state.txUpdates).toHaveLength(1);
@@ -165,7 +174,7 @@ describe('sendInvitations (re-invite handling)', () => {
   it('re-sends the original invite token for a still-pending invite without an account', async () => {
     h.state.userRows = [[]]; // no account for this email
     h.state.txRows = [
-      [{ name: 'Springfield High', portalId: 'portal-1' }],
+      [{ id: 'school-1', name: 'Springfield High', type: 'high_school' }],
       [
         {
           id: 'mem-3',
@@ -176,7 +185,7 @@ describe('sendInvitations (re-invite handling)', () => {
       ],
     ];
 
-    await sendInvitations('portal-1', inviteForm([EXISTING_SCHOOL]));
+    await sendInvitations('portal-1', inviteForm([formSchool()]));
 
     expect(h.state.txInserts).toHaveLength(0);
     expect(h.state.txUpdates).toHaveLength(1);
@@ -192,12 +201,12 @@ describe('sendInvitations (re-invite handling)', () => {
   it('inserts an accepted membership for a fresh email that already has an account', async () => {
     h.state.userRows = [[{ id: 'user-9', email: 'newteacher@gmail.com' }]];
     h.state.txRows = [
-      [{ name: 'Springfield High', portalId: 'portal-1' }],
+      [{ id: 'school-1', name: 'Springfield High', type: 'high_school' }],
       [], // no membership yet
     ];
 
     const form = inviteForm([
-      { existingId: 'school-1', teacherEmails: ['newteacher@gmail.com'] },
+      formSchool({ teacherEmails: ['newteacher@gmail.com'] }),
     ]);
     await sendInvitations('portal-1', form);
 
@@ -213,14 +222,20 @@ describe('sendInvitations (re-invite handling)', () => {
     expect(h.state.sentEmails).toHaveLength(0);
   });
 
-  it('creates the school, a pending invite and sends the invite email for a brand-new teacher', async () => {
+  it('creates the school, a pending invite and sends the invite email for a brand-new school', async () => {
     h.state.userRows = [[]];
     h.state.txRows = [
+      [], // school lookup misses -> insert
       [], // no membership yet
     ];
 
     const form = inviteForm([
-      { newName: 'New School', teacherEmails: ['brandnew@teacher.com'] },
+      {
+        name: 'New School',
+        type: 'high_school',
+        externalId: '999999999',
+        teacherEmails: ['brandnew@teacher.com'],
+      },
     ]);
     await sendInvitations('portal-1', form);
 
@@ -228,6 +243,8 @@ describe('sendInvitations (re-invite handling)', () => {
     expect(h.state.txInserts[0]).toEqual({
       portalId: 'portal-1',
       name: 'New School',
+      type: 'high_school',
+      externalId: '999999999',
     });
     expect(h.state.txInserts[1]).toMatchObject({
       portalId: 'portal-1',
@@ -244,39 +261,61 @@ describe('sendInvitations (re-invite handling)', () => {
     });
   });
 
-  it('rejects an existing school that belongs to a different portal (regression: cross-portal leak)', async () => {
-    h.state.userRows = [[{ id: 'user-jon', email: 'jonteacher@gmail.com' }]];
+  it('stores universities with their domain as the external id', async () => {
+    h.state.userRows = [[]];
     h.state.txRows = [
-      // The school row exists but belongs to another olympiad
-      [{ name: 'Random School', portalId: 'portal-OTHER' }],
+      [], // school lookup misses -> insert
+      [], // no membership yet
     ];
 
-    const result = await sendInvitations(
-      'portal-1',
-      inviteForm([EXISTING_SCHOOL])
-    );
+    const form = inviteForm([
+      {
+        name: 'University of Cape Town',
+        type: 'university',
+        externalId: 'uct.ac.za',
+        teacherEmails: ['lecturer@uct.ac.za'],
+      },
+    ]);
+    await sendInvitations('portal-1', form);
 
-    expect(result).toMatchObject({
-      error: expect.stringContaining('does not belong to this olympiad'),
+    expect(h.state.txInserts[0]).toEqual({
+      portalId: 'portal-1',
+      name: 'University of Cape Town',
+      type: 'university',
+      externalId: 'uct.ac.za',
     });
-    // Nothing was written — no school, no memberships, no emails
+  });
+
+  it('heals a legacy type-less school row with the picked type and external id', async () => {
+    h.state.userRows = [[]];
+    h.state.txRows = [
+      // School row created before the picker existed (type = NULL)
+      [{ id: 'school-legacy', name: 'Springfield High', type: null }],
+      [], // no membership yet
+    ];
+
+    await sendInvitations('portal-1', inviteForm([formSchool()]));
+
+    // One update heals the school row; one insert creates the membership.
+    expect(h.state.txUpdates).toEqual([
+      { type: 'high_school', externalId: '700401012' },
+    ]);
+    expect(h.state.txInserts).toHaveLength(1);
+    expect(h.state.txInserts[0]).toMatchObject({
+      schoolId: 'school-legacy',
+      status: 'invited',
+    });
+  });
+
+  it('skips entries whose type is not a valid school type (tampered form data)', async () => {
+    const form = inviteForm([
+      { name: 'Weird School', type: 'kindergarten', teacherEmails: [] },
+    ]);
+    const result = await sendInvitations('portal-1', form);
+
+    expect(result).toBeUndefined();
     expect(h.state.txInserts).toHaveLength(0);
     expect(h.state.txUpdates).toHaveLength(0);
     expect(h.state.sentEmails).toHaveLength(0);
-  });
-
-  it('rejects a nonexistent existing school id the same way', async () => {
-    h.state.userRows = [[{ id: 'user-jon', email: 'jonteacher@gmail.com' }]];
-    h.state.txRows = [[]]; // school lookup misses
-
-    const result = await sendInvitations(
-      'portal-1',
-      inviteForm([EXISTING_SCHOOL])
-    );
-
-    expect(result).toMatchObject({
-      error: expect.stringContaining('does not belong to this olympiad'),
-    });
-    expect(h.state.txInserts).toHaveLength(0);
   });
 });

@@ -1,16 +1,14 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { schools, memberships, users } from '@/lib/db/schema';
+import { memberships, users } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { sendInviteEmail } from '@/lib/email';
-
-// Thrown when a school picked from the autocomplete belongs to a different
-// portal; letting it through would leak participants across olympiads.
-class InvalidSchoolError extends Error {}
+import { ensureSchool } from '@/lib/schools/db';
+import { isSchoolType, type PickedSchool } from '@/lib/schools/types';
 
 export async function sendInvitations(portalId: string, formData: FormData) {
   const supabase = await createClient();
@@ -24,24 +22,25 @@ export async function sendInvitations(portalId: string, formData: FormData) {
 
   const schoolCount = parseInt(formData.get('schoolCount') as string, 10) || 0;
 
-  // Parse school entries from form data
+  // Parse picked school entries from form data. Schools always come from the
+  // picker (name + type + external id), never from free-typed text, so a
+  // school can only ever resolve to a row scoped to this portal.
   const schoolEntries: {
-    existingId: string | null;
-    newName: string;
+    school: PickedSchool;
     teacherEmails: string[];
   }[] = [];
   for (let i = 0; i < schoolCount; i++) {
-    const existingId =
-      (formData.get(`school_existingId_${i}`) as string)?.trim() || null;
-    const newName =
-      (formData.get(`school_newName_${i}`) as string)?.trim() || '';
+    const name = (formData.get(`school_name_${i}`) as string)?.trim() || '';
+    const type = (formData.get(`school_type_${i}`) as string)?.trim() || '';
+    const externalId =
+      (formData.get(`school_externalId_${i}`) as string)?.trim() || null;
     const teacherEmails = formData
       .getAll(`school_teacherEmails_${i}`)
       .map((e) => (e as string).trim().toLowerCase())
       .filter((e) => e.length > 0 && e.includes('@'));
 
-    if (existingId || newName) {
-      schoolEntries.push({ existingId, newName, teacherEmails });
+    if (name && isSchoolType(type)) {
+      schoolEntries.push({ school: { name, type, externalId }, teacherEmails });
     }
   }
 
@@ -65,36 +64,14 @@ export async function sendInvitations(portalId: string, formData: FormData) {
 
   try {
     await db.transaction(async (tx) => {
-      // Process each school entry
+      // Process each school entry: find-or-create the portal's row for the
+      // picked school, so re-inviting a school reuses its existing row.
       for (const entry of schoolEntries) {
-        let schoolId: string;
-        let schoolName: string;
-
-        if (entry.existingId) {
-          // Use an existing school
-          schoolId = entry.existingId;
-          const [existingSchool] = await tx
-            .select({ name: schools.name, portalId: schools.portalId })
-            .from(schools)
-            .where(eq(schools.id, entry.existingId));
-          if (!existingSchool || existingSchool.portalId !== portalId) {
-            // Rolls the whole transaction back: no memberships may point at
-            // another olympiad's school row.
-            throw new InvalidSchoolError();
-          }
-          schoolName = existingSchool.name;
-        } else {
-          // Create a new school
-          const [newSchool] = await tx
-            .insert(schools)
-            .values({
-              portalId,
-              name: entry.newName,
-            })
-            .returning();
-          schoolId = newSchool.id;
-          schoolName = newSchool.name;
-        }
+        const { id: schoolId, name: schoolName } = await ensureSchool(
+          tx,
+          portalId,
+          entry.school
+        );
 
         // Create educator memberships
         if (entry.teacherEmails.length > 0) {
@@ -195,12 +172,6 @@ export async function sendInvitations(portalId: string, formData: FormData) {
       }
     }
   } catch (err: any) {
-    if (err instanceof InvalidSchoolError) {
-      return {
-        error:
-          'One of the selected schools does not belong to this olympiad. Pick it from the suggestions or enter it as a new school.',
-      };
-    }
     console.error('Failed to send invitations:', err);
     return { error: 'Failed to send invitations. Please try again.' };
   }
