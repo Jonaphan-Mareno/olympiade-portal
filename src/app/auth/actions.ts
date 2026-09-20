@@ -2,10 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
 import { users, memberships } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
@@ -212,4 +213,111 @@ export async function logout() {
   await supabase.auth.signOut();
   revalidatePath('/', 'layout');
   redirect('/');
+}
+
+// The reset email's link must lead back to a site we control. The request's
+// Origin header is spoofable, so only trust it when it is the configured
+// production URL, a local dev server, or a private LAN address (used when
+// browsing the dev server from another device on the same network, e.g. a
+// phone) — otherwise fall back to the configured base URL.
+function resolveResetOrigin(originHeader: string | null): string {
+  const configured = (
+    process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+  ).replace(/\/+$/, '');
+
+  if (originHeader) {
+    const origin = originHeader.replace(/\/+$/, '');
+    const isConfigured = origin === configured;
+    const isLocalDev =
+      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    // RFC 1918 private ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
+    const isPrivateNetwork =
+      /^https?:\/\/(10(\.\d{1,3}){3}|172\.(1[6-9]|2\d|3[01])(\.\d{1,3}){2}|192\.168(\.\d{1,3}){2})(:\d+)?$/.test(
+        origin
+      );
+    if (isConfigured || isLocalDev || isPrivateNetwork) {
+      return origin;
+    }
+  }
+
+  return configured;
+}
+
+export async function requestPasswordReset(
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const supabase = await createClient();
+
+  const email = (formData.get('email') as string).trim();
+  if (!email) {
+    return { error: 'Please enter the email address you signed up with.' };
+  }
+
+  // Ghost accounts (Supabase credentials whose app profile was deleted) are
+  // blocked at sign-in, so don't send them a reset link either.
+  const [profile] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${email.toLowerCase()}`);
+
+  if (profile) {
+    const origin = resolveResetOrigin((await headers()).get('origin'));
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${origin}/auth/callback?next=/reset-password`,
+    });
+
+    if (error) {
+      console.error('Password reset request failed:', error.message);
+      return {
+        error:
+          'Something went wrong while sending the reset email. Please try again in a moment.',
+      };
+    }
+  }
+
+  // Always report success — never reveal whether the address has an account.
+  return {
+    success:
+      'If an account exists for that email, a password reset link is on its way. Please check your inbox (and your spam folder).',
+  };
+}
+
+export async function resetPassword(formData: FormData) {
+  const supabase = await createClient();
+
+  const password = formData.get('password') as string;
+  const confirmPassword = formData.get('confirmPassword') as string;
+
+  if (!password || password.length < 6) {
+    return { error: 'Passwords must be at least 6 characters long.' };
+  }
+  if (password !== confirmPassword) {
+    return { error: 'Passwords do not match.' };
+  }
+
+  // The reset email links to /auth/callback, which exchanges the recovery
+  // code for a session before redirecting here. No session means the page was
+  // opened directly or the link has expired.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      error:
+        'Your password reset link is invalid or has expired. Please request a new one.',
+    };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  // The recovery session is kept once the password changes, so the user is
+  // already signed in — take them straight to their dashboard.
+  revalidatePath('/', 'layout');
+  redirect('/dashboard');
 }

@@ -1,17 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { login } from '@/app/auth/actions';
+import { resetPassword } from '@/app/auth/actions';
 import { SubmitButton } from '@/components/SubmitButton';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 
-export default function LoginPage() {
+export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(formData: FormData) {
     setError(null);
-    const result = await login(formData);
+    const result = await resetPassword(formData);
     if (result?.error) {
       setError(result.error);
     }
@@ -41,7 +41,7 @@ export default function LoginPage() {
         }
         
         /* Input Overrides */
-        .login-input { 
+        .reset-input { 
           background: #FFFFFF !important; 
           border: 1px solid #CCCCCC !important; 
           color: #000000 !important; 
@@ -52,11 +52,11 @@ export default function LoginPage() {
           outline: none !important; 
           transition: none !important; 
         }
-        .login-input:focus { 
+        .reset-input:focus { 
           border-color: #0066CC !important; 
         }
         
-        .login-label { 
+        .reset-label { 
           color: #333333 !important; 
           font-weight: 500 !important; 
           font-size: 0.875rem !important; 
@@ -66,7 +66,7 @@ export default function LoginPage() {
         }
 
         /* Button Overrides */
-        .login-btn { 
+        .reset-btn { 
           background: #1e3a8a !important;
           color: white !important;
           border: none !important; 
@@ -76,7 +76,7 @@ export default function LoginPage() {
           box-shadow: none !important; 
           transform: none !important;
         }
-        .login-btn:hover {
+        .reset-btn:hover {
           background: #1e40af !important;
         }
       `,
@@ -111,14 +111,25 @@ export default function LoginPage() {
               style={{
                 fontSize: '2.5rem',
                 fontWeight: 600,
-                marginBottom: '2.5rem',
+                marginBottom: '0.5rem',
                 textAlign: 'left',
                 color: '#000000',
                 letterSpacing: '-0.02em',
               }}
             >
-              Welcome to Olympia
+              Choose a new password
             </h1>
+            <p
+              style={{
+                color: '#64748B',
+                fontSize: '0.95rem',
+                marginBottom: '2rem',
+                textAlign: 'left',
+              }}
+            >
+              Your reset link has been verified. Pick a new password for your
+              account and we&rsquo;ll sign you straight in.
+            </p>
 
             <form
               action={handleSubmit}
@@ -144,55 +155,41 @@ export default function LoginPage() {
               )}
 
               <div>
-                <label className="login-label" htmlFor="email">
-                  Email Address
+                <label className="reset-label" htmlFor="password">
+                  New Password
                 </label>
                 <input
-                  className="login-input"
-                  type="email"
-                  name="email"
-                  id="email"
+                  className="reset-input"
+                  type="password"
+                  name="password"
+                  id="password"
+                  autoComplete="new-password"
                   required
+                  minLength={6}
                 />
               </div>
 
               <div>
-                <label className="login-label" htmlFor="password">
-                  Password
+                <label className="reset-label" htmlFor="confirmPassword">
+                  Confirm New Password
                 </label>
                 <input
-                  className="login-input"
+                  className="reset-input"
                   type="password"
-                  name="password"
-                  id="password"
+                  name="confirmPassword"
+                  id="confirmPassword"
+                  autoComplete="new-password"
                   required
+                  minLength={6}
                 />
-                <div
-                  style={{
-                    marginTop: '0.5rem',
-                    textAlign: 'right',
-                    fontSize: '0.875rem',
-                  }}
-                >
-                  <Link
-                    href="/forgot-password"
-                    className="text-blue-900 hover:text-blue-800 transition-colors"
-                    style={{
-                      textDecoration: 'none',
-                      fontWeight: 600,
-                    }}
-                  >
-                    Forgot your password?
-                  </Link>
-                </div>
               </div>
 
               <div style={{ marginTop: '0.5rem' }}>
                 <SubmitButton
-                  pendingText="Signing In..."
-                  className="btn btn-primary login-btn bg-blue-900 hover:bg-blue-800 text-white font-semibold transition-colors"
+                  pendingText="Updating..."
+                  className="btn btn-primary reset-btn bg-blue-900 hover:bg-blue-800 text-white font-semibold transition-colors"
                 >
-                  Sign In
+                  Update Password
                 </SubmitButton>
               </div>
 
@@ -204,17 +201,17 @@ export default function LoginPage() {
                 }}
               >
                 <span style={{ color: '#64748B' }}>
-                  Want to run an Olympiad?{' '}
+                  Link not working?{' '}
                 </span>
                 <Link
-                  href="/signup"
+                  href="/forgot-password"
                   className="text-blue-900 hover:text-blue-800 transition-colors"
                   style={{
                     textDecoration: 'none',
                     fontWeight: 600,
                   }}
                 >
-                  Apply to become an Organiser.
+                  Request a new one.
                 </Link>
               </div>
             </form>
@@ -267,10 +264,7 @@ export default function LoginPage() {
               opacity="0.6"
             />
             {/* Solid Front Wave */}
-            <path
-              d="M100,0 C70,40 90,70 70,100 L100,100 L100,0 Z"
-              fill="#0066CC"
-            />
+            <path d="M100,0 C70,40 90,70 70,100 L100,100 L100,0 Z" fill="#0066CC" />
           </svg>
         </div>
 
