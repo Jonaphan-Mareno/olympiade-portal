@@ -1,19 +1,26 @@
 'use client';
 
-import { useState } from 'react';
-import { login } from '@/app/auth/actions';
+import { useState, Suspense } from 'react';
+import { requestPasswordReset } from '@/app/auth/actions';
 import { SubmitButton } from '@/components/SubmitButton';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 
-export default function LoginPage() {
+function ForgotPasswordForm() {
+  const searchParams = useSearchParams();
+  const linkInvalid = searchParams.get('resetLink') === 'invalid';
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   async function handleSubmit(formData: FormData) {
     setError(null);
-    const result = await login(formData);
+    setSuccess(null);
+    const result = await requestPasswordReset(formData);
     if (result?.error) {
       setError(result.error);
+    } else if (result?.success) {
+      setSuccess(result.success);
     }
   }
 
@@ -41,7 +48,7 @@ export default function LoginPage() {
         }
         
         /* Input Overrides */
-        .login-input { 
+        .forgot-input { 
           background: #FFFFFF !important; 
           border: 1px solid #CCCCCC !important; 
           color: #000000 !important; 
@@ -52,11 +59,11 @@ export default function LoginPage() {
           outline: none !important; 
           transition: none !important; 
         }
-        .login-input:focus { 
+        .forgot-input:focus { 
           border-color: #0066CC !important; 
         }
         
-        .login-label { 
+        .forgot-label { 
           color: #333333 !important; 
           font-weight: 500 !important; 
           font-size: 0.875rem !important; 
@@ -66,7 +73,7 @@ export default function LoginPage() {
         }
 
         /* Button Overrides */
-        .login-btn { 
+        .forgot-btn { 
           background: #1e3a8a !important;
           color: white !important;
           border: none !important; 
@@ -76,7 +83,7 @@ export default function LoginPage() {
           box-shadow: none !important; 
           transform: none !important;
         }
-        .login-btn:hover {
+        .forgot-btn:hover {
           background: #1e40af !important;
         }
       `,
@@ -111,113 +118,148 @@ export default function LoginPage() {
               style={{
                 fontSize: '2.5rem',
                 fontWeight: 600,
-                marginBottom: '2.5rem',
+                marginBottom: '0.5rem',
                 textAlign: 'left',
                 color: '#000000',
                 letterSpacing: '-0.02em',
               }}
             >
-              Welcome to Olympia
+              Reset your password
             </h1>
-
-            <form
-              action={handleSubmit}
+            <p
               style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1.25rem',
+                color: '#64748B',
+                fontSize: '0.95rem',
+                marginBottom: '2rem',
+                textAlign: 'left',
               }}
             >
-              {error && (
+              Enter the email address you signed up with and we&rsquo;ll send
+              you a link to choose a new one.
+            </p>
+
+            {success ? (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1.25rem',
+                }}
+              >
                 <div
                   style={{
-                    backgroundColor: '#FEE2E2',
-                    color: '#DC2626',
+                    backgroundColor: '#DCFCE7',
+                    color: '#15803D',
                     padding: '0.75rem',
                     borderRadius: '4px',
-                    border: '1px solid #F87171',
+                    border: '1px solid #86EFAC',
                     fontSize: '0.875rem',
                   }}
                 >
-                  {error}
+                  {success}
                 </div>
-              )}
-
-              <div>
-                <label className="login-label" htmlFor="email">
-                  Email Address
-                </label>
-                <input
-                  className="login-input"
-                  type="email"
-                  name="email"
-                  id="email"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="login-label" htmlFor="password">
-                  Password
-                </label>
-                <input
-                  className="login-input"
-                  type="password"
-                  name="password"
-                  id="password"
-                  required
-                />
-                <div
-                  style={{
-                    marginTop: '0.5rem',
-                    textAlign: 'right',
-                    fontSize: '0.875rem',
-                  }}
-                >
+                <div style={{ textAlign: 'center', fontSize: '0.875rem' }}>
+                  <span style={{ color: '#64748B' }}>
+                    Ready to try again?{' '}
+                  </span>
                   <Link
-                    href="/forgot-password"
+                    href="/"
                     className="text-blue-900 hover:text-blue-800 transition-colors"
                     style={{
                       textDecoration: 'none',
                       fontWeight: 600,
                     }}
                   >
-                    Forgot your password?
+                    Return to sign in.
                   </Link>
                 </div>
               </div>
-
-              <div style={{ marginTop: '0.5rem' }}>
-                <SubmitButton
-                  pendingText="Signing In..."
-                  className="btn btn-primary login-btn bg-blue-900 hover:bg-blue-800 text-white font-semibold transition-colors"
-                >
-                  Sign In
-                </SubmitButton>
-              </div>
-
-              <div
+            ) : (
+              <form
+                action={handleSubmit}
                 style={{
-                  marginTop: '1.5rem',
-                  textAlign: 'center',
-                  fontSize: '0.875rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1.25rem',
                 }}
               >
-                <span style={{ color: '#64748B' }}>
-                  Want to run an Olympiad?{' '}
-                </span>
-                <Link
-                  href="/signup"
-                  className="text-blue-900 hover:text-blue-800 transition-colors"
+                {linkInvalid && (
+                  <div
+                    style={{
+                      backgroundColor: '#FEE2E2',
+                      color: '#DC2626',
+                      padding: '0.75rem',
+                      borderRadius: '4px',
+                      border: '1px solid #F87171',
+                      fontSize: '0.875rem',
+                    }}
+                  >
+                    That password reset link is invalid or has expired. Enter
+                    your email below to request a new one.
+                  </div>
+                )}
+
+                {error && (
+                  <div
+                    style={{
+                      backgroundColor: '#FEE2E2',
+                      color: '#DC2626',
+                      padding: '0.75rem',
+                      borderRadius: '4px',
+                      border: '1px solid #F87171',
+                      fontSize: '0.875rem',
+                    }}
+                  >
+                    {error}
+                  </div>
+                )}
+
+                <div>
+                  <label className="forgot-label" htmlFor="email">
+                    Email Address
+                  </label>
+                  <input
+                    className="forgot-input"
+                    type="email"
+                    name="email"
+                    id="email"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+
+                <div style={{ marginTop: '0.5rem' }}>
+                  <SubmitButton
+                    pendingText="Sending..."
+                    className="btn btn-primary forgot-btn bg-blue-900 hover:bg-blue-800 text-white font-semibold transition-colors"
+                  >
+                    Send Reset Link
+                  </SubmitButton>
+                </div>
+
+                <div
                   style={{
-                    textDecoration: 'none',
-                    fontWeight: 600,
+                    marginTop: '1.5rem',
+                    textAlign: 'center',
+                    fontSize: '0.875rem',
                   }}
                 >
-                  Apply to become an Organiser.
-                </Link>
-              </div>
-            </form>
+                  <span style={{ color: '#64748B' }}>
+                    Remembered your password?{' '}
+                  </span>
+                  <Link
+                    href="/"
+                    className="text-blue-900 hover:text-blue-800 transition-colors"
+                    style={{
+                      textDecoration: 'none',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Sign in.
+                  </Link>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       </motion.div>
@@ -267,10 +309,7 @@ export default function LoginPage() {
               opacity="0.6"
             />
             {/* Solid Front Wave */}
-            <path
-              d="M100,0 C70,40 90,70 70,100 L100,100 L100,0 Z"
-              fill="#0066CC"
-            />
+            <path d="M100,0 C70,40 90,70 70,100 L100,100 L100,0 Z" fill="#0066CC" />
           </svg>
         </div>
 
@@ -332,5 +371,29 @@ export default function LoginPage() {
         </div>
       </motion.div>
     </div>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{
+            display: 'flex',
+            height: '100vh',
+            width: '100vw',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#FFFFFF',
+            color: '#64748B',
+          }}
+        >
+          <p>Loading...</p>
+        </div>
+      }
+    >
+      <ForgotPasswordForm />
+    </Suspense>
   );
 }
