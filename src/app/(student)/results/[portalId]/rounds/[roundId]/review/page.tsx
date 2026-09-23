@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
-import { submissions, results, questions, memberships } from '@/lib/db/schema';
+import { submissions, results, questions, memberships, rounds } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
+import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 
@@ -32,6 +33,27 @@ export default async function ReviewPage({
     .limit(1);
 
   if (!membership) return notFound();
+
+  // 2.5. Fetch Round and check embargo state
+  const [round] = await db.select().from(rounds).where(eq(rounds.id, roundId));
+  if (!round) return notFound();
+
+  const roundState = deriveRoundState(round);
+  if (roundState !== 'released') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-lg shadow-sm border border-slate-200 text-center max-w-lg w-full">
+          <h2 className="text-2xl font-serif font-bold text-slate-900 mb-2">Results Embargoed</h2>
+          <p className="text-slate-600 mb-6">
+            Results are under review. Check back when the round is officially released.
+          </p>
+          <Link href={`/results/${portalId}`} className="text-blue-600 font-medium hover:underline">
+            &larr; Back to Results
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // 3. Fetch the submission and the result
   const [submissionData] = await db

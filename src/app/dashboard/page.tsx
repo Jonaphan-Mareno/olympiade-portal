@@ -191,7 +191,7 @@ export default async function DashboardPage() {
                     Manage your classes, view submissions, and track student
                     progress.
                   </p>
-                  <Link href="/educator/dashboard" style={cardLinkStyle}>
+                  <Link href="/educator" style={cardLinkStyle}>
                     Go to Educator Portal
                   </Link>
                 </div>

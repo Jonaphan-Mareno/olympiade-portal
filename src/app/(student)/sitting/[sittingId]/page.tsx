@@ -25,10 +25,10 @@ export default async function SittingPage({ params }: { params: Promise<{ sittin
   const deadline = row.sitting.startedAt.getTime() + (row.paper.durationMinutes ?? 60) * 60_000;
   if (row.sitting.status === 'active' && Date.now() >= deadline) {
     await db.update(examSittings).set({ status: 'submitted', endedAt: new Date() }).where(eq(examSittings.id, sittingId));
-    return <div className="max-w-2xl mx-auto p-8 text-center"><h1 className="text-2xl font-bold text-slate-900">Time expired</h1><p className="mt-2 text-slate-600">Your attempt has been submitted automatically.</p></div>;
+    return <div className="max-w-2xl mx-auto p-8 text-center"><h1 className="text-2xl font-bold text-slate-900">Time expired</h1><p className="mt-2 text-slate-600">Your attempt has been submitted automatically. Awaiting Final Results.</p></div>;
   }
   if (row.sitting.status !== 'active') {
-    return <div className="max-w-2xl mx-auto p-8 text-center"><h1 className="text-2xl font-bold text-slate-900">Attempt submitted</h1><p className="mt-2 text-slate-600">This exam sitting is no longer active.</p></div>;
+    return <div className="max-w-2xl mx-auto p-8 text-center"><h1 className="text-2xl font-bold text-slate-900">Test Submitted</h1><p className="mt-2 text-slate-600">Awaiting Final Results.</p></div>;
   }
 
   const [round] = await db.select().from(rounds).where(eq(rounds.id, row.paper.roundId));

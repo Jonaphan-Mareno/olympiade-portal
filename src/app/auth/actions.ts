@@ -173,7 +173,7 @@ export async function signup(formData: FormData) {
 
         // Determine redirect based on role (applied after try/catch)
         if (invite.role === 'educator') {
-          redirectTo = `/educator/dashboard?portalId=${invite.portalId}`;
+          redirectTo = `/educator?portalId=${invite.portalId}`;
         } else if (invite.role === 'student') {
           redirectTo = `/results?portalId=${invite.portalId}`;
         }

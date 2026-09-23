@@ -31,6 +31,11 @@ export default async function OlympiadDetailsPage({
     .where(eq(rounds.portalId, portalId))
     .orderBy(rounds.orderIndex);
 
+  const now = new Date();
+  const hasStartedRounds = existingRounds.some((round) => {
+    return deriveRoundState(round, now) !== 'scheduled';
+  });
+
   // 3. Fetch all participating schools
   const existingSchools = await db
     .select()
@@ -300,9 +305,11 @@ export default async function OlympiadDetailsPage({
             )}
           </div>
 
-          <div className="flex justify-end mt-16 mb-8">
-            <DeletePortalButton portalId={portalId} />
-          </div>
+          {!hasStartedRounds && (
+            <div className="flex justify-start mt-16 mb-8">
+              <DeletePortalButton portalId={portalId} />
+            </div>
+          )}
         </div>
       </div>
     </div>

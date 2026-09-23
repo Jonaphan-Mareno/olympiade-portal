@@ -20,7 +20,11 @@ export async function createRound(formData: FormData) {
   const orderIndex = parseInt(formData.get('orderIndex') as string, 10);
   const opensAt = formData.get('opensAt') as string;
   const closesAt = formData.get('closesAt') as string;
-  const deliveryMethod = formData.get('deliveryMethod') as 'paper' | 'online';
+  const deliveryMethod = formData.get('deliveryMethod') as 'paper' | 'online' | 'hybrid';
+
+  if (new Date(closesAt) <= new Date(opensAt)) {
+    throw new Error('Closing time must be after the opening time.');
+  }
 
   // Insert the Round
   const [newRound] = await db
@@ -37,7 +41,7 @@ export async function createRound(formData: FormData) {
 
   if (!newRound) throw new Error('Failed to create round');
 
-  if (deliveryMethod === 'paper') {
+  if (deliveryMethod === 'paper' || deliveryMethod === 'hybrid') {
     const questionPaperFile = formData.get('questionPaper') as File;
     const answerKeyFile = formData.get('answerKey') as File; // Now it's a PDF memo
 
@@ -65,7 +69,9 @@ export async function createRound(formData: FormData) {
       answerKeyJson: null, // no longer JSON
       isMultipleChoice: false,
     });
-  } else {
+  }
+  
+  if (deliveryMethod === 'online' || deliveryMethod === 'hybrid') {
     // Online Test Delivery
     const questionsDataStr = formData.get('questionsData') as string;
     const questionsArray = JSON.parse(questionsDataStr || '[]');

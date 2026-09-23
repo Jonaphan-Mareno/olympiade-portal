@@ -69,7 +69,7 @@ function baseUrl(): string {
 }
 
 function educatorDashboardUrl(portalId: string): string {
-  return `${baseUrl()}/educator/dashboard?portalId=${portalId}`;
+  return `${baseUrl()}/educator?portalId=${portalId}`;
 }
 
 function studentResultsUrl(portalId: string): string {

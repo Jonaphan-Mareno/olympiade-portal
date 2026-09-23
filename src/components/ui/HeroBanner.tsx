@@ -3,11 +3,13 @@ import React from 'react';
 interface HeroBannerProps {
   userName?: string;
   userInitial?: string;
+  subtitle?: string;
 }
 
 export default function HeroBanner({
   userName = 'there',
   userInitial = '?',
+  subtitle = "Here is what's happening with your Olympiads today.",
 }: HeroBannerProps) {
   return (
     <div className="relative w-full h-[33vh] min-h-[320px] overflow-hidden bg-[url('/images/banner.jpg')] bg-cover bg-center bg-no-repeat">
@@ -30,7 +32,7 @@ export default function HeroBanner({
               Welcome back, {userName}
             </h1>
             <p className="text-blue-50 text-sm md:text-base font-medium opacity-90 drop-shadow-sm">
-              Here is what's happening with your Olympiads today.
+              {subtitle}
             </p>
           </div>
         </div>

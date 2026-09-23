@@ -1,10 +1,11 @@
 'use client';
-
 import { useState, use } from 'react';
 import { createRound } from './actions';
+import { generateTestFromBase64PDF } from './ai-actions';
 import QuestionBuilder from '@/components/organiser/QuestionBuilder';
 import { SubmitButton } from '@/components/SubmitButton';
 import Link from 'next/link';
+import RoundFormInputs from '@/components/organiser/RoundFormInputs';
 
 const FileUploadDropzone = ({
   name,
@@ -71,9 +72,47 @@ export default function CreateRoundPage({
 
   const [selectedPaper, setSelectedPaper] = useState<File | null>(null);
   const [selectedAnswerKey, setSelectedAnswerKey] = useState<File | null>(null);
-  const [deliveryMethod, setDeliveryMethod] = useState<'paper' | 'online'>(
+  const [deliveryMethod, setDeliveryMethod] = useState<'paper' | 'online' | 'hybrid'>(
     'paper'
   );
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedQuestions, setGeneratedQuestions] = useState<any[] | null>(null);
+
+  const handleGenerateTest = async () => {
+    if (!selectedPaper) return;
+    setIsGenerating(true);
+    try {
+      const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const buffer = e.target?.result as ArrayBuffer;
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            resolve(window.btoa(binary));
+          };
+          reader.onerror = () => reject(new Error('Failed to read file.'));
+          reader.readAsArrayBuffer(file);
+        });
+      };
+
+      const [base64Paper, base64Memo] = await Promise.all([
+        fileToBase64(selectedPaper),
+        selectedAnswerKey ? fileToBase64(selectedAnswerKey) : Promise.resolve(null),
+      ]);
+
+      const questions = await generateTestFromBase64PDF(base64Paper, base64Memo);
+      setGeneratedQuestions(questions);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Failed to generate test.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handlePaperChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedPaper(e.target.files?.[0] || null);
@@ -152,36 +191,7 @@ export default function CreateRoundPage({
                   className="w-full p-3 border border-slate-300 rounded-md text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
-              <div className="md:col-span-1">
-                <label
-                  className="block text-sm font-semibold text-slate-700 mb-2"
-                  htmlFor="opensAt"
-                >
-                  Opening Time
-                </label>
-                <input
-                  type="datetime-local"
-                  id="opensAt"
-                  name="opensAt"
-                  required
-                  className="w-full p-3 border border-slate-300 rounded-md text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-              <div className="md:col-span-1">
-                <label
-                  className="block text-sm font-semibold text-slate-700 mb-2"
-                  htmlFor="closesAt"
-                >
-                  Closing Time
-                </label>
-                <input
-                  type="datetime-local"
-                  id="closesAt"
-                  name="closesAt"
-                  required
-                  className="w-full p-3 border border-slate-300 rounded-md text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
+              <RoundFormInputs isOnline={deliveryMethod === 'online' || deliveryMethod === 'hybrid'} />
             </div>
           </div>
         </div>
@@ -195,18 +205,6 @@ export default function CreateRoundPage({
             <div className="flex gap-8">
               <button
                 type="button"
-                onClick={() => setDeliveryMethod('paper')}
-                className={`pb-2 text-lg transition-colors ${
-                  deliveryMethod === 'paper'
-                    ? 'text-blue-900 font-semibold border-b-2 border-blue-900'
-                    : 'text-slate-500 font-medium border-b-2 border-transparent hover:text-slate-700'
-                }`}
-              >
-                Paper (PDF)
-              </button>
-
-              <button
-                type="button"
                 onClick={() => setDeliveryMethod('online')}
                 className={`pb-2 text-lg transition-colors ${
                   deliveryMethod === 'online'
@@ -214,7 +212,31 @@ export default function CreateRoundPage({
                     : 'text-slate-500 font-medium border-b-2 border-transparent hover:text-slate-700'
                 }`}
               >
-                Online Test
+                Online Only
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDeliveryMethod('paper')}
+                className={`pb-2 text-lg transition-colors ${
+                  deliveryMethod === 'paper'
+                    ? 'text-blue-900 font-semibold border-b-2 border-blue-900'
+                    : 'text-slate-500 font-medium border-b-2 border-transparent hover:text-slate-700'
+                }`}
+              >
+                Offline Only (Paper)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDeliveryMethod('hybrid')}
+                className={`pb-2 text-lg transition-colors ${
+                  deliveryMethod === 'hybrid'
+                    ? 'text-blue-900 font-semibold border-b-2 border-blue-900'
+                    : 'text-slate-500 font-medium border-b-2 border-transparent hover:text-slate-700'
+                }`}
+              >
+                Hybrid (Both)
               </button>
             </div>
           </div>
@@ -223,20 +245,44 @@ export default function CreateRoundPage({
         {/* Section 3: Content (Uploads or Question Builder) */}
         <div className="w-full">
           <div className="max-w-5xl mx-auto px-4 md:px-8 mb-12 pb-12 border-b border-slate-200">
-            {deliveryMethod === 'paper' ? (
+            {deliveryMethod === 'paper' || deliveryMethod === 'hybrid' ? (
               <>
                 <h2 className="font-serif text-3xl font-bold text-blue-950 mb-6">
                   Upload Documents
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <FileUploadDropzone
-                    name="questionPaper"
-                    label="Question Paper (PDF)"
-                    accept=".pdf"
-                    description="PDF up to 10MB"
-                    selectedFile={selectedPaper}
-                    onChange={handlePaperChange}
-                  />
+                  <div>
+                    <FileUploadDropzone
+                      name="questionPaper"
+                      label="Question Paper (PDF)"
+                      accept=".pdf"
+                      description="PDF up to 10MB"
+                      selectedFile={selectedPaper}
+                      onChange={handlePaperChange}
+                    />
+                    {deliveryMethod === 'hybrid' && selectedPaper && (
+                      <button
+                        type="button"
+                        onClick={handleGenerateTest}
+                        disabled={isGenerating}
+                        className="mt-4 flex items-center justify-center w-full px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-lg shadow-sm transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                      >
+                        {isGenerating ? (
+                          <span className="flex items-center gap-2">
+                            <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Generating AI Test...
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-2 text-sm">
+                            ✨ Generate Online Test from PDF
+                          </span>
+                        )}
+                      </button>
+                    )}
+                  </div>
                   <FileUploadDropzone
                     name="answerKey"
                     label="Answer Key Memo (PDF)"
@@ -247,14 +293,26 @@ export default function CreateRoundPage({
                   />
                 </div>
               </>
-            ) : (
+            ) : null}
+            
+            {deliveryMethod === 'online' || deliveryMethod === 'hybrid' ? (
               <>
-                <h2 className="font-serif text-3xl font-bold text-blue-950 mb-6">
+                <h2 className="font-serif text-3xl font-bold text-blue-950 mb-6 mt-12 border-t border-slate-200 pt-12">
                   Question Builder
                 </h2>
-                <QuestionBuilder />
+                {deliveryMethod === 'hybrid' && generatedQuestions && generatedQuestions.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-md mb-6 text-sm flex gap-2 items-start">
+                    <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <strong>AI-Generated Test.</strong> Please review all questions for formatting accuracy and manually upload any required diagrams or images.
+                    </div>
+                  </div>
+                )}
+                <QuestionBuilder key={generatedQuestions ? 'generated' : 'default'} initialQuestions={generatedQuestions || undefined} />
               </>
-            )}
+            ) : null}
           </div>
         </div>
 

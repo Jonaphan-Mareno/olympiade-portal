@@ -41,10 +41,12 @@ export default function RoundTabs({ rounds }: { rounds: Round[] }) {
   const closed = selectedRound.closesAt ? now > new Date(selectedRound.closesAt) : false;
   
   // Results logic
-  const hasResults = selectedRound.myResult && selectedRound.myResult.score !== null;
+  const isReleased = selectedRound.state === 'released';
+  const hasResults = isReleased && selectedRound.myResult && selectedRound.myResult.score !== null;
   const hasSubmitted = selectedRound.sittingStatus === 'submitted' || selectedRound.myResult?.submitted;
   
-  const canStart = selectedRound.deliveryMethod === 'online' && opened && !closed && !hasSubmitted;
+  const isOnlineOrHybrid = selectedRound.deliveryMethod === 'online' || selectedRound.deliveryMethod === 'hybrid';
+  const canStart = isOnlineOrHybrid && opened && !closed && !hasSubmitted;
 
   async function startOrResume() {
     setStarting(true); setError('');
@@ -84,7 +86,7 @@ const formatDateTime = (dateString: Date | string) => {
       <div className="bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
           <div>
-            <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">{selectedRound.deliveryMethod === 'online' ? 'Online test' : 'Paper round'}</p>
+            <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">{selectedRound.deliveryMethod === 'online' ? 'Online test' : selectedRound.deliveryMethod === 'paper' ? 'Paper round' : 'Hybrid round'}</p>
             <h2 className="text-2xl font-bold text-slate-900 mt-1">{selectedRound.name}</h2>
             <p className="text-slate-600 mt-2" suppressHydrationWarning>
               Opens: {selectedRound.opensAt ? formatDateTime(selectedRound.opensAt) : 'Not set'}
@@ -107,7 +109,7 @@ const formatDateTime = (dateString: Date | string) => {
                 >
                   View Detailed Review
                 </Link>
-              ) : selectedRound.deliveryMethod === 'online' ? (
+              ) : isOnlineOrHybrid ? (
                 <button disabled={!canStart || starting} onClick={startOrResume} className="bg-blue-700 hover:bg-blue-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold px-5 py-2.5 rounded-md">
                   {starting ? 'Opening…' : selectedRound.sittingId ? 'Resume test' : 'Start test'}
                 </button>
@@ -120,7 +122,7 @@ const formatDateTime = (dateString: Date | string) => {
           </div>
         </div>
 
-        {hasResults && (
+        {hasResults ? (
           <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-5">
             <h3 className="text-sm font-semibold text-slate-500 uppercase mb-2">Your Final Result</h3>
             <div className="flex items-baseline gap-3">
@@ -147,7 +149,12 @@ const formatDateTime = (dateString: Date | string) => {
               </div>
             )}
           </div>
-        )}
+        ) : hasSubmitted ? (
+          <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-5 text-center">
+             <h3 className="text-lg font-bold text-slate-900">Awaiting Final Results</h3>
+             <p className="text-slate-600 mt-1">Your results will appear here once the round is officially released.</p>
+          </div>
+        ) : null}
 
         {error && <div className="mt-5 bg-red-50 border border-red-200 text-red-800 p-3 rounded-md text-sm">{error}</div>}
       </div>

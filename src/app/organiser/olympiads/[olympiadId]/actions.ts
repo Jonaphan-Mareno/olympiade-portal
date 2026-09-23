@@ -2,8 +2,9 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
-import { portals, schools, users } from '@/lib/db/schema';
+import { portals, rounds, schools, users } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
+import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { sendInviteEmail } from '@/lib/email';
@@ -28,6 +29,17 @@ export async function deleteOlympiad(portalId: string) {
 
   if (!portal) {
     throw new Error('Not authorized to delete this portal');
+  }
+
+  const portalRounds = await db.select().from(rounds).where(eq(rounds.portalId, portalId));
+  const now = new Date();
+  const hasStartedRounds = portalRounds.some(round => {
+    const state = deriveRoundState(round, now);
+    return state !== 'scheduled';
+  });
+
+  if (hasStartedRounds) {
+    throw new Error('Cannot delete an Olympiad that has rounds which have already opened or started.');
   }
 
   // Due to ON DELETE CASCADE on our foreign keys in schema.ts,
