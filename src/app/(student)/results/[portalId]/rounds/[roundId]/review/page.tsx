@@ -80,6 +80,19 @@ export default async function ReviewPage({
   const { submission, result } = submissionData;
   const studentAnswers = (submission.answersJson as Record<string, string>) || {};
 
+  // Raw mark out of the round's total, plus the percentage. The total is the
+  // sum of the round's question marks — the same basis the auto-marker uses
+  // when it scores the submission on submit. Rounds without questions in the
+  // bank (e.g. manually graded paper rounds) have no computable total, so
+  // they fall back to the raw mark alone.
+  const totalMarks = roundQuestions.reduce(
+    (total, q) => total + (q.marks ?? 1),
+    0
+  );
+  const score = result?.score != null ? Number(result.score) : 0;
+  const percentage =
+    totalMarks > 0 ? Math.round((score / totalMarks) * 100) : null;
+
   return (
     <div className="min-h-screen bg-slate-50 py-12 px-4 md:px-8">
       <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-8">
@@ -92,7 +105,14 @@ export default async function ReviewPage({
           </div>
           <div className="text-right bg-blue-50 text-blue-900 px-6 py-4 rounded-lg border border-blue-100">
             <div className="text-sm font-semibold uppercase tracking-wider mb-1">Final Score</div>
-            <div className="text-3xl font-bold">{result?.score || '0'}</div>
+            <div className="text-3xl font-bold">
+              {totalMarks > 0 ? `${score} / ${totalMarks}` : score}
+            </div>
+            {percentage !== null && (
+              <div className="text-sm font-semibold text-blue-700 mt-1">
+                {percentage}%
+              </div>
+            )}
           </div>
         </div>
 

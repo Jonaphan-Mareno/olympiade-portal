@@ -8,7 +8,7 @@ sidebar_position: 3
 
 The Olympiad Portal sends transactional email over SMTP, relayed through **Brevo** (formerly Sendinblue). Brevo was selected because its free tier provides 300 emails per day, which comfortably covers our invitation-driven workflows, and it exposes a standard SMTP relay that works with [Nodemailer](https://nodemailer.com/) without any proprietary SDK.
 
-The entire email pipeline is centralized in a single module, `src/lib/email/index.ts`. Application code never talks to SMTP directly: Server Actions call the module's `sendInviteEmail()` helper, and the module decides at runtime whether to deliver through Brevo or fall back to a disposable test account for development.
+The entire email pipeline is centralized in a single module, `src/lib/email/index.ts`. Application code never talks to SMTP directly: Server Actions call the module's `sendEmail()` / `sendInviteEmail()` helpers, and the module decides at runtime whether to deliver through Brevo or fall back to a disposable test account for development.
 
 ## How It Works
 
@@ -21,11 +21,11 @@ On the first send, the module builds a Nodemailer transporter and caches it for 
 
 ### The invitation lifecycle
 
-Invite emails are the only email type currently implemented, and they drive account claiming for both educators and students:
+Invite emails drive account claiming for both educators and students. Four Server Actions send them — `createPortal` (`src/app/organiser/actions.ts`) and `sendInvitations` (`src/app/organiser/olympiads/[olympiadId]/invite/actions.ts`) for organisers, `inviteStudents` (`src/app/educator/actions.ts`) for educators, and `addEducators` (`src/app/organiser/olympiads/[olympiadId]/actions.ts`) for adding educators to a school that is already participating. All four share the same dedup/claim semantics, extracted into `inviteEducatorsToSchool()` in `src/lib/invites.ts` so the flows cannot drift:
 
 ```mermaid
 graph TD
-    Actor[Organiser or Educator] -->|Submits educator/student emails| Action[Server Action<br/>createPortal / inviteStudents]
+    Actor[Organiser or Educator] -->|Submits educator/student emails| Action[Server Action<br/>createPortal / inviteStudents /<br/>sendInvitations / addEducators]
     Action --> Lookup{Recipient already<br/>has an account?}
     Lookup -->|Yes| Direct[(Membership created<br/>status: accepted)]
     Lookup -->|No| Invite[(Membership created<br/>status: invited + inviteToken)]
@@ -45,11 +45,36 @@ Step by step:
    - **Existing account:** the membership is inserted immediately with status `accepted` — no email is sent.
    - **No account:** a membership is inserted with status `invited` and a randomly generated UUID `inviteToken`, and the address is queued for an invite email.
 3. Once all database writes have completed (the organiser flow only sends after the Drizzle transaction commits, so a failed email can never leave half-written data), `sendInviteEmail()` is called once per invite. It renders a styled HTML email from `EMAIL_FROM` with the subject `You've been invited to join <portalName>` and an **Accept Invitation** button linking to `${NEXT_PUBLIC_BASE_URL}/signup?inviteToken=<token>`.
-4. The recipient signs up through that link. The `signup` Server Action (`src/app/auth/actions.ts`) looks up the membership by token, attaches the new user to it (`userId`, `status: 'accepted'`, `claimedAt`), and redirects them straight to their dashboard.
+4. The recipient signs up through that link. The `signup` Server Action (`src/app/auth/actions.ts`) looks up the membership by token, attaches the new user to it (`userId`, `status: 'accepted'`, `claimedAt`), and routes them through the one-time welcome page (`/welcome?next=<original destination>`) before landing them on the page they were heading to (educator dashboard, student results, or organiser dashboard).
 
-### Error handling
+## Automated Notification Emails
 
-Email delivery is intentionally non-blocking: each invite send is wrapped in its own `try/catch`, so one failed recipient is logged server-side and never aborts the remaining inserts or invites. Emails are currently sent inline within the Server Actions — there is no queue or retry mechanism yet, which is a known limitation to revisit as email volume grows.
+Beyond invitations, the portal sends five automated notification kinds from the notification engine (`src/domain/notifications/automation-engine.ts`, with templates in `email-templates.ts`):
+
+| Kind                           | Recipient          | Trigger                                                                                                |
+| :----------------------------- | :----------------- | :----------------------------------------------------------------------------------------------------- |
+| `round_opening_reminder`       | Portal educators   | Round enters the opening window (default 7 days before `opensAt`)                                      |
+| `round_closing_reminder`       | Portal educators   | Round enters the closing window (default 3 days before `closesAt`)                                     |
+| `submission_overdue_followup`  | Overdue educators  | Round closed with missing submissions, default 2 days after `closesAt`                                  |
+| `results_published_school`     | Portal educators   | Organiser publishes results (also caught up by the sweep for 14 days)                                   |
+| `results_published_entrant`    | Each entrant       | Same trigger as above — each entrant who submitted gets their own result email                          |
+
+The scheduler sweep (`src/domain/rounds/round-scheduler.ts`, invoked by the `/api/webhooks/round-scheduler` cron in `vercel.json`) decides **when** to notify; the engine decides **who** and **what**. Every send is recorded in the `notification_log` table and deduplicated per `(kind, round, recipient)` — so the sweep can run repeatedly without double-sending, and a failed send is automatically retried on the next sweep. Unlike invitations, these emails **do** have a retry mechanism.
+
+The reminder windows are configurable through environment variables (all optional, with the defaults shown above):
+
+| Variable                          | Default | Meaning                                            |
+| :-------------------------------- | :------ | :------------------------------------------------- |
+| `REMINDER_OPENING_WINDOW_DAYS`    | `7`     | Days before `opensAt` the opening reminder fires   |
+| `REMINDER_OPENING_WINDOW_HOURS`   | `0`     | Extra hours on top of the opening window           |
+| `REMINDER_CLOSING_WINDOW_DAYS`    | `3`     | Days before `closesAt` the closing reminder fires  |
+| `REMINDER_CLOSING_WINDOW_HOURS`   | `0`     | Extra hours on top of the closing window           |
+| `REMINDER_OVERDUE_AFTER_DAYS`     | `2`     | Days after `closesAt` the overdue follow-up fires  |
+| `REMINDER_RESULTS_CATCHUP_DAYS`   | `14`    | How long the sweep retries failed results emails   |
+
+## Error Handling
+
+Invite emails are intentionally non-blocking: each send is wrapped in its own `try/catch`, so one failed recipient is logged server-side and never aborts the remaining inserts or invites. Invitations are sent inline within the Server Actions with no queue or retry — a known limitation to revisit as email volume grows. Automated notifications, by contrast, retry automatically on the next scheduler sweep via their `notification_log` rows (failed results sends are retried for `REMINDER_RESULTS_CATCHUP_DAYS` days).
 
 ## Environment Variables
 

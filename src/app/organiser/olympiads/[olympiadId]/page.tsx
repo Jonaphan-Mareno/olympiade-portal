@@ -4,6 +4,7 @@ import { and, count, eq, inArray } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import DeletePortalButton from './DeletePortalButton';
+import AddEducatorButton from './AddEducatorButton';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 
 export default async function OlympiadDetailsPage({
@@ -280,14 +281,22 @@ export default async function OlympiadDetailsPage({
                         </p>
                       </div>
 
-                      {/* Student head-count for this school */}
-                      <div className="text-right shrink-0 ml-6">
-                        <span className="font-serif text-2xl font-bold text-slate-900">
-                          {studentTotal}
-                        </span>
-                        <span className="block text-xs text-slate-500 uppercase tracking-wide">
-                          student{studentTotal === 1 ? '' : 's'}
-                        </span>
+                      {/* Student head-count and educator management for
+                          this school */}
+                      <div className="flex items-center gap-4 shrink-0 ml-6">
+                        <div className="text-right">
+                          <span className="font-serif text-2xl font-bold text-slate-900">
+                            {studentTotal}
+                          </span>
+                          <span className="block text-xs text-slate-500 uppercase tracking-wide">
+                            student{studentTotal === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        <AddEducatorButton
+                          portalId={portalId}
+                          schoolId={school.id}
+                          schoolName={school.name}
+                        />
                       </div>
                     </div>
                   );
