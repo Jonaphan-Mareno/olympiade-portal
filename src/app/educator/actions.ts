@@ -186,6 +186,8 @@ export async function inviteStudents(formData: FormData) {
     return { error: 'Failed to invite students. Please try again.' };
   }
 
-  revalidatePath('/educator/dashboard');
+  revalidatePath('/educator');
+  revalidatePath('/educator/entrants');
+  revalidatePath(`/organiser/olympiads/${portalId}`);
   return { success: true, count: uniqueEmails.length };
 }

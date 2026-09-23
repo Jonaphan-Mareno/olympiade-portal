@@ -9,7 +9,7 @@ export type Round = {
   portalName: string;
   name: string;
   orderIndex: number;
-  deliveryMethod: 'online' | 'paper';
+  deliveryMethod: 'online' | 'paper' | 'hybrid';
   opensAt: Date;
   closesAt: Date;
   qualifyingThreshold: string | null;

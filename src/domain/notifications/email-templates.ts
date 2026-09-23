@@ -55,7 +55,7 @@ export function roundOpeningReminderEmail(params: {
   schoolName: string;
   opensAt: Date;
   closesAt: Date;
-  deliveryMethod: 'online' | 'paper';
+  deliveryMethod: 'online' | 'paper' | 'hybrid';
   dashboardUrl: string;
 }): { subject: string; html: string } {
   return {
@@ -67,7 +67,7 @@ export function roundOpeningReminderEmail(params: {
         <li><strong>Opens:</strong> ${formatDate(params.opensAt)}</li>
         <li><strong>Closes:</strong> ${formatDate(params.closesAt)}</li>
       </ul>
-      <p>Delivery is <strong>${params.deliveryMethod === 'online' ? 'online (students sit the paper in the portal)' : 'on paper (scans are submitted to the portal)'}</strong>.
+      <p>Delivery is <strong>${params.deliveryMethod === 'online' ? 'online (students sit the paper in the portal)' : params.deliveryMethod === 'paper' ? 'on paper (scans are submitted to the portal)' : 'hybrid (online or paper submissions)'}</strong>.
       Please make sure ${params.schoolName}'s entrants are ready to take part.</p>
       ${button(params.dashboardUrl, 'Go to your dashboard')}
     `),

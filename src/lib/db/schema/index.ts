@@ -103,7 +103,7 @@ export const rounds = pgTable('rounds', {
     .notNull(),
   name: text('name').notNull(),
   orderIndex: integer('order_index').notNull(),
-  deliveryMethod: text('delivery_method', { enum: ['online', 'paper'] })
+  deliveryMethod: text('delivery_method', { enum: ['online', 'paper', 'hybrid'] })
     .default('paper')
     .notNull(),
   opensAt: timestamp('opens_at', { withTimezone: true }).notNull(),

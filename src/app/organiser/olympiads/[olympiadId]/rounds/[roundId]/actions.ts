@@ -34,8 +34,12 @@ export async function updateRound(formData: FormData) {
   const orderIndex = parseInt(formData.get('orderIndex') as string, 10);
   const opensAt = formData.get('opensAt') as string;
   const closesAt = formData.get('closesAt') as string;
-  const deliveryMethod = formData.get('deliveryMethod') as 'paper' | 'online';
+  const deliveryMethod = formData.get('deliveryMethod') as 'paper' | 'online' | 'hybrid';
   const durationMinutes = Math.max(1, parseInt((formData.get('durationMinutes') as string) || '60', 10));
+
+  if (new Date(closesAt) <= new Date(opensAt)) {
+    throw new Error('Closing time must be after the opening time.');
+  }
 
   // Update the Round
   await db
@@ -48,20 +52,65 @@ export async function updateRound(formData: FormData) {
     })
     .where(eq(rounds.id, roundId));
 
-  if (deliveryMethod === 'online') {
-    // Check if any student has started the exam
-    let paper = await db
-      .select()
-      .from(questionPapers)
-      .where(eq(questionPapers.roundId, roundId))
-      .limit(1);
+  let paperRecord = await db
+    .select()
+    .from(questionPapers)
+    .where(eq(questionPapers.roundId, roundId))
+    .limit(1);
 
+  // If paper/hybrid, handle PDF replacements
+  if (deliveryMethod === 'paper' || deliveryMethod === 'hybrid') {
+    const questionPaperFile = formData.get('questionPaper') as File | null;
+    const answerKeyFile = formData.get('answerKey') as File | null;
+    
+    let fileUrl = paperRecord[0]?.fileUrl || null;
+    let answerKeyJson = paperRecord[0]?.answerKeyJson || null;
+
+    if (questionPaperFile && questionPaperFile.size > 0) {
+      const fileExtension = questionPaperFile.name.split('.').pop() || 'pdf';
+      const uniqueFileName = `papers/${crypto.randomUUID()}.${fileExtension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('round-documents')
+        .upload(uniqueFileName, questionPaperFile, { contentType: 'application/pdf' });
+
+      if (!uploadError) {
+        const { data } = supabase.storage.from('round-documents').getPublicUrl(uniqueFileName);
+        fileUrl = data.publicUrl;
+      }
+    }
+
+    if (answerKeyFile && answerKeyFile.size > 0) {
+      const fileExtension = answerKeyFile.name.split('.').pop() || 'pdf';
+      const uniqueFileName = `papers/${crypto.randomUUID()}.${fileExtension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('round-documents')
+        .upload(uniqueFileName, answerKeyFile, { contentType: 'application/pdf' });
+
+      if (!uploadError) {
+        const { data } = supabase.storage.from('round-documents').getPublicUrl(uniqueFileName);
+        const currentAnswerKeyObj = (typeof answerKeyJson === 'object' && answerKeyJson !== null) ? answerKeyJson : {};
+        answerKeyJson = { ...currentAnswerKeyObj, memoUrl: data.publicUrl };
+      }
+    }
+
+    if (paperRecord.length === 0) {
+      await db.insert(questionPapers).values({ roundId, durationMinutes, fileUrl, answerKeyJson, isMultipleChoice: false });
+      paperRecord = await db.select().from(questionPapers).where(eq(questionPapers.roundId, roundId)).limit(1);
+    } else {
+      await db.update(questionPapers).set({ durationMinutes, fileUrl, answerKeyJson }).where(eq(questionPapers.id, paperRecord[0].id));
+    }
+  }
+
+  if (deliveryMethod === 'online' || deliveryMethod === 'hybrid') {
+    // Check if any student has started the exam
     let hasLiveSittings = false;
-    if (paper && paper.length > 0) {
+    if (paperRecord && paperRecord.length > 0) {
       const sittings = await db
         .select()
         .from(examSittings)
-        .where(eq(examSittings.questionPaperId, paper[0].id))
+        .where(eq(examSittings.questionPaperId, paperRecord[0].id))
         .limit(1);
       hasLiveSittings = sittings.length > 0;
     }
@@ -72,11 +121,12 @@ export async function updateRound(formData: FormData) {
       );
     }
 
-    if (paper.length === 0) {
+    if (paperRecord.length === 0) {
       await db.insert(questionPapers).values({ roundId, durationMinutes });
-      paper = await db.select().from(questionPapers).where(eq(questionPapers.roundId, roundId)).limit(1);
-    } else {
-      await db.update(questionPapers).set({ durationMinutes }).where(eq(questionPapers.id, paper[0].id));
+      paperRecord = await db.select().from(questionPapers).where(eq(questionPapers.roundId, roundId)).limit(1);
+    } else if (deliveryMethod === 'online') {
+      // Only update duration here if it was strictly online, since hybrid already did it above
+      await db.update(questionPapers).set({ durationMinutes }).where(eq(questionPapers.id, paperRecord[0].id));
     }
 
     const questionsDataStr = formData.get('questionsData') as string;
@@ -127,6 +177,29 @@ export async function updateRound(formData: FormData) {
       await db.insert(questions).values(inserts);
     }
   }
+
+  revalidatePath(`/organiser/olympiads/${portalId}`);
+  redirect(`/organiser/olympiads/${portalId}`);
+}
+
+export async function deleteRound(roundId: string, portalId: string) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const [round] = await db.select().from(rounds).where(eq(rounds.id, roundId));
+  if (!round) throw new Error('Round not found');
+
+  const roundState = deriveRoundState(round, new Date());
+  if (roundState !== 'scheduled') {
+    throw new Error('Cannot delete a round that has already opened or started.');
+  }
+
+  // We can rely on ON DELETE CASCADE in the database to remove questions, question_papers, submissions etc.
+  await db.delete(rounds).where(eq(rounds.id, roundId));
 
   revalidatePath(`/organiser/olympiads/${portalId}`);
   redirect(`/organiser/olympiads/${portalId}`);
