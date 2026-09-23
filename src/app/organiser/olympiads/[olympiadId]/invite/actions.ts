@@ -1,14 +1,15 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { memberships, users } from '@/lib/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { users } from '@/lib/db/schema';
+import { inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { sendInviteEmail } from '@/lib/email';
 import { ensureSchool } from '@/lib/schools/db';
 import { isSchoolType, type PickedSchool } from '@/lib/schools/types';
+import { inviteEducatorsToSchool } from '@/lib/invites';
 
 export async function sendInvitations(portalId: string, formData: FormData) {
   const supabase = await createClient();
@@ -73,87 +74,16 @@ export async function sendInvitations(portalId: string, formData: FormData) {
           entry.school
         );
 
-        // Create educator memberships
+        // Create educator memberships (deduplicated per invited email)
         if (entry.teacherEmails.length > 0) {
-          const uniqueEmails = [...new Set(entry.teacherEmails)];
-
-          for (const email of uniqueEmails) {
-            const existingUserId = existingUserMap.get(email);
-
-            // A membership is unique per (portal, invited email): re-inviting
-            // an address that is already a member of this portal must not
-            // crash the whole transaction.
-            const [existingMembership] = await tx
-              .select()
-              .from(memberships)
-              .where(
-                and(
-                  eq(memberships.portalId, portalId),
-                  eq(memberships.invitedEmail, email)
-                )
-              );
-
-            if (existingMembership?.status === 'accepted') {
-              // Already a member of this portal — nothing to do.
-              continue;
-            }
-
-            if (!existingMembership) {
-              if (existingUserId) {
-                // Educator already has an account - link them directly
-                await tx.insert(memberships).values({
-                  userId: existingUserId,
-                  portalId,
-                  schoolId,
-                  role: 'educator',
-                  status: 'accepted',
-                  invitedEmail: email,
-                });
-              } else {
-                // No account yet - create invite and track for email
-                const [membership] = await tx
-                  .insert(memberships)
-                  .values({
-                    portalId,
-                    schoolId,
-                    role: 'educator',
-                    status: 'invited',
-                    invitedEmail: email,
-                  })
-                  .returning();
-
-                invitesToSend.push({
-                  email,
-                  schoolName,
-                  inviteToken: membership.inviteToken!,
-                });
-              }
-            } else if (existingUserId) {
-              // Pending invite, but the account now exists — link and accept
-              await tx
-                .update(memberships)
-                .set({
-                  userId: existingUserId,
-                  schoolId,
-                  status: 'accepted',
-                  claimedAt: new Date(),
-                })
-                .where(eq(memberships.id, existingMembership.id));
-            } else {
-              // Pending invite, still no account — re-send the original
-              // token, refreshed to point at this school
-              await tx
-                .update(memberships)
-                .set({ schoolId })
-                .where(eq(memberships.id, existingMembership.id));
-
-              invitesToSend.push({
-                email,
-                schoolName,
-                inviteToken: existingMembership.inviteToken!,
-              });
-            }
-          }
+          await inviteEducatorsToSchool(tx, {
+            portalId,
+            schoolId,
+            schoolName,
+            emails: [...new Set(entry.teacherEmails)],
+            existingUserIds: existingUserMap,
+            invitesToSend,
+          });
         }
       }
     });

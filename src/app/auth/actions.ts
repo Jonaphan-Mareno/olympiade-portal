@@ -203,9 +203,11 @@ export async function signup(formData: FormData) {
     };
   }
 
-  // Redirect to the appropriate page
+  // Redirect to the welcome page for new accounts, carrying the page they
+  // were heading to — both fresh organiser signups and educators/students
+  // claiming an invited account land there first.
   revalidatePath('/', 'layout');
-  redirect(redirectTo ?? '/dashboard');
+  redirect(`/welcome?next=${encodeURIComponent(redirectTo ?? '/dashboard')}`);
 }
 
 export async function logout() {
