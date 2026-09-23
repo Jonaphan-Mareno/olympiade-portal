@@ -10,6 +10,7 @@ export function getAuthRedirect(pathname: string, user: { id: string } | null) {
     '/organiser',
     '/results',
     '/sitting',
+    '/welcome',
   ];
 
   if (user && publicPaths.has(pathname)) {

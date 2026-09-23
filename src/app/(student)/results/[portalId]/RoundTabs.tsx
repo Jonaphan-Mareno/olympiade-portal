@@ -17,6 +17,9 @@ type Round = {
   myResult?: {
     submitted: boolean;
     score: number | null;
+    // Total available marks for the round (sum of question marks); null when
+    // the round has no questions in the bank, so no percentage is computable.
+    maxScore: number | null;
     feedback: string | null;
   } | null;
 };
@@ -120,8 +123,23 @@ const formatDateTime = (dateString: Date | string) => {
         {hasResults && (
           <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-5">
             <h3 className="text-sm font-semibold text-slate-500 uppercase mb-2">Your Final Result</h3>
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-bold text-blue-700 leading-none">{selectedRound.myResult?.score}</span>
+            <div className="flex items-baseline gap-3">
+              <span className="text-4xl font-bold text-blue-700 leading-none">
+                {selectedRound.myResult?.score ?? 0}
+                {selectedRound.myResult?.maxScore
+                  ? ` / ${selectedRound.myResult.maxScore}`
+                  : ''}
+              </span>
+              {selectedRound.myResult?.maxScore ? (
+                <span className="text-xl font-semibold text-slate-500">
+                  {Math.round(
+                    ((selectedRound.myResult.score ?? 0) /
+                      selectedRound.myResult.maxScore) *
+                      100
+                  )}
+                  %
+                </span>
+              ) : null}
             </div>
             {selectedRound.myResult?.feedback && (
               <div className="mt-4 p-4 bg-white border border-slate-200 rounded text-slate-700 text-sm">

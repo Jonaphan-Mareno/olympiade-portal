@@ -10,8 +10,9 @@ import {
   results as resultsTable,
   questionPapers,
   examSittings,
+  questions,
 } from '@/lib/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, sum } from 'drizzle-orm';
 import RoundTabs from './RoundTabs';
 import Link from 'next/link';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
@@ -124,6 +125,21 @@ export default async function PortalRoundsPage({
     ])
   );
 
+  // Total available marks per round, so results render as a raw mark out of
+  // the total plus a percentage (the same basis the auto-marker scores on).
+  const marksByRound =
+    roundIds.length > 0
+      ? await db
+          .select({ roundId: questions.roundId, total: sum(questions.marks) })
+          .from(questions)
+          .where(inArray(questions.roundId, roundIds))
+          .groupBy(questions.roundId)
+      : [];
+
+  const totalMarksByRound = new Map(
+    marksByRound.map((row) => [row.roundId, row.total ? Number(row.total) : 0])
+  );
+
   // ---------------------------------------------------------------------------
   // Online test functionality
   // ---------------------------------------------------------------------------
@@ -191,6 +207,7 @@ export default async function PortalRoundsPage({
       ? {
           submitted: mine?.submitted ?? false,
           score: mine?.score ? Number(mine.score) : null,
+          maxScore: totalMarksByRound.get(round.id) ?? null,
           feedback: mine?.feedback ?? null,
         }
       : null,

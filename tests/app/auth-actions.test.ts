@@ -148,9 +148,10 @@ describe('signup: auto-claims all pending invites for the email', () => {
     expect(autoLink.whereParams).toContain('jonteacher@gmail.com');
     expect(autoLink.whereParams).toContain('invited');
 
-    // Redirected to the clicked invite's educator dashboard
+    // New accounts are welcomed first, carrying the invite's dashboard as
+    // the next destination (encoded as a query param)
     expect(h.state.redirectCalls).toContain(
-      '/educator/dashboard?portalId=portal-A'
+      `/welcome?next=${encodeURIComponent('/educator/dashboard?portalId=portal-A')}`
     );
   });
 
@@ -169,7 +170,9 @@ describe('signup: auto-claims all pending invites for the email', () => {
 
     expect(h.state.capturedUpdates).toHaveLength(1);
     expect(h.state.capturedUpdates[0].whereParams).toContain('jon@teacher.com');
-    expect(h.state.redirectCalls).toContain('/dashboard');
+    expect(h.state.redirectCalls).toContain(
+      `/welcome?next=${encodeURIComponent('/dashboard')}`
+    );
   });
 
   it('auto-accepts pending invites even when signing up with no invite link at all', async () => {
