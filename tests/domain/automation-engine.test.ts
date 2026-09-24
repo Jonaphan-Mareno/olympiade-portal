@@ -114,7 +114,7 @@ describe('sendRoundOpeningReminders', () => {
     expect(state.sentEmails[0].subject).toContain('Round 1');
     expect(state.sentEmails[0].html).toContain('Maths Olympiad');
     expect(state.sentEmails[0].html).toContain(
-      'http://test.example/educator/dashboard?portalId=portal-1'
+      'http://test.example/educator?portalId=portal-1'
     );
 
     expect(state.inserts).toHaveLength(2);

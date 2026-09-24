@@ -23,7 +23,18 @@ export async function generateTestFromPDF(roundId: string, portalId: string) {
   }
 
   const pdfUrl = paperRecords[0].fileUrl;
-  const memoUrl = paperRecords[0].answerKeyUrl;
+
+  // The memo PDF's public URL is stored inside the answerKeyJson blob by the
+  // organiser round upload action (saved as { memoUrl }).
+  let memoUrl: string | null = null;
+  const answerKeyJson = paperRecords[0].answerKeyJson as any;
+  if (
+    answerKeyJson &&
+    typeof answerKeyJson === 'object' &&
+    answerKeyJson.memoUrl
+  ) {
+    memoUrl = answerKeyJson.memoUrl as string;
+  }
 
   const pdfResponse = await fetch(pdfUrl);
   if (!pdfResponse.ok) {

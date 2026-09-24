@@ -8,6 +8,15 @@ import ReviewPage from '@/app/(student)/results/[portalId]/rounds/[roundId]/revi
 // bank (e.g. manually graded paper rounds) have no computable total and fall
 // back to the raw mark alone.
 
+// The review page refuses to show results unless the round has been
+// released, so every fixture must include a released round row.
+const releasedRound = {
+  id: 'round-1',
+  opensAt: new Date('2026-09-01T09:00:00Z'),
+  closesAt: new Date('2026-09-10T17:00:00Z'),
+  resultsPublishedAt: new Date('2026-09-12T09:00:00Z'),
+};
+
 const h = vi.hoisted(() => {
   const state = {
     // Queued row arrays, one per select() the page performs
@@ -16,9 +25,9 @@ const h = vi.hoisted(() => {
     authUser: null as { id: string; email?: string } | null,
   };
 
-  // `.where(...)` is awaited directly for the questions query but chained
-  // with `.limit(1)` for the membership and submission queries, so return a
-  // promise that also exposes `limit`.
+  // `.where(...)` is awaited directly for the round and questions queries but
+  // chained with `.limit(1)` for the membership and submission queries, so
+  // return a promise that also exposes `limit`.
   const whereResult = (rows: any[]) => {
     const p = Promise.resolve(rows) as Promise<any[]> & {
       limit?: () => Promise<any[]>;
@@ -77,6 +86,7 @@ describe('ReviewPage score display', () => {
   it('shows the raw mark out of the total and the percentage', async () => {
     h.state.selectRows = [
       [{ id: 'membership-1', userId: 'user-1', portalId: 'portal-1' }], // membership
+      [releasedRound], // round (released, so the embargo check passes)
       [
         {
           submission: { id: 'sub-1', answersJson: { 'q-1': '4' } },
@@ -100,6 +110,7 @@ describe('ReviewPage score display', () => {
   it('shows the raw mark alone when the round has no questions', async () => {
     h.state.selectRows = [
       [{ id: 'membership-1', userId: 'user-1', portalId: 'portal-1' }], // membership
+      [releasedRound], // round (released, so the embargo check passes)
       [
         {
           submission: { id: 'sub-1', answersJson: {} },
@@ -118,6 +129,7 @@ describe('ReviewPage score display', () => {
   it('treats a missing result as zero marks', async () => {
     h.state.selectRows = [
       [{ id: 'membership-1', userId: 'user-1', portalId: 'portal-1' }], // membership
+      [releasedRound], // round (released, so the embargo check passes)
       [
         {
           submission: { id: 'sub-1', answersJson: {} },
@@ -139,6 +151,7 @@ describe('ReviewPage score display', () => {
   it('returns not-found when the student has no submission for the round', async () => {
     h.state.selectRows = [
       [{ id: 'membership-1', userId: 'user-1', portalId: 'portal-1' }], // membership
+      [releasedRound], // round (released, so the embargo check passes)
       [], // no submission
     ];
 

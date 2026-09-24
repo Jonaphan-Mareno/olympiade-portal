@@ -155,11 +155,17 @@ export default async function EducatorMarkingPage({
       if (sitting) {
         const answers = await db.select().from(studentAnswers).where(eq(studentAnswers.sittingId, sitting.id));
         if (answers.length > 0) {
-          initialGrades = answers.map(a => ({
-            questionId: a.questionId,
-            score: parseFloat(a.manualScore as string) || 0,
-            feedback: a.educatorFeedback || '',
-          }));
+          initialGrades = answers.flatMap((a) =>
+            a.questionId === null
+              ? []
+              : [
+                  {
+                    questionId: a.questionId,
+                    score: parseFloat(a.manualScore as string) || 0,
+                    feedback: a.educatorFeedback || '',
+                  },
+                ]
+          );
         }
       }
     }
@@ -177,7 +183,7 @@ export default async function EducatorMarkingPage({
           </p>
         </div>
         <Link
-          href={`/educator/rounds/${params.roundId}`}
+          href={`/educator/rounds/${roundId}`}
           className="text-white hover:text-blue-200 transition-colors text-sm font-medium border border-blue-700 hover:border-blue-500 rounded px-4 py-2"
         >
           ← Back to Round
@@ -199,7 +205,7 @@ export default async function EducatorMarkingPage({
                 </li>
               ) : (
                 markableSubmissions.map((sub) => {
-                  const isSelected = sub.id === searchParams.submissionId;
+                  const isSelected = sub.id === submissionId;
                   const isDraft = sub.resultStatus === 'queued_for_marker';
                   return (
                     <li key={sub.id}>
@@ -241,7 +247,7 @@ export default async function EducatorMarkingPage({
         <div className="w-full lg:w-3/4">
           {selectedSubmission ? (
             <EducatorGradingForm 
-              roundId={params.roundId}
+              roundId={roundId}
               submission={selectedSubmission}
               questions={roundQuestions}
               initialGrades={initialGrades}

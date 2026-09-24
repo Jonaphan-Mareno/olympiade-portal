@@ -28,8 +28,9 @@ Our automated testing suite is separated into distinct layers to optimize execut
 * **Objective:** Validate critical core business logic and deterministic algorithms in complete isolation without network or database overhead.
 * **Tooling:** **Vitest** (chosen for instant ESM execution, Turbopack alignment, and low runtime overhead).
 * **Key Targets:**
-  * **Round State Machine (`src/domain/rounds/round-state-machine.ts`):** Verifies deterministic phase transitions (`draft` $\rightarrow$ `open` $\rightarrow$ `closed` $\rightarrow$ `grading` $\rightarrow$ `released`) based on UTC timestamps and administrative overrides.
+  * **Round State Machine (`src/domain/rounds/round-state-machine.ts`):** Verifies deterministic phase transitions (`scheduled` $\rightarrow$ `open` $\rightarrow$ `closed` $\rightarrow$ `released`) derived from UTC timestamps, with `released` taking precedence once results are published.
   * **Automated Notification Engine (`src/domain/notifications/automation-engine.ts`):** Validates email queue filtering, idempotency constraints, and threshold detection for round opening/closing reminders.
+  * **Public API Gates & Queries (`src/domain/public-api/`):** Verifies the anonymous read queries behind `/api/public/*` — deduplicated school directory, portal catalogue, round list, published scores, paper URLs — and the visibility gates layered on the round state machine: papers/questions become readable once a round has closed, marks only once results are released.
   * **School Directory Search (`src/lib/schools/`):** Verifies token-based fuzzy matching over the committed South African high-school snapshot (`searchHighSchools`) and the response mapping / error handling of the proxied hipolabs universities API (`searchUniversities`).
 * **Characteristics:** 100% deterministic, executed in under 1 second.
 
@@ -56,6 +57,7 @@ Our automated testing suite is separated into distinct layers to optimize execut
 * **Mocking Patterns:**
   * **Drizzle ORM Mocking:** Database query builders and relational joins are mocked using chained fluent mock interfaces (supporting `.select().from().innerJoin().where().limit()`), ensuring DB interactions are verified without requiring live Postgres instances.
   * **Supabase Server Auth:** Mocking `createClient()` to simulate anonymous users, student members, educators, and platform admins.
+  * **Domain Query Mocking (Public API):** The `/api/public/*` route tests mock the shared read functions in `src/domain/public-api/queries.ts`, verifying each route's parameter validation, visibility gating, and response envelope independently of SQL.
 * **Key API Test Suites:**
   * `/api/health`: Validates system heartbeat and infrastructure readiness.
   * `/api/schools/suggest`: Tests school-picker suggestions — `q`/`type` validation, session auth, local high-school snapshot search, and 502 mapping when the universities API is unavailable.
@@ -64,6 +66,9 @@ Our automated testing suite is separated into distinct layers to optimize execut
   * `/api/student/sitting/submit`: Validates submission finalization, lock-out enforcement, and auto-marking trigger.
   * `/api/student/sitting/sync`: Tests offline/online answer synchronization and conflict resolution.
   * `/api/webhooks/round-scheduler`: Tests cron authentication tokens (`CRON_SECRET`) and bulk notification scheduling.
+  * `/api/public/schools`, `/api/public/portals`, `/api/public/rounds`: Test the always-readable directories — response shapes, ISO date serialization, status exposure, and the wildcard CORS header with no session required.
+  * `/api/public/results`: Tests the release gate (403 until the results are published), `round_id` validation (400/404), and the anonymous highest-first `{ score }` payload.
+  * `/api/public/question-papers`, `/api/public/questions`: Test the post-closing gate (403 while a round is scheduled or open), paper URL mapping, and the full question bank with correct answers included.
 
 ---
 
@@ -176,6 +181,8 @@ Testers complete structured user journeys followed by an evaluation survey captu
 | :--- | :--- | :--- |
 | `tests/domain/round-state-machine.test.ts` | Unit | Time-based phase calculation & state transitions |
 | `tests/domain/automation-engine.test.ts` | Unit | Notification queue logic & idempotency |
+| `tests/domain/public-api-queries.test.ts` | Unit | Public read queries: key mapping, portal grouping, numeric coercion & file-URL filtering |
+| `tests/domain/public-api-access.test.ts` | Unit | Visibility gates: closed/released availability for papers and published marks |
 | `tests/lib/high-schools.test.ts` | Unit | Token-based fuzzy search over the SA high-school snapshot |
 | `tests/lib/universities.test.ts` | Unit | Hipolabs universities proxy mapping & failure handling |
 | `tests/components/OrganisationApplicationForm.test.tsx` | Component | Form validation, user input, server action dispatch |
@@ -186,6 +193,12 @@ Testers complete structured user journeys followed by an evaluation survey captu
 | `tests/components/schools/SchoolPicker.test.tsx` | Component | Combobox type toggle, debounced fetching & keyboard navigation |
 | `tests/api/health.test.ts` | API Integration | System uptime & endpoint availability |
 | `tests/api/schools.suggest.test.ts` | API Integration | School picker suggestions, auth, validation & proxy 502 mapping |
+| `tests/api/public/schools.test.ts` | API Integration | Public school directory: response shape, no-auth & CORS header |
+| `tests/api/public/portals.test.ts` | API Integration | Portal catalogue: status/schools exposure & ISO date serialization |
+| `tests/api/public/rounds.test.ts` | API Integration | Round list: portal nesting, threshold coercion & CORS |
+| `tests/api/public/results.test.ts` | API Integration | Results release gate (403), 400/404 handling & anonymous scores |
+| `tests/api/public/question-papers.test.ts` | API Integration | Post-closing gate & paper `public_url` mapping |
+| `tests/api/public/questions.test.ts` | API Integration | Post-closing gate & full question bank with correct answers |
 | `tests/app/send-invitations.test.ts` | Server Action | Picked-school parsing, find-or-create of school rows & invite emails |
 | `tests/api/student/sitting.start.test.ts` | API Integration | Exam session initiation & uniqueness constraints |
 | `tests/api/student/sitting.save.test.ts` | API Integration | Answer draft persistence & payload checks |
