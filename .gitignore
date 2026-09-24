@@ -48,3 +48,6 @@ next-env.d.ts
 # scratch & chat logs
 chat_history*.md
 
+
+# R session history
+.Rhistory

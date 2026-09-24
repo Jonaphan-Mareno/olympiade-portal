@@ -1,0 +1,69 @@
+import { ReactNode } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
+import SignOutButton from '@/app/organiser/SignOutButton';
+import { createClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
+import StudentSidebarNav from '@/components/student/StudentSidebarNav';
+import { headers } from 'next/headers';
+import CollapsibleSidebar from '@/components/ui/CollapsibleSidebar';
+
+export default async function StudentGlobalLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/login');
+  }
+
+  // Check if we are in a sitting route
+  const headersList = await headers();
+  const pathname = headersList.get('x-invoke-path') || '';
+  const isSitting = pathname.includes('/sitting/');
+
+  if (isSitting) {
+    return <>{children}</>;
+  }
+
+  return (
+    <CollapsibleSidebar 
+      sidebarContent={
+        <>
+          <div className="p-6 border-b border-slate-200">
+            <Link href="/dashboard" className="flex items-center gap-2 no-underline">
+              <Image
+                src="/images/logo-BIG-v2.jpg"
+                alt="Olympia Logo"
+                width={28}
+                height={28}
+                className="object-contain"
+              />
+              <span className="text-blue-600 font-bold text-xl">
+                Olympia
+              </span>
+            </Link>
+            <div className="mt-4">
+               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                 Student Portal
+               </p>
+            </div>
+          </div>
+
+          <StudentSidebarNav />
+
+          <div className="p-4 border-t border-slate-200 mt-auto">
+            <SignOutButton />
+          </div>
+        </>
+      }
+    >
+      {children}
+    </CollapsibleSidebar>
+  );
+}

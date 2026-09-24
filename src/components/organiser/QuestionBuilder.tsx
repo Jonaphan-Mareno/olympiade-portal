@@ -6,7 +6,7 @@ export interface QuestionType {
   id: string; // purely for local keying
   type: string;
   prompt: string;
-  marks: number;
+  marks: number | string;
   options: any; // array of strings for choices, or array of pairs for matching
   correctAnswer: any; // string, array of strings, or text
   imageUrl?: string | null;
@@ -25,7 +25,7 @@ export default function QuestionBuilder({
             id: crypto.randomUUID(),
             type: 'single_choice',
             prompt: '',
-            marks: 1,
+            marks: '',
             options: ['Option 1'],
             correctAnswer: 'Option 1',
           },
@@ -75,7 +75,7 @@ export default function QuestionBuilder({
         id: crypto.randomUUID(),
         type: 'single_choice',
         prompt: '',
-        marks: 1,
+        marks: '',
         options: ['Option 1'],
         correctAnswer: 'Option 1',
       },
@@ -221,11 +221,10 @@ export default function QuestionBuilder({
               </label>
               <input
                 type="number"
-                min="1"
+                min="0"
+                step="0.25"
                 value={q.marks}
-                onChange={(e) =>
-                  updateQuestion(q.id, { marks: Number(e.target.value) })
-                }
+                onChange={(e) => updateQuestion(q.id, { marks: e.target.value })}
                 className="w-full p-2 border border-slate-300 rounded-md text-slate-900"
               />
             </div>

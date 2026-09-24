@@ -169,17 +169,13 @@ export async function inviteStudents(formData: FormData) {
 
     // Send invite emails after DB operations
     for (const invite of invitesToSend) {
-      try {
-        await sendInviteEmail({
-          to: invite.email,
-          portalName: portal?.name ?? 'Olympiad',
-          schoolName: school?.name ?? 'School',
-          inviteToken: invite.inviteToken,
-          role: 'student',
-        });
-      } catch (emailErr) {
-        console.error(`Failed to send invite to ${invite.email}:`, emailErr);
-      }
+      await sendInviteEmail({
+        to: invite.email,
+        portalName: portal?.name ?? 'Olympiad',
+        schoolName: school?.name ?? 'School',
+        inviteToken: invite.inviteToken,
+        role: 'student',
+      });
     }
   } catch (err: any) {
     console.error('Failed to invite students:', err);

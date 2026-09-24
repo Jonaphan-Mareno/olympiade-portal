@@ -11,6 +11,7 @@ export default function StudentNavbar() {
   const [isTestDarkMode, setIsTestDarkMode] = useState(false);
 
   const isSitting = pathname?.includes('/sitting/');
+  const isResultsRoute = pathname?.startsWith('/results');
 
   useEffect(() => {
     if (isSitting) {
@@ -28,6 +29,10 @@ export default function StudentNavbar() {
   }, [isSitting]);
 
   const darkTheme = isSitting && isTestDarkMode;
+
+  if (isResultsRoute) {
+    return null;
+  }
 
   return (
     <header

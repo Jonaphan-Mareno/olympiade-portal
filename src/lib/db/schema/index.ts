@@ -14,7 +14,7 @@ import { sql } from 'drizzle-orm';
 // We map the Supabase auth.users table so we can create foreign keys to it
 // Note: We don't manage this table via Drizzle migrations (Supabase manages it),
 // but we need it for relations.
-import { pgSchema } from 'drizzle-orm/pg-core';
+import { pgSchema, type AnyPgColumn } from 'drizzle-orm/pg-core';
 export const authSchema = pgSchema('auth');
 export const authUsers = authSchema.table('users', {
   id: uuid('id').primaryKey(),
@@ -23,17 +23,18 @@ export const authUsers = authSchema.table('users', {
 export const users = pgTable('users', {
   id: uuid('id')
     .primaryKey()
-    .references(() => authUsers.id, { onDelete: 'cascade' }),
+    .references((): AnyPgColumn => authUsers.id, { onDelete: 'cascade' }),
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   isPlatformAdmin: boolean('is_platform_admin').default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  schoolId: uuid('school_id').references((): AnyPgColumn => schools.id),
 });
 
 export const organiserApplications = pgTable('organiser_applications', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id')
-    .references(() => users.id, { onDelete: 'cascade' })
+    .references((): AnyPgColumn => users.id, { onDelete: 'cascade' })
     .notNull()
     .unique(),
   pdfUrl: text('pdf_url').notNull(),
@@ -47,22 +48,17 @@ export const organiserApplications = pgTable('organiser_applications', {
 export const schools = pgTable('schools', {
   id: uuid('id').primaryKey().defaultRandom(),
   portalId: uuid('portal_id')
-    .references(() => portals.id, { onDelete: 'cascade' })
+    .references((): AnyPgColumn => portals.id, { onDelete: 'cascade' })
     .notNull(),
   name: text('name').notNull(),
-  // Where the school was picked from: the SA high-school directory
-  // (src/data/south-african-high-schools.json) or the universities API.
-  // Nullable so rows created before the school picker keep working.
   type: text('type', { enum: ['high_school', 'university'] }),
-  // nat_emis for high schools, primary domain for universities.
   externalId: text('external_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
 export const portals = pgTable('portals', {
   id: uuid('id').primaryKey().defaultRandom(),
-  // SET NULL so deleting a user doesn't destroy portals other people depend on
-  ownerUserId: uuid('owner_user_id').references(() => users.id, {
+  ownerUserId: uuid('owner_user_id').references((): AnyPgColumn => users.id, {
     onDelete: 'set null',
   }),
   name: text('name').notNull(),
@@ -109,9 +105,26 @@ export const rounds = pgTable('rounds', {
   opensAt: timestamp('opens_at', { withTimezone: true }).notNull(),
   closesAt: timestamp('closes_at', { withTimezone: true }).notNull(),
   qualifyingThreshold: numeric('qualifying_threshold'),
-  // Set when the organiser releases the round's results (state -> 'released');
   // drives the "results are out" emails to educators and entrants
   resultsPublishedAt: timestamp('results_published_at', { withTimezone: true }),
+  certificateTemplateUrl: text('certificate_template_url'),
+  nameXCoord: numeric('name_x_coord'),
+  nameYCoord: numeric('name_y_coord'),
+  nameFontSize: integer('name_font_size').default(48),
+  nameTextColor: text('name_text_color').default('#000000'),
+});
+
+export const certificateTemplates = pgTable('certificate_templates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  roundId: uuid('round_id')
+    .notNull()
+    .references(() => rounds.id, { onDelete: 'cascade' }),
+  minScorePercentage: numeric('min_score_percentage').notNull(),
+  templateUrl: text('template_url').notNull(),
+  nameXCoord: numeric('name_x_coord').notNull(),
+  nameYCoord: numeric('name_y_coord').notNull(),
+  nameFontSize: integer('name_font_size').default(48).notNull(),
+  nameTextColor: text('name_text_color').default('#000000').notNull(),
 });
 
 export const questionPapers = pgTable('question_papers', {

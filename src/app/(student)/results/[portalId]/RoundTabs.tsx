@@ -79,13 +79,13 @@ const formatDateTime = (dateString: Date | string) => {
       
       <div className="flex gap-3 border-b border-slate-200 pb-2 overflow-x-auto mb-5">
         {rounds.map((round) => (
-          <button key={round.id} onClick={() => { setSelectedRoundId(round.id); setError(''); }} className={`px-4 py-2 rounded-md font-semibold whitespace-nowrap ${selectedRoundId === round.id ? 'bg-blue-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+          <button key={round.id} onClick={() => { setSelectedRoundId(round.id); setError(''); }} className={`px-4 py-2 font-semibold whitespace-nowrap transition-colors rounded-none ${selectedRoundId === round.id ? 'bg-blue-950 text-white' : 'text-slate-600 hover:bg-slate-100 border-b-2 border-transparent'}`}>
             {round.name}
           </button>
         ))}
       </div>
       
-      <div className="bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm">
+      <div className="bg-white p-6 md:p-8 rounded-sm border-2 border-slate-200 shadow-none">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
           <div>
             <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">{selectedRound.deliveryMethod === 'online' ? 'Online test' : selectedRound.deliveryMethod === 'paper' ? 'Paper round' : 'Hybrid round'}</p>
@@ -99,24 +99,24 @@ const formatDateTime = (dateString: Date | string) => {
           </div>
           
           <div className="md:text-right">
-            <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${hasResults ? 'bg-green-100 text-green-700' : hasSubmitted ? 'bg-amber-100 text-amber-700' : selectedRound.sittingId ? 'bg-blue-100 text-blue-700' : canStart ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+            <span className={`inline-block px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-none ${hasResults ? 'bg-green-100 text-green-800 border border-green-200' : hasSubmitted ? 'bg-amber-100 text-amber-800 border border-amber-200' : selectedRound.sittingId ? 'bg-blue-100 text-blue-800 border border-blue-200' : canStart ? 'bg-blue-100 text-blue-800 border border-blue-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
               {hasResults ? 'Graded' : hasSubmitted ? 'Submitted' : selectedRound.sittingId ? 'In progress' : canStart ? 'Ready' : closed ? 'Closed' : 'Not open'}
             </span>
             
-            <div className="mt-4">
+            <div className="mt-4 flex md:justify-end">
               {hasResults ? (
                 <Link
                   href={`/results/${portalId}/rounds/${selectedRound.id}/review`}
-                  className="inline-block bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-md hover:bg-blue-800"
+                  className="inline-block bg-blue-950 text-white font-bold px-5 py-2.5 rounded-sm hover:bg-blue-900 transition-colors"
                 >
                   View Detailed Review
                 </Link>
               ) : isOnlineOrHybrid ? (
-                <button disabled={!canStart || starting} onClick={startOrResume} className="bg-blue-700 hover:bg-blue-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold px-5 py-2.5 rounded-md">
+                <button disabled={!canStart || starting} onClick={startOrResume} className="bg-blue-950 hover:bg-blue-900 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold px-8 py-3 rounded-none uppercase tracking-wider text-sm transition-colors">
                   {starting ? 'Opening…' : selectedRound.sittingId ? 'Resume test' : 'Start test'}
                 </button>
               ) : (
-                <button disabled className="bg-slate-300 text-white font-semibold px-5 py-2.5 rounded-md cursor-not-allowed">
+                <button disabled className="bg-slate-200 text-slate-500 font-bold px-8 py-3 rounded-none uppercase tracking-wider text-sm cursor-not-allowed">
                   {hasSubmitted ? 'Submitted' : 'Paper Round'}
                 </button>
               )}
@@ -125,10 +125,11 @@ const formatDateTime = (dateString: Date | string) => {
         </div>
 
         {hasResults ? (
-          <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-5">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase mb-2">Your Final Result</h3>
+          <div className="mt-6 bg-slate-50 border-2 border-slate-200 rounded-sm p-6 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-950"></div>
+            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Your Final Result</h3>
             <div className="flex items-baseline gap-3">
-              <span className="text-4xl font-bold text-blue-700 leading-none">
+              <span className="text-4xl font-bold text-blue-950 leading-none">
                 {selectedRound.myResult?.score ?? 0}
                 {selectedRound.myResult?.maxScore
                   ? ` / ${selectedRound.myResult.maxScore}`
@@ -146,15 +147,16 @@ const formatDateTime = (dateString: Date | string) => {
               ) : null}
             </div>
             {selectedRound.myResult?.feedback && (
-              <div className="mt-4 p-4 bg-white border border-slate-200 rounded text-slate-700 text-sm">
-                <strong>Feedback:</strong> {selectedRound.myResult?.feedback}
+              <div className="mt-6 p-4 bg-white border border-slate-200 rounded-sm text-slate-700">
+                <strong className="text-blue-950 uppercase text-xs tracking-wider mb-1 block">Feedback</strong> 
+                <p className="text-sm">{selectedRound.myResult?.feedback}</p>
               </div>
             )}
           </div>
         ) : hasSubmitted ? (
-          <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-5 text-center">
-             <h3 className="text-lg font-bold text-slate-900">Awaiting Final Results</h3>
-             <p className="text-slate-600 mt-1">Your results will appear here once the round is officially released.</p>
+          <div className="mt-6 bg-slate-50 border-2 border-slate-200 rounded-sm p-6 text-center">
+             <h3 className="text-xl font-bold text-blue-950">Awaiting Final Results</h3>
+             <p className="text-slate-600 mt-2">Your results will appear here once the round is officially released.</p>
           </div>
         ) : null}
 

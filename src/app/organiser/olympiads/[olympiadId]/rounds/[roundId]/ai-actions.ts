@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { questions, questionPapers } from '@/lib/db/schema';
+import { questions, questionPapers, rounds } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
@@ -21,7 +21,6 @@ export async function generateTestFromPDF(roundId: string, portalId: string) {
   if (paperRecords.length === 0 || !paperRecords[0].fileUrl) {
     throw new Error('No Question Paper PDF found for this round.');
   }
-
   const pdfUrl = paperRecords[0].fileUrl;
 
   // The memo PDF's public URL is stored inside the answerKeyJson blob by the
@@ -36,7 +35,7 @@ export async function generateTestFromPDF(roundId: string, portalId: string) {
     memoUrl = answerKeyJson.memoUrl as string;
   }
 
-  const pdfResponse = await fetch(pdfUrl);
+  const pdfResponse = await fetch(pdfUrl!);
   if (!pdfResponse.ok) {
     throw new Error('Failed to fetch the PDF file from storage.');
   }

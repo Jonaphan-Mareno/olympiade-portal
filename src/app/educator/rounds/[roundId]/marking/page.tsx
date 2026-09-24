@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import EducatorGradingForm from './EducatorGradingForm';
 import Link from 'next/link';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
+import { publishRoundResults } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +43,7 @@ export default async function EducatorMarkingPage({
   // Strict Access Control: only closed or released rounds
   const now = new Date();
   const state = deriveRoundState(round, now);
-  if (state === 'scheduled' || state === 'open') {
+  if ((state === 'scheduled' || state === 'open') && round.deliveryMethod !== 'online') {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
         <div className="bg-white border-2 border-red-200 p-8 rounded-lg max-w-md text-center shadow-sm">
@@ -119,6 +120,7 @@ export default async function EducatorMarkingPage({
       invitedEmail: memberships.invitedEmail,
       resultId: results.id,
       resultStatus: results.status,
+      score: results.score,
     })
     .from(submissions)
     .innerJoin(memberships, eq(submissions.studentMembershipId, memberships.id))
@@ -132,16 +134,29 @@ export default async function EducatorMarkingPage({
       )
     );
 
-  // Filter to show pending or queued_for_marker submissions
-  const markableSubmissions = allSubmissions.filter(
-    (s) => !s.resultId || s.resultStatus === 'queued_for_marker'
-  );
+  // Filter to show pending or queued_for_marker submissions, 
+  // or auto_marked online submissions if there are manual questions
+  const hasManualQuestions = roundQuestions.some(q => q.questionType === 'free_text');
+  
+  const isSubmissionPending = (s: any) => !s.resultId || s.resultStatus === 'queued_for_marker' || (hasManualQuestions && s.resultStatus === 'auto_marked');
+  const pendingSubmissionsCount = allSubmissions.filter(isSubmissionPending).length;
+
+  const submissionsWithScores = allSubmissions
+    .filter(s => !isSubmissionPending(s))
+    .map(s => ({ ...s, parsedScore: parseFloat(s.score as string) || 0 }))
+    .sort((a, b) => b.parsedScore - a.parsedScore);
+
+  const allScores = submissionsWithScores.map(s => s.parsedScore);
+  const rankedSubmissions = new Map<string, number>();
+  submissionsWithScores.forEach(s => {
+    rankedSubmissions.set(s.id, allScores.indexOf(s.parsedScore) + 1);
+  });
 
   let selectedSubmission = null;
   let initialGrades = undefined;
 
   if (submissionId) {
-    selectedSubmission = markableSubmissions.find((s) => s.id === submissionId);
+    selectedSubmission = allSubmissions.find((s) => s.id === submissionId);
     
     if (selectedSubmission && selectedSubmission.studentMembershipId && paper) {
       // Find the sitting to load initial grades
@@ -179,15 +194,62 @@ export default async function EducatorMarkingPage({
             Manual Marking
           </h1>
           <p className="text-blue-200 text-sm m-0">
-            {round.name} • Educator View
+            {round.name}
           </p>
         </div>
-        <Link
-          href={`/educator/rounds/${roundId}`}
-          className="text-white hover:text-blue-200 transition-colors text-sm font-medium border border-blue-700 hover:border-blue-500 rounded px-4 py-2"
-        >
-          ← Back to Round
-        </Link>
+        <div className="flex items-center gap-4">
+          {pendingSubmissionsCount === 0 && allSubmissions.length > 0 && (
+            round.resultsPublishedAt && new Date(round.resultsPublishedAt) <= now ? (
+              <button
+                disabled
+                className="bg-slate-300 text-slate-500 cursor-not-allowed px-4 py-2 text-sm font-bold uppercase tracking-wider rounded-none border-2 border-slate-400"
+              >
+                Results Published
+              </button>
+            ) : (
+              <form action={publishRoundResults.bind(null, roundId)}>
+                <button
+                  type="submit"
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-bold uppercase tracking-wider transition-colors border-2 border-green-700 rounded-none inline-block shadow-sm"
+                >
+                  Publish Results
+                </button>
+              </form>
+            )
+          )}
+          {round.deliveryMethod === 'online' ? null : now < round.closesAt ? (
+            <button
+              disabled
+              title="Memo is locked until the round closes"
+              className="bg-slate-300 text-slate-500 cursor-not-allowed px-4 py-2 text-sm font-bold uppercase tracking-wider rounded-none border-2 border-slate-400"
+            >
+              Memo Locked
+            </button>
+          ) : memoUrl ? (
+            <a
+              href={memoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-amber-400 hover:bg-amber-500 text-amber-950 px-4 py-2 text-sm font-bold uppercase tracking-wider transition-colors border-2 border-amber-500 rounded-none inline-block"
+            >
+              Download Official Memo
+            </a>
+          ) : (
+             <button
+              disabled
+              title="No memo uploaded"
+              className="bg-slate-300 text-slate-500 cursor-not-allowed px-4 py-2 text-sm font-bold uppercase tracking-wider rounded-none border-2 border-slate-400"
+            >
+              No Memo Available
+            </button>
+          )}
+          <Link
+            href={`/educator/rounds/${roundId}`}
+            className="text-white hover:text-blue-200 transition-colors text-sm font-medium border border-blue-700 hover:border-blue-500 rounded px-4 py-2"
+          >
+            ← Back to Round
+          </Link>
+        </div>
       </div>
 
       <div className="max-w-[1400px] mx-auto p-6 flex flex-col lg:flex-row gap-6">
@@ -195,44 +257,46 @@ export default async function EducatorMarkingPage({
         {/* Left column: Submissions List */}
         <div className="w-full lg:w-1/4 flex-shrink-0">
           <div className="bg-white border border-slate-200 rounded-md overflow-hidden flex flex-col max-h-[calc(100vh-12rem)]">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 shrink-0">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 shrink-0 flex items-center justify-between">
               <h3 className="font-semibold text-slate-900 m-0">Pending Marking</h3>
+              <span className="text-slate-500 text-sm font-medium">
+                {pendingSubmissionsCount} left
+              </span>
             </div>
             <ul className="divide-y divide-slate-100 overflow-y-auto flex-1">
-              {markableSubmissions.length === 0 ? (
+              {allSubmissions.length === 0 ? (
                 <li className="p-4 text-sm text-slate-500 italic text-center">
-                  All submissions are fully marked or moderated.
+                  No submissions have been received yet.
                 </li>
               ) : (
-                markableSubmissions.map((sub) => {
+                allSubmissions.map((sub) => {
                   const isSelected = sub.id === submissionId;
-                  const isDraft = sub.resultStatus === 'queued_for_marker';
+                  const isPending = isSubmissionPending(sub);
+                  const rank = rankedSubmissions.get(sub.id);
                   return (
                     <li key={sub.id}>
                       <a
                         href={`?submissionId=${sub.id}`}
                         className={`block p-4 transition-colors ${
-                          isSelected
-                            ? 'bg-blue-50 border-l-4 border-blue-600'
-                            : 'hover:bg-slate-50 border-l-4 border-transparent'
+                          !isPending
+                            ? 'bg-green-50 hover:bg-green-100'
+                            : isSelected
+                            ? 'bg-blue-50'
+                            : 'hover:bg-slate-50'
                         }`}
                       >
-                        <div className="font-medium text-slate-900 truncate">
-                          {sub.studentName || sub.invitedEmail}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-slate-500 uppercase">
-                            {sub.submissionType}
-                          </span>
-                          {isDraft ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                              Draft Saved
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
-                              Needs Marking
+                        <div className="font-medium truncate text-slate-900 flex justify-between items-center">
+                          <span>{sub.studentName || sub.invitedEmail}</span>
+                          {!isPending && rank && (
+                            <span className="text-xs font-bold text-green-700 bg-green-200 px-2 py-0.5 rounded-full whitespace-nowrap ml-2">
+                              Rank #{rank}
                             </span>
                           )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs uppercase text-slate-500">
+                            {sub.submissionType}
+                          </span>
                         </div>
                       </a>
                     </li>
@@ -249,7 +313,7 @@ export default async function EducatorMarkingPage({
             <EducatorGradingForm 
               roundId={roundId}
               submission={selectedSubmission}
-              questions={roundQuestions}
+              questions={roundQuestions.map((q, i) => ({ ...q, originalIndex: i + 1 })).filter((q) => q.questionType === 'free_text')}
               initialGrades={initialGrades}
               memoText={memoText}
               memoUrl={memoUrl}
