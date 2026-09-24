@@ -28,6 +28,7 @@ export const users = pgTable('users', {
   name: text('name').notNull(),
   isPlatformAdmin: boolean('is_platform_admin').default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  schoolId: uuid('school_id').references(() => schools.id),
 });
 
 export const organiserApplications = pgTable('organiser_applications', {
@@ -62,7 +63,7 @@ export const schools = pgTable('schools', {
 export const portals = pgTable('portals', {
   id: uuid('id').primaryKey().defaultRandom(),
   // SET NULL so deleting a user doesn't destroy portals other people depend on
-  ownerUserId: uuid('owner_user_id').references(() => users.id, {
+  ownerUserId: uuid('owner_user_id').references(() => users.id as any, {
     onDelete: 'set null',
   }),
   name: text('name').notNull(),

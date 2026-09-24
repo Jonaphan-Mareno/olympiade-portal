@@ -1,6 +1,15 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, type Mock } from 'vitest';
 import ExamInterface from '@/components/student/ExamInterface';
+
+beforeAll(() => {
+  global.IntersectionObserver = class IntersectionObserver {
+    constructor() {}
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as any;
+});
 
 vi.stubGlobal('fetch', vi.fn(() =>
   Promise.resolve({
@@ -19,9 +28,20 @@ const mockQuestions: any[] = [
   },
 ];
 
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem(key: string) { return store[key] || null; },
+    setItem(key: string, value: string) { store[key] = value.toString(); },
+    removeItem(key: string) { delete store[key]; },
+    clear() { store = {}; },
+  };
+})();
+Object.defineProperty(window, 'localStorage', { value: localStorageMock });
+
 describe('ExamInterface', () => {
   beforeEach(() => {
-    localStorage.clear();
+    window.localStorage.clear();
     vi.clearAllMocks();
     // Re-establish the default stubbed response so a test that overrides the
     // implementation (e.g. with a deferred promise) cannot leak into others.

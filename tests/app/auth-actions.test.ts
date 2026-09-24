@@ -151,7 +151,7 @@ describe('signup: auto-claims all pending invites for the email', () => {
     // New accounts are welcomed first, carrying the invite's dashboard as
     // the next destination (encoded as a query param)
     expect(h.state.redirectCalls).toContain(
-      `/welcome?next=${encodeURIComponent('/educator/dashboard?portalId=portal-A')}`
+      `/welcome?next=${encodeURIComponent('/educator?portalId=portal-A')}`
     );
   });
 

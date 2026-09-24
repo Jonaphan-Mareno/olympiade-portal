@@ -124,24 +124,38 @@ export async function sendInviteEmail(params: {
   ).replace(/\/+$/, '');
   const inviteLink = `${baseUrl}/signup?inviteToken=${params.inviteToken}`;
 
-  const info = await sendEmail({
-    to: params.to,
-    subject: `You've been invited to join ${params.portalName}`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="color: #6366f1;">You're Invited!</h2>
-        <p>You have been added as a <strong>${role}</strong> at <strong>${params.schoolName}</strong> for the <strong>${params.portalName}</strong> olympiad.</p>
-        <p>Click the link below to create your account and join the portal:</p>
-        <a href="${inviteLink}"
-           style="display: inline-block; padding: 12px 24px; background: #6366f1; color: white; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 16px 0;">
-          Accept Invitation
-        </a>
-        <p style="color: #a1a1aa; font-size: 0.85rem;">
-          If you did not expect this invitation, you can safely ignore this email.
-        </p>
-      </div>
-    `,
-  });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('\n=============================================');
+    console.log(' TEST INVITE LINK (Local Development Fallback)');
+    console.log(` To: ${params.to}`);
+    console.log(` Role: ${role}`);
+    console.log(` Link: ${inviteLink}`);
+    console.log('=============================================\n');
+    return { previewUrl: inviteLink };
+  }
 
-  return info;
+  try {
+    const info = await sendEmail({
+      to: params.to,
+      subject: `You've been invited to join ${params.portalName}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2 style="color: #6366f1;">You're Invited!</h2>
+          <p>You have been added as a <strong>${role}</strong> at <strong>${params.schoolName}</strong> for the <strong>${params.portalName}</strong> olympiad.</p>
+          <p>Click the link below to create your account and join the portal:</p>
+          <a href="${inviteLink}"
+             style="display: inline-block; padding: 12px 24px; background: #6366f1; color: white; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 16px 0;">
+            Accept Invitation
+          </a>
+          <p style="color: #a1a1aa; font-size: 0.85rem;">
+            If you did not expect this invitation, you can safely ignore this email.
+          </p>
+        </div>
+      `,
+    });
+    return info;
+  } catch (error) {
+    console.error(`Email delivery failed for ${params.to}:`, error);
+    throw error;
+  }
 }
