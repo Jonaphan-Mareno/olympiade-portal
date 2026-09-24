@@ -29,18 +29,13 @@ export default async function StudentGlobalOverviewPage() {
     redirect('/login');
   }
 
-  // Fetch the student's global school_id from their user profile
-  const [currentUser] = await db.select({ schoolId: users.schoolId }).from(users).where(eq(users.id, user.id));
-  const globalSchoolId = currentUser?.schoolId;
-
   const studentMemberships = await db
     .select()
     .from(memberships)
     .where(
       and(
         eq(memberships.userId, user.id),
-        eq(memberships.role, 'student'),
-        globalSchoolId ? eq(memberships.schoolId, globalSchoolId) : undefined
+        eq(memberships.role, 'student')
       )
     );
 
@@ -127,8 +122,7 @@ export default async function StudentGlobalOverviewPage() {
   const roundsCompleted = studentSubmissions.filter(s => s.status === 'submitted').length;
   const certificates = 0; // Mocked
 
-  // 3. Recent Achievements calculation
-  let recentAchievement = null;
+  let recentAchievement: any = null;
   const completedWithResults = studentSubmissions
     .filter(s => s.score !== null && s.status === 'submitted')
     .map(s => {
@@ -140,7 +134,34 @@ export default async function StudentGlobalOverviewPage() {
 
   if (completedWithResults.length > 0) {
     recentAchievement = completedWithResults[0];
+    
+    // Calculate ranking
+    const allRoundResults = await db.select({
+      score: resultsTable.score
+    }).from(resultsTable)
+      .innerJoin(submissions, eq(resultsTable.submissionId, submissions.id))
+      .where(eq(submissions.roundId, recentAchievement.roundId));
+
+    const scores = allRoundResults
+      .map(r => parseFloat(r.score as string) || 0)
+      .sort((a, b) => b - a);
+
+    const studentScore = parseFloat(recentAchievement.score) || 0;
+    const rank = scores.indexOf(studentScore) + 1;
+    recentAchievement.rank = rank;
+    recentAchievement.totalStudents = scores.length;
   }
+
+  const pendingSubmissions = studentSubmissions
+    .filter(s => s.status === 'submitted')
+    .map(s => {
+       const r = roundMap.get(s.roundId);
+       return { ...s, round: r, publishedAt: r?.resultsPublishedAt };
+    })
+    .filter(s => !s.publishedAt || s.publishedAt > now)
+    .sort((a, b) => (b.submittedAt?.getTime() || 0) - (a.submittedAt?.getTime() || 0));
+
+  const latestPending = pendingSubmissions.length > 0 ? pendingSubmissions[0] : null;
 
   const displayName = user.user_metadata?.full_name || user.email;
   const firstName = displayName?.split(' ')[0] || 'Student';
@@ -190,7 +211,7 @@ export default async function StudentGlobalOverviewPage() {
               
               {isActionable && (
                 <Link 
-                  href={`/results/${urgentRound.portalId}/rounds/${urgentRound.id}`}
+                  href={`/results/${urgentRound.portalId}/rounds`}
                   className="bg-amber-400 hover:bg-amber-500 text-amber-950 font-bold py-4 px-10 transition-colors text-center text-sm uppercase tracking-wider rounded-none border-2 border-amber-500 shrink-0"
                 >
                   Start Test
@@ -223,7 +244,7 @@ export default async function StudentGlobalOverviewPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Recent Achievements */}
-          {recentAchievement && (
+          {recentAchievement ? (
             <div>
               <h2 className="font-serif text-2xl text-blue-950 font-bold mb-4">
                 Recent Achievement
@@ -234,26 +255,58 @@ export default async function StudentGlobalOverviewPage() {
                     <path d="M12 15.228l-5.32 2.796 1.017-5.928L3.385 7.89l5.952-.866L12 1.636l2.663 5.388 5.952.866-4.312 4.206 1.017 5.928z"/>
                   </svg>
                 </div>
-                <div className="relative z-10">
-                  <span className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-2 block">
-                    Latest Result
-                  </span>
-                  <p className="text-white text-3xl font-bold mb-1">
-                    {recentAchievement.score}%
-                  </p>
-                  <p className="text-slate-300 font-medium">
-                    in {recentAchievement.round?.name || 'Round'}
-                  </p>
-                  <Link href={`/results/scores`} className="inline-block mt-4 text-amber-400 hover:text-amber-300 font-bold text-sm uppercase tracking-wider">
-                    View all results &rarr;
-                  </Link>
+                <div className="relative z-10 flex flex-row justify-between items-end">
+                  <div>
+                    <span className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-2 block">
+                      Latest Result
+                    </span>
+                    <p className="text-white text-4xl font-bold mb-1">
+                      {recentAchievement.score}%
+                    </p>
+                    <p className="text-slate-300 font-medium">
+                      in {recentAchievement.round?.name || 'Round'}
+                    </p>
+                    <div className="flex gap-4 mt-4">
+                      <Link href={`/results/scores`} className="inline-block text-amber-400 hover:text-amber-300 font-bold text-sm uppercase tracking-wider">
+                        View all results &rarr;
+                      </Link>
+                      <a href={`/api/certificates/${recentAchievement.submissionId}`} download className="inline-block text-white hover:text-blue-200 font-bold text-sm uppercase tracking-wider">
+                        Download Certificate &darr;
+                      </a>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-blue-300 font-bold text-xs uppercase tracking-widest mb-1 block">
+                      Ranking
+                    </span>
+                    <p className="text-white text-2xl font-bold">
+                      #{recentAchievement.rank} <span className="text-sm text-slate-400 font-normal">/ {recentAchievement.totalStudents}</span>
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
-          )}
+          ) : latestPending ? (
+            <div>
+              <h2 className="font-serif text-2xl text-blue-950 font-bold mb-4">
+                Recent Achievement
+              </h2>
+              <div className="bg-slate-50 border-2 border-slate-200 rounded-none p-6 h-full flex flex-col justify-center">
+                <span className="text-slate-500 font-bold text-xs uppercase tracking-widest mb-2 block">
+                  Awaiting Marker
+                </span>
+                <p className="text-slate-900 text-xl font-bold mb-2">
+                  {latestPending.round?.name || 'Round'}
+                </p>
+                <p className="text-slate-600 font-medium text-sm">
+                  Your marks are currently being processed by your educator and will appear here once published.
+                </p>
+              </div>
+            </div>
+          ) : null}
 
           {/* Quick Prep */}
-          <div className={!recentAchievement ? "md:col-span-2" : ""}>
+          <div className={(!recentAchievement && !latestPending) ? "md:col-span-2" : ""}>
             <h2 className="font-serif text-2xl text-blue-950 font-bold mb-4">
               Quick Prep
             </h2>

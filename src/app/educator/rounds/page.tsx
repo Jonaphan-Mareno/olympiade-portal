@@ -132,13 +132,7 @@ export default async function EducatorAssessmentsPage() {
                             </button>
                           )}
                           
-                          {state === 'open' && round.deliveryMethod === 'online' && (
-                             <button disabled className="inline-flex items-center justify-center px-4 py-2 border border-slate-200 bg-slate-100 text-slate-500 font-bold rounded-sm cursor-not-allowed">
-                               Online Round (Auto-Graded)
-                             </button>
-                          )}
-
-                          {state === 'closed' && (
+                          {(state === 'closed' || state === 'open') && (
                             <Link 
                               href={`/educator/rounds/${round.id}/marking`}
                               className="inline-flex items-center justify-center px-4 py-2 border border-blue-900 bg-blue-900 text-white font-bold rounded-sm hover:bg-blue-800 transition-colors"

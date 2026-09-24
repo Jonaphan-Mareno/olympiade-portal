@@ -10,6 +10,7 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import SidebarNav from '@/components/educator/SidebarNav';
 import SchoolSwitcher, { SchoolMembership } from '@/components/educator/SchoolSwitcher';
+import CollapsibleSidebar from '@/components/ui/CollapsibleSidebar';
 
 export default async function EducatorLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
@@ -56,36 +57,34 @@ export default async function EducatorLayout({ children }: { children: ReactNode
   const activeSchoolId = cookieStore.get('active_school_id')?.value;
 
   return (
-    <div className="min-h-screen flex bg-slate-50 font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col fixed inset-y-0 z-50">
-        <div className="p-6 border-b border-slate-200">
-          <Link href="/educator" className="flex items-center gap-2 no-underline mb-6">
-            <Image
-              src="/images/logo-BIG-v2.jpg"
-              alt="Olympia Logo"
-              width={28}
-              height={28}
-              className="object-contain"
-            />
-            <span className="text-blue-600 font-bold text-xl">
-              Olympia
-            </span>
-          </Link>
-          <SchoolSwitcher schools={uniqueSchools} activeSchoolId={activeSchoolId} />
-        </div>
+    <CollapsibleSidebar 
+      sidebarContent={
+        <>
+          <div className="p-6 border-b border-slate-200">
+            <Link href="/educator" className="flex items-center gap-2 no-underline mb-6">
+              <Image
+                src="/images/logo-BIG-v2.jpg"
+                alt="Olympia Logo"
+                width={28}
+                height={28}
+                className="object-contain"
+              />
+              <span className="text-blue-600 font-bold text-xl">
+                Olympia
+              </span>
+            </Link>
+            <SchoolSwitcher schools={uniqueSchools} activeSchoolId={activeSchoolId} />
+          </div>
 
-        <SidebarNav />
+          <SidebarNav />
 
-        <div className="p-4 border-t border-slate-200">
-          <SignOutButton />
-        </div>
-      </aside>
-
-      {/* Main Content Area - Offset by sidebar width */}
-      <main className="flex-1 ml-64 min-h-screen">
-        {children}
-      </main>
-    </div>
+          <div className="p-4 border-t border-slate-200 mt-auto">
+            <SignOutButton />
+          </div>
+        </>
+      }
+    >
+      {children}
+    </CollapsibleSidebar>
   );
 }
