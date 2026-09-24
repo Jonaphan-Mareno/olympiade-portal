@@ -38,6 +38,7 @@ export default function PdfPreview({ url }: { url: string }) {
         canvas.width = viewport.width;
         
         const renderContext = {
+          canvas,
           canvasContext: context,
           viewport: viewport,
         };

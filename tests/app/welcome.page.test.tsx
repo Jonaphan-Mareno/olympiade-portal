@@ -108,7 +108,7 @@ describe('WelcomePage', () => {
       ],
     ];
 
-    const page = await renderPage('/educator/dashboard?portalId=portal-A');
+    const page = await renderPage('/educator?portalId=portal-A');
     render(page);
 
     expect(screen.getByText('Welcome to Olympia, Jon!')).toBeInTheDocument();
@@ -118,7 +118,7 @@ describe('WelcomePage', () => {
     expect(screen.getByText(/educator portal/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Get Started' })).toHaveAttribute(
       'href',
-      '/educator/dashboard?portalId=portal-A'
+      '/educator?portalId=portal-A'
     );
   });
 

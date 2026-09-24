@@ -131,6 +131,7 @@ export default async function EducatorResultsPage({
         return {
           ...sub,
           rank: currentRank,
+          internalRank: currentRank,
           numericScore,
           percentage: ((numericScore / totalMarks) * 100).toFixed(1),
         };

@@ -61,7 +61,7 @@ export default async function EducatorLayout({ children }: { children: ReactNode
       sidebarContent={
         <>
           <div className="p-6 border-b border-slate-200">
-            <Link href="/educator" className="flex items-center gap-2 no-underline mb-6">
+            <Link href="/dashboard" className="flex items-center gap-2 no-underline mb-6">
               <Image
                 src="/images/logo-BIG-v2.jpg"
                 alt="Olympia Logo"

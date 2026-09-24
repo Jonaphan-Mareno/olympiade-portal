@@ -120,6 +120,7 @@ export default async function EducatorMarkingPage({
       invitedEmail: memberships.invitedEmail,
       resultId: results.id,
       resultStatus: results.status,
+      score: results.score,
     })
     .from(submissions)
     .innerJoin(memberships, eq(submissions.studentMembershipId, memberships.id))
@@ -169,11 +170,17 @@ export default async function EducatorMarkingPage({
       if (sitting) {
         const answers = await db.select().from(studentAnswers).where(eq(studentAnswers.sittingId, sitting.id));
         if (answers.length > 0) {
-          initialGrades = answers.map(a => ({
-            questionId: a.questionId as string,
-            score: parseFloat(a.manualScore as string) || 0,
-            feedback: a.educatorFeedback || '',
-          }));
+          initialGrades = answers.flatMap((a) =>
+            a.questionId === null
+              ? []
+              : [
+                  {
+                    questionId: a.questionId,
+                    score: parseFloat(a.manualScore as string) || 0,
+                    feedback: a.educatorFeedback || '',
+                  },
+                ]
+          );
         }
       }
     }
@@ -236,6 +243,12 @@ export default async function EducatorMarkingPage({
               No Memo Available
             </button>
           )}
+          <Link
+            href={`/educator/rounds/${roundId}`}
+            className="text-white hover:text-blue-200 transition-colors text-sm font-medium border border-blue-700 hover:border-blue-500 rounded px-4 py-2"
+          >
+            ← Back to Round
+          </Link>
         </div>
       </div>
 

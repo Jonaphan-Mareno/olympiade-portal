@@ -55,6 +55,7 @@ export default async function StudentGlobalOverviewPage() {
         roundId: submissions.roundId,
         score: resultsTable.score,
         status: submissions.status,
+        submittedAt: submissions.submittedAt,
       })
       .from(submissions)
       .leftJoin(resultsTable, eq(resultsTable.submissionId, submissions.id))

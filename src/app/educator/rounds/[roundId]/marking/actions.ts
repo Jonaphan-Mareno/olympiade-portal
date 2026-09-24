@@ -182,9 +182,7 @@ export async function publishRoundResults(roundId: string) {
 
     revalidatePath(`/educator/rounds/${roundId}/marking`);
     revalidatePath(`/results`);
-    return { success: true };
   } catch (err: any) {
     console.error('Failed to publish results:', err);
-    return { error: err.message || 'Failed to publish results' };
   }
 }

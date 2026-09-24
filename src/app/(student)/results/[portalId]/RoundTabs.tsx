@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import type { RoundState } from '@/domain/rounds/round-state-machine';
 
 type Round = {
   id: string;
@@ -11,7 +12,7 @@ type Round = {
   closesAt: Date | string | null;
   qualifyingThreshold: string | null;
   deliveryMethod: 'online' | 'paper' | 'hybrid';
-  state: 'scheduled' | 'open' | 'closed' | 'released' | 'archived';
+  state: RoundState;
   durationMinutes: number | null;
   sittingId: string | null;
   sittingStatus: 'active' | 'submitted' | 'abandoned' | null;

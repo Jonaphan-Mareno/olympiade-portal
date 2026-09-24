@@ -22,12 +22,17 @@ export async function generateTestFromPDF(roundId: string, portalId: string) {
     throw new Error('No Question Paper PDF found for this round.');
   }
   const pdfUrl = paperRecords[0].fileUrl;
-  let memoUrl = null;
-  if (paperRecords[0].answerKeyJson && typeof paperRecords[0].answerKeyJson === 'object') {
-    const parsedJson = paperRecords[0].answerKeyJson as any;
-    if (parsedJson.memoUrl) {
-      memoUrl = parsedJson.memoUrl;
-    }
+
+  // The memo PDF's public URL is stored inside the answerKeyJson blob by the
+  // organiser round upload action (saved as { memoUrl }).
+  let memoUrl: string | null = null;
+  const answerKeyJson = paperRecords[0].answerKeyJson as any;
+  if (
+    answerKeyJson &&
+    typeof answerKeyJson === 'object' &&
+    answerKeyJson.memoUrl
+  ) {
+    memoUrl = answerKeyJson.memoUrl as string;
   }
 
   const pdfResponse = await fetch(pdfUrl!);

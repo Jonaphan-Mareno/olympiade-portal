@@ -64,7 +64,7 @@ export default async function EducatorStandingsPage({
   const totalMarks = roundQuestions.reduce((sum, q) => sum + (q.marks || 0), 0) || 100; // fallback to 100
 
   // 1. School Roster Query
-  let schoolRoster = [];
+  let schoolRoster: any[] = [];
   if (tab === 'school') {
     const rawRoster = await db
       .select({
@@ -110,7 +110,7 @@ export default async function EducatorStandingsPage({
   }
 
   // 2. Global Top 50 Query
-  let globalTop50 = [];
+  let globalTop50: any[] = [];
   if (tab === 'global') {
     const rawGlobal = await db
       .select({

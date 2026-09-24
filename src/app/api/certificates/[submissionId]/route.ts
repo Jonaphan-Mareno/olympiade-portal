@@ -122,7 +122,9 @@ export async function GET(
 
   const pdfBytes = await pdfDoc.save();
 
-  return new NextResponse(pdfBytes, {
+  // pdf-lib types save() as Uint8Array<ArrayBufferLike>, which lib.dom's
+  // BodyInit does not accept; re-wrap it in a plain Uint8Array.
+  return new NextResponse(new Uint8Array(pdfBytes), {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="certificate-${nameToDraw.replace(/[^a-z0-9]/gi, '_')}.pdf"`,
