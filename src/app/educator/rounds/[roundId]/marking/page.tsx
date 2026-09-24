@@ -42,7 +42,7 @@ export default async function EducatorMarkingPage({
   // Strict Access Control: only closed or released rounds
   const now = new Date();
   const state = deriveRoundState(round, now);
-  if (state === 'scheduled' || state === 'open') {
+  if ((state === 'scheduled' || state === 'open') && round.deliveryMethod !== 'online') {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
         <div className="bg-white border-2 border-red-200 p-8 rounded-lg max-w-md text-center shadow-sm">
@@ -128,13 +128,16 @@ export default async function EducatorMarkingPage({
       and(
         eq(submissions.roundId, roundId),
         eq(submissions.status, 'submitted'),
-        eq(memberships.schoolId, schoolId)
+        eq(users.schoolId, schoolId)
       )
     );
 
-  // Filter to show pending or queued_for_marker submissions
+  // Filter to show pending or queued_for_marker submissions, 
+  // or auto_marked online submissions if there are manual questions
+  const hasManualQuestions = roundQuestions.some(q => q.questionType === 'free_text');
+  
   const markableSubmissions = allSubmissions.filter(
-    (s) => !s.resultId || s.resultStatus === 'queued_for_marker'
+    (s) => !s.resultId || s.resultStatus === 'queued_for_marker' || (hasManualQuestions && s.resultStatus === 'auto_marked')
   );
 
   let selectedSubmission = null;
@@ -156,7 +159,7 @@ export default async function EducatorMarkingPage({
         const answers = await db.select().from(studentAnswers).where(eq(studentAnswers.sittingId, sitting.id));
         if (answers.length > 0) {
           initialGrades = answers.map(a => ({
-            questionId: a.questionId,
+            questionId: a.questionId as string,
             score: parseFloat(a.manualScore as string) || 0,
             feedback: a.educatorFeedback || '',
           }));
@@ -176,12 +179,40 @@ export default async function EducatorMarkingPage({
             {round.name} • Educator View
           </p>
         </div>
-        <Link
-          href={`/educator/rounds/${params.roundId}`}
-          className="text-white hover:text-blue-200 transition-colors text-sm font-medium border border-blue-700 hover:border-blue-500 rounded px-4 py-2"
-        >
-          ← Back to Round
-        </Link>
+        <div className="flex items-center gap-4">
+          {round.deliveryMethod === 'online' ? null : now < round.closesAt ? (
+            <button
+              disabled
+              title="Memo is locked until the round closes"
+              className="bg-slate-300 text-slate-500 cursor-not-allowed px-4 py-2 text-sm font-bold uppercase tracking-wider rounded-none border-2 border-slate-400"
+            >
+              Memo Locked
+            </button>
+          ) : memoUrl ? (
+            <a
+              href={memoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-amber-400 hover:bg-amber-500 text-amber-950 px-4 py-2 text-sm font-bold uppercase tracking-wider transition-colors border-2 border-amber-500 rounded-none inline-block"
+            >
+              Download Official Memo
+            </a>
+          ) : (
+             <button
+              disabled
+              title="No memo uploaded"
+              className="bg-slate-300 text-slate-500 cursor-not-allowed px-4 py-2 text-sm font-bold uppercase tracking-wider rounded-none border-2 border-slate-400"
+            >
+              No Memo Available
+            </button>
+          )}
+          <Link
+            href={`/educator/rounds/${roundId}`}
+            className="text-white hover:text-blue-200 transition-colors text-sm font-medium border border-blue-700 hover:border-blue-500 rounded-none px-4 py-2 inline-block"
+          >
+            ← Back to Round
+          </Link>
+        </div>
       </div>
 
       <div className="max-w-[1400px] mx-auto p-6 flex flex-col lg:flex-row gap-6">
@@ -199,7 +230,7 @@ export default async function EducatorMarkingPage({
                 </li>
               ) : (
                 markableSubmissions.map((sub) => {
-                  const isSelected = sub.id === searchParams.submissionId;
+                  const isSelected = sub.id === submissionId;
                   const isDraft = sub.resultStatus === 'queued_for_marker';
                   return (
                     <li key={sub.id}>
@@ -241,9 +272,9 @@ export default async function EducatorMarkingPage({
         <div className="w-full lg:w-3/4">
           {selectedSubmission ? (
             <EducatorGradingForm 
-              roundId={params.roundId}
+              roundId={roundId}
               submission={selectedSubmission}
-              questions={roundQuestions}
+              questions={roundQuestions.filter((q) => q.questionType === 'free_text')}
               initialGrades={initialGrades}
               memoText={memoText}
               memoUrl={memoUrl}

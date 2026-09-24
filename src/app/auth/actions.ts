@@ -171,6 +171,14 @@ export async function signup(formData: FormData) {
           })
           .where(eq(memberships.id, invite.id));
 
+        // Save school_id to user profile
+        if (invite.schoolId) {
+          await db
+            .update(users)
+            .set({ schoolId: invite.schoolId })
+            .where(eq(users.id, userId));
+        }
+
         // Determine redirect based on role (applied after try/catch)
         if (invite.role === 'educator') {
           redirectTo = `/educator?portalId=${invite.portalId}`;

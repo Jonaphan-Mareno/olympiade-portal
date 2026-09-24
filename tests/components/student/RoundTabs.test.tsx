@@ -28,6 +28,7 @@ function roundWithResult(
     durationMinutes: 60,
     sittingId: null,
     sittingStatus: 'submitted' as const,
+    state: 'released' as const,
     myResult: {
       submitted: true,
       score,

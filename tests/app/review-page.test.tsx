@@ -77,6 +77,7 @@ describe('ReviewPage score display', () => {
   it('shows the raw mark out of the total and the percentage', async () => {
     h.state.selectRows = [
       [{ id: 'membership-1', userId: 'user-1', portalId: 'portal-1' }], // membership
+      [{ id: 'round-1', opensAt: new Date(0), closesAt: new Date(0), resultsPublishedAt: new Date() }], // round
       [
         {
           submission: { id: 'sub-1', answersJson: { 'q-1': '4' } },
@@ -100,6 +101,7 @@ describe('ReviewPage score display', () => {
   it('shows the raw mark alone when the round has no questions', async () => {
     h.state.selectRows = [
       [{ id: 'membership-1', userId: 'user-1', portalId: 'portal-1' }], // membership
+      [{ id: 'round-1', opensAt: new Date(0), closesAt: new Date(0), resultsPublishedAt: new Date() }], // round
       [
         {
           submission: { id: 'sub-1', answersJson: {} },
@@ -118,6 +120,7 @@ describe('ReviewPage score display', () => {
   it('treats a missing result as zero marks', async () => {
     h.state.selectRows = [
       [{ id: 'membership-1', userId: 'user-1', portalId: 'portal-1' }], // membership
+      [{ id: 'round-1', opensAt: new Date(0), closesAt: new Date(0), resultsPublishedAt: new Date() }], // round
       [
         {
           submission: { id: 'sub-1', answersJson: {} },
@@ -139,6 +142,7 @@ describe('ReviewPage score display', () => {
   it('returns not-found when the student has no submission for the round', async () => {
     h.state.selectRows = [
       [{ id: 'membership-1', userId: 'user-1', portalId: 'portal-1' }], // membership
+      [{ id: 'round-1', opensAt: new Date(0), closesAt: new Date(0), resultsPublishedAt: new Date() }], // round
       [], // no submission
     ];
 

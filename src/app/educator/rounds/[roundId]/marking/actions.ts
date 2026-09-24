@@ -1,10 +1,23 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { results, studentAnswers, examSittings, questionPapers, submissions, memberships } from '@/lib/db/schema';
+import { results, studentAnswers, examSittings, questionPapers, submissions, memberships, questions } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+
+function isAnswerCorrect(correct: any, studentAns: string | undefined): boolean {
+  if (!studentAns || correct === null || correct === undefined) return false;
+  const sVal = studentAns.trim();
+  if (typeof correct === 'string') return sVal.toLowerCase() === correct.replace(/^"|"$/g, '').trim().toLowerCase();
+  if (typeof correct === 'number' || typeof correct === 'boolean') return sVal.toLowerCase() === String(correct).toLowerCase();
+  if (Array.isArray(correct)) return correct.some((c) => String(c).trim().toLowerCase() === sVal.toLowerCase());
+  if (typeof correct === 'object') {
+    const val = correct.value ?? correct.answer ?? correct.key;
+    if (val !== undefined) return String(val).trim().toLowerCase() === sVal.toLowerCase();
+  }
+  return JSON.stringify(correct) === sVal;
+}
 
 export async function submitMarksForModeration(
   roundId: string,
@@ -81,10 +94,12 @@ export async function submitMarksForModeration(
     }
 
     // 6. Upsert student_answers for each grade
-    let totalScore = 0;
+    let manualScoreTotal = 0;
+    const manualScoresMap = new Map<string, number>();
     
     for (const grade of grades) {
-      totalScore += grade.score;
+      manualScoreTotal += grade.score;
+      manualScoresMap.set(grade.questionId, grade.score);
       
       const existingAnswer = await db.query.studentAnswers.findFirst({
         where: and(
@@ -109,7 +124,26 @@ export async function submitMarksForModeration(
       }
     }
 
-    // 7. Upsert results table
+    // 7. Calculate total score including auto-marked MCQs
+    let totalScore = manualScoreTotal;
+    if (submission.submissionType === 'online' && submission.answersJson) {
+      // Re-evaluate MCQs based on answersJson
+      const roundQuestions = await db.query.questions.findMany({
+        where: eq(questions.roundId, roundId)
+      });
+      const answersObj = submission.answersJson as Record<string, string>;
+      
+      for (const q of roundQuestions) {
+        if (q.questionType !== 'free_text') {
+          const studentAns = answersObj[q.id];
+          if (isAnswerCorrect(q.correctAnswer, studentAns)) {
+            totalScore += (q.marks ?? 1);
+          }
+        }
+      }
+    }
+
+    // 8. Upsert results table
     const existingResult = await db.query.results.findFirst({
       where: eq(results.submissionId, submissionId)
     });

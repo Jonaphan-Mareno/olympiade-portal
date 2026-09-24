@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { questions, questionPapers } from '@/lib/db/schema';
+import { questions, questionPapers, rounds } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
@@ -21,11 +21,16 @@ export async function generateTestFromPDF(roundId: string, portalId: string) {
   if (paperRecords.length === 0 || !paperRecords[0].fileUrl) {
     throw new Error('No Question Paper PDF found for this round.');
   }
-
   const pdfUrl = paperRecords[0].fileUrl;
-  const memoUrl = paperRecords[0].answerKeyUrl;
+  let memoUrl = null;
+  if (paperRecords[0].answerKeyJson && typeof paperRecords[0].answerKeyJson === 'object') {
+    const parsedJson = paperRecords[0].answerKeyJson as any;
+    if (parsedJson.memoUrl) {
+      memoUrl = parsedJson.memoUrl;
+    }
+  }
 
-  const pdfResponse = await fetch(pdfUrl);
+  const pdfResponse = await fetch(pdfUrl!);
   if (!pdfResponse.ok) {
     throw new Error('Failed to fetch the PDF file from storage.');
   }
