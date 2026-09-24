@@ -138,9 +138,17 @@ export default async function ManageRoundPage({
             </span>
             </div>
           </div>
-          <p className="text-slate-600 text-lg">
+          <p className="text-slate-600 text-lg mb-6">
             Update round details and edit questions.
           </p>
+          <div className="flex gap-4 border-b border-slate-200">
+            <Link href={`/organiser/olympiads/${olympiadId}/rounds/${roundId}`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-slate-900 text-slate-900">
+              Manage Round
+            </Link>
+            <Link href={`/organiser/olympiads/${olympiadId}/rounds/${roundId}/certificate`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-500 hover:text-slate-700">
+              Certificates
+            </Link>
+          </div>
         </div>
 
         <form action={updateRound} className="space-y-8">

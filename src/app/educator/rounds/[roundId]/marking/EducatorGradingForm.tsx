@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { submitMarksForModeration } from './actions';
+import { useRouter } from 'next/navigation';
 
 export default function EducatorGradingForm({
   roundId,
@@ -18,33 +19,40 @@ export default function EducatorGradingForm({
   memoText?: string;
   memoUrl?: string;
 }) {
-  const [grades, setGrades] = useState<Record<string, { score: number; feedback: string }>>(() => {
-    const initialState: Record<string, { score: number; feedback: string }> = {};
+  const [grades, setGrades] = useState<Record<string, { score: number | string; feedback: string }>>(() => {
+    const initialState: Record<string, { score: number | string; feedback: string }> = {};
     if (initialGrades && initialGrades.length > 0) {
       initialGrades.forEach((g) => {
         initialState[g.questionId] = { score: g.score, feedback: g.feedback };
       });
     } else {
       questions.forEach((q) => {
-        initialState[q.id] = { score: 0, feedback: '' };
+        initialState[q.id] = { score: '', feedback: '' };
       });
     }
     return initialState;
   });
+
+  const router = useRouter();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const handleScoreChange = (questionId: string, maxMarks: number, value: string) => {
-    let score = parseFloat(value);
-    if (isNaN(score)) score = 0;
-    if (score < 0) score = 0;
-    if (score > maxMarks) score = maxMarks;
+    let newScore: number | string = value;
+    
+    if (value !== '') {
+      const parsed = parseFloat(value);
+      if (!isNaN(parsed)) {
+        if (parsed < 0) newScore = 0;
+        if (parsed > maxMarks) newScore = maxMarks;
+      }
+    }
 
     setGrades((prev) => ({
       ...prev,
-      [questionId]: { ...prev[questionId], score },
+      [questionId]: { ...prev[questionId], score: newScore },
     }));
     setError(null);
     setSuccess(false);
@@ -67,7 +75,7 @@ export default function EducatorGradingForm({
 
     const gradesArray = Object.entries(grades).map(([questionId, data]) => ({
       questionId,
-      score: data.score,
+      score: parseFloat(data.score as string) || 0,
       feedback: data.feedback,
     }));
 
@@ -79,13 +87,14 @@ export default function EducatorGradingForm({
       setError(result.error);
     } else {
       setSuccess(true);
+      router.refresh();
     }
   };
 
   const getStudentAnswer = (questionId: string) => {
     if (submission.submissionType === 'online' && submission.answersJson) {
-      const answer = (submission.answersJson as any[]).find(a => a.questionId === questionId);
-      return answer ? answer.answerValue : 'No answer provided.';
+      const answers = submission.answersJson as Record<string, string>;
+      return answers[questionId] || 'No answer provided.';
     }
     return 'Offline submission (see uploaded paper).';
   };
@@ -119,7 +128,7 @@ export default function EducatorGradingForm({
           <div key={q.id} className="bg-white border-2 border-slate-200 rounded-none shadow-none flex flex-col">
             {/* Card Header */}
             <div className="bg-blue-950 p-4 flex justify-between items-center">
-              <h3 className="text-white font-bold uppercase tracking-wider text-sm">Question {idx + 1}</h3>
+              <h3 className="text-white font-bold uppercase tracking-wider text-sm">Question {q.originalIndex || (idx + 1)}</h3>
               <span className="text-amber-400 font-bold uppercase tracking-wider text-sm">{q.marks} Marks Available</span>
             </div>
             
@@ -161,7 +170,7 @@ export default function EducatorGradingForm({
                       step="0.25"
                       min="0"
                       max={q.marks}
-                      value={grades[q.id]?.score ?? 0}
+                      value={grades[q.id]?.score ?? ''}
                       onChange={(e) => handleScoreChange(q.id, q.marks, e.target.value)}
                       className="w-24 px-4 py-3 border-2 border-blue-950 rounded-none text-xl font-bold text-center text-blue-950 focus:ring-0 focus:outline-none"
                     />
@@ -181,7 +190,10 @@ export default function EducatorGradingForm({
               </div>
             )}
             {success && (
-              <div className="px-4 py-2 bg-green-50 text-green-700 font-bold text-sm border-2 border-green-200 rounded-none">
+              <div 
+                className="pl-6 pr-8 py-3 bg-green-600 text-white font-bold text-sm shadow-sm"
+                style={{ clipPath: 'polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%)', marginLeft: '-24px' }}
+              >
                 Marks successfully submitted for moderation!
               </div>
             )}
@@ -192,7 +204,7 @@ export default function EducatorGradingForm({
             disabled={isSubmitting}
             className="w-full md:w-auto bg-amber-400 hover:bg-amber-500 disabled:bg-slate-300 disabled:border-slate-400 text-amber-950 font-bold py-4 px-10 transition-colors text-center uppercase tracking-wider rounded-none border-2 border-amber-500 shrink-0"
           >
-            {isSubmitting ? 'Saving...' : 'Submit Final Grades'}
+            {isSubmitting ? 'Saving...' : (success || (submission.resultStatus === 'moderated' || submission.resultStatus === 'remark_requested') ? 'Remark' : 'Submit Final Grades')}
           </button>
         </div>
       </form>

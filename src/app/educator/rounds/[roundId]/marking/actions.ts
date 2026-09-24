@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { results, studentAnswers, examSittings, questionPapers, submissions, memberships, questions } from '@/lib/db/schema';
+import { results, studentAnswers, examSittings, questionPapers, submissions, memberships, questions, rounds } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
@@ -151,22 +151,40 @@ export async function submitMarksForModeration(
     if (existingResult) {
       await db.update(results).set({
         score: totalScore.toString(),
-        status: 'queued_for_marker',
+        status: 'moderated',
         gradedByMembershipId: educatorMembership.id,
       }).where(eq(results.id, existingResult.id));
     } else {
       await db.insert(results).values({
         submissionId: submissionId,
         score: totalScore.toString(),
-        status: 'queued_for_marker',
+        status: 'moderated',
         gradedByMembershipId: educatorMembership.id,
       });
     }
 
-    revalidatePath(`/educator/rounds/${roundId}/marking`);
     return { success: true };
   } catch (err: any) {
     console.error('Failed to submit marks:', err);
     return { error: err.message || 'Failed to submit marks' };
+  }
+}
+
+export async function publishRoundResults(roundId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  try {
+    await db.update(rounds).set({
+      resultsPublishedAt: new Date()
+    }).where(eq(rounds.id, roundId));
+
+    revalidatePath(`/educator/rounds/${roundId}/marking`);
+    revalidatePath(`/results`);
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to publish results:', err);
+    return { error: err.message || 'Failed to publish results' };
   }
 }

@@ -132,6 +132,39 @@ export async function updateRound(formData: FormData) {
     const questionsDataStr = formData.get('questionsData') as string;
     const questionsArray = JSON.parse(questionsDataStr || '[]');
 
+    // Validate that questions have correct answers/marking guidelines
+    for (let i = 0; i < questionsArray.length; i++) {
+      const q = questionsArray[i];
+      if (q.type === 'free_text') {
+        if (!q.correctAnswer || (typeof q.correctAnswer === 'string' && q.correctAnswer.trim() === '')) {
+          throw new Error(`Question ${i + 1} requires marking guidelines/answers for the educator.`);
+        }
+      } else if (q.type === 'single_choice' || q.type === 'multiple_choice' || q.type === 'true_false') {
+        let hasAnswer = false;
+        if (Array.isArray(q.correctAnswer)) {
+          hasAnswer = q.correctAnswer.length > 0;
+          if (hasAnswer && q.options) {
+             const allValid = q.correctAnswer.every((ans: string) => q.options.includes(ans));
+             if (!allValid) hasAnswer = false;
+          }
+        } else if (typeof q.correctAnswer === 'string' && q.correctAnswer.trim() !== '') {
+          if (q.options) {
+            hasAnswer = q.options.includes(q.correctAnswer);
+          } else {
+            hasAnswer = true;
+          }
+        }
+        
+        if (!hasAnswer) {
+          throw new Error(`Question ${i + 1} requires an answer to be selected from the options for auto-marking.`);
+        }
+      } else if (q.type === 'matching') {
+         if (!q.options || q.options.length === 0) {
+            throw new Error(`Question ${i + 1} requires matching pairs.`);
+         }
+      }
+    }
+
     // Delete existing questions
     await db.delete(questions).where(eq(questions.roundId, roundId));
 
@@ -167,7 +200,7 @@ export async function updateRound(formData: FormData) {
             questionType: q.type,
             prompt: q.prompt,
             imageUrl,
-            marks: q.marks,
+            marks: Number(q.marks) || 1,
             options: q.options || null,
             correctAnswer: q.correctAnswer || null,
           };
