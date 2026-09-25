@@ -18,7 +18,7 @@ import {
   type DispatchSummary,
 } from '@/domain/notifications/automation-engine';
 import { notifyEducatorsInPortal } from '@/domain/notifications/in-app-notifications';
-import { advanceQualifyingEntrants } from '@/domain/rounds/advance-entrants';
+import { advanceQualifyingEntrants, type AdvancementSummary } from '@/domain/rounds/advance-entrants';
 import type { Round } from '@/domain/rounds/round.types';
 
 export async function updateRound(formData: FormData) {
@@ -267,6 +267,7 @@ export async function publishRoundResults(
   error?: string;
   alreadyPublished?: boolean;
   summary?: DispatchSummary;
+  advancementSummary?: AdvancementSummary | null;
 }> {
   const supabase = await createClient();
 
