@@ -26,6 +26,11 @@ export async function createRound(formData: FormData) {
     throw new Error('Closing time must be after the opening time.');
   }
 
+  const qualifyingThresholdRaw = formData.get('qualifyingThreshold') as string;
+  const thresholdTopNRaw = formData.get('thresholdTopN') as string;
+  const qualifyingThreshold = qualifyingThresholdRaw?.trim() !== '' ? qualifyingThresholdRaw?.trim() : null;
+  const thresholdTopN = thresholdTopNRaw?.trim() !== '' ? parseInt(thresholdTopNRaw.trim(), 10) : null;
+
   // Insert the Round
   const [newRound] = await db
     .insert(rounds)
@@ -36,6 +41,8 @@ export async function createRound(formData: FormData) {
       deliveryMethod,
       opensAt: new Date(opensAt),
       closesAt: new Date(closesAt),
+      qualifyingThreshold: qualifyingThreshold ?? undefined,
+      thresholdTopN: thresholdTopN ?? undefined,
     })
     .returning({ id: rounds.id });
 

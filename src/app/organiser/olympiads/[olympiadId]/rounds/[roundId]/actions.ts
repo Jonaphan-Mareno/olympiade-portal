@@ -18,6 +18,7 @@ import {
   type DispatchSummary,
 } from '@/domain/notifications/automation-engine';
 import { notifyEducatorsInPortal } from '@/domain/notifications/in-app-notifications';
+import { advanceQualifyingEntrants } from '@/domain/rounds/advance-entrants';
 import type { Round } from '@/domain/rounds/round.types';
 
 export async function updateRound(formData: FormData) {
@@ -42,6 +43,11 @@ export async function updateRound(formData: FormData) {
     throw new Error('Closing time must be after the opening time.');
   }
 
+  const qualifyingThresholdRaw = formData.get('qualifyingThreshold') as string;
+  const thresholdTopNRaw = formData.get('thresholdTopN') as string;
+  const qualifyingThreshold = qualifyingThresholdRaw && qualifyingThresholdRaw.trim() !== '' ? qualifyingThresholdRaw.trim() : null;
+  const thresholdTopN = thresholdTopNRaw && thresholdTopNRaw.trim() !== '' ? parseInt(thresholdTopNRaw.trim(), 10) : null;
+
   // Update the Round
   await db
     .update(rounds)
@@ -50,6 +56,8 @@ export async function updateRound(formData: FormData) {
       orderIndex,
       opensAt: new Date(opensAt),
       closesAt: new Date(closesAt),
+      qualifyingThreshold,
+      thresholdTopN,
     })
     .where(eq(rounds.id, roundId));
 
@@ -330,12 +338,19 @@ export async function publishRoundResults(
     summary = await sendResultsPublishedNotifications(round);
   } catch (err) {
     console.error('Failed to send results-published notifications:', err);
-    // The round is still released; the scheduler sweep will retry the emails.
     summary = { sent: 0, skipped: 0, failed: 0 };
+  }
+
+  // Auto-advance qualifying entrants into the next round
+  let advancementSummary = null;
+  try {
+    advancementSummary = await advanceQualifyingEntrants(roundId);
+  } catch (err) {
+    console.error('Failed to advance entrants:', err);
   }
 
   revalidatePath(`/organiser/olympiads/${portalId}/rounds/${roundId}`);
   revalidatePath(`/organiser/olympiads/${portalId}`);
 
-  return { summary };
+  return { summary, advancementSummary };
 }
