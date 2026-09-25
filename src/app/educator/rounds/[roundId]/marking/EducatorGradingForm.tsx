@@ -110,6 +110,12 @@ export default function EducatorGradingForm({
     return String(correctAnswer);
   };
 
+  const totalAvailable = questions.reduce((sum, q) => sum + (q.marks || 0), 0);
+  const totalAwarded = Object.values(grades).reduce((sum, g) => {
+    const v = parseFloat(g.score as string);
+    return sum + (isNaN(v) ? 0 : v);
+  }, 0);
+
   return (
     <div className="w-full">
       <div className="mb-6 bg-slate-50 border-2 border-slate-200 p-6 rounded-none flex justify-between items-center">
@@ -118,8 +124,12 @@ export default function EducatorGradingForm({
            <p className="text-slate-600 font-medium">{submission.studentName || submission.invitedEmail}</p>
         </div>
         <div className="text-right">
-           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Manual Questions</p>
-           <p className="text-2xl font-bold text-blue-950">{questions.length}</p>
+           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Manual Score</p>
+           <p className="text-2xl font-bold text-blue-950">
+             {totalAwarded.toFixed(totalAwarded % 1 === 0 ? 0 : 2)}
+             <span className="text-base font-normal text-slate-400"> / {totalAvailable}</span>
+           </p>
+           <p className="text-xs text-slate-400">{questions.length} question{questions.length === 1 ? '' : 's'} to mark</p>
         </div>
       </div>
 
