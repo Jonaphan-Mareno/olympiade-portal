@@ -4,10 +4,20 @@ import { useState, useTransition } from 'react';
 import { publishRoundResults } from './actions';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
+type AdvancementSummary = {
+  advancedCount: number;
+  skippedAlreadyEnrolled: number;
+  nextRoundId: string | null;
+  nextRoundName: string | null;
+  noNextRound: boolean;
+  noThresholdSet: boolean;
+};
+
 type PublishOutcome = {
   error?: string;
   alreadyPublished?: boolean;
   summary?: { sent: number; skipped: number; failed: number };
+  advancementSummary?: AdvancementSummary | null;
 };
 
 export default function PublishResultsButton({
@@ -28,7 +38,7 @@ export default function PublishResultsButton({
 
     startTransition(async () => {
       const result = await publishRoundResults(formData);
-      setOutcome(result);
+      setOutcome(result as PublishOutcome);
       setConfirmOpen(false);
     });
   };
@@ -40,7 +50,7 @@ export default function PublishResultsButton({
         disabled={isPending}
         className="bg-green-700 hover:bg-green-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-medium px-6 py-2 rounded-md transition-colors"
       >
-        {isPending ? 'Publishing & emailing…' : 'Publish Results'}
+        {isPending ? 'Publishing & advancing…' : 'Publish Results'}
       </button>
 
       <ConfirmDialog
@@ -49,12 +59,13 @@ export default function PublishResultsButton({
         description={
           <>
             Educators will receive a school-level summary and every entrant who
-            submitted will be emailed their own result.{' '}
+            submitted will be emailed their own result. Qualifying students will
+            be automatically advanced to the next round.{' '}
             <strong>This cannot be undone.</strong>
           </>
         }
         confirmLabel="Publish Results"
-        busyLabel="Publishing & emailing…"
+        busyLabel="Publishing & advancing…"
         busy={isPending}
         onConfirm={handlePublish}
         onCancel={() => setConfirmOpen(false)}
@@ -84,6 +95,28 @@ export default function PublishResultsButton({
             : ''}
           .
         </p>
+      )}
+
+      {outcome?.advancementSummary && !outcome.advancementSummary.noThresholdSet && (
+        <div className="mt-3 p-3 rounded-md border text-sm
+          bg-blue-50 border-blue-200 text-blue-800">
+          {outcome.advancementSummary.noNextRound ? (
+            <p>ℹ️ This is the final round — no advancement was performed.</p>
+          ) : outcome.advancementSummary.advancedCount === 0 ? (
+            <p>
+              No students met the advancement criteria for{' '}
+              <strong>{outcome.advancementSummary.nextRoundName}</strong>.
+            </p>
+          ) : (
+            <p>
+              ✅ <strong>{outcome.advancementSummary.advancedCount}</strong> student
+              {outcome.advancementSummary.advancedCount === 1 ? '' : 's'} automatically
+              advanced to <strong>{outcome.advancementSummary.nextRoundName}</strong>.
+              {outcome.advancementSummary.skippedAlreadyEnrolled > 0 &&
+                ` (${outcome.advancementSummary.skippedAlreadyEnrolled} were already enrolled.)`}
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
