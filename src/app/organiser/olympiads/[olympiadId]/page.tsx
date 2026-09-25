@@ -120,6 +120,14 @@ export default async function OlympiadDetailsPage({
           <p className="text-slate-500 mt-2 text-lg">
             Manage your rounds, question banks, and automations here.
           </p>
+          <div className="mt-4">
+            <Link
+              href={`/organiser/olympiads/${portalId}/automations`}
+              className="inline-block bg-white text-blue-900 border border-blue-200 px-4 py-2 rounded-md font-semibold hover:bg-blue-50 transition-colors"
+            >
+              ⚙️ Manage Automations
+            </Link>
+          </div>
         </div>
       </div>
 
