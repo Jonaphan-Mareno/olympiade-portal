@@ -17,6 +17,7 @@ import { SubmitButton } from '@/components/SubmitButton';
 import RoundFormInputs from '@/components/organiser/RoundFormInputs';
 import DeleteRoundButton from './DeleteRoundButton';
 import GenerateTestButton from './GenerateTestButton';
+import BroadcastNotificationButton from './BroadcastNotificationButton';
 
 export default async function ManageRoundPage({
   params,
@@ -137,6 +138,7 @@ export default async function ManageRoundPage({
               {roundState}
             </span>
             </div>
+            <BroadcastNotificationButton portalId={olympiadId} roundId={roundId} />
           </div>
           <p className="text-slate-600 text-lg mb-6">
             Update round details and edit questions.
@@ -147,6 +149,9 @@ export default async function ManageRoundPage({
             </Link>
             <Link href={`/organiser/olympiads/${olympiadId}/rounds/${roundId}/certificate`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-500 hover:text-slate-700">
               Certificates
+            </Link>
+            <Link href={`/organiser/olympiads/${olympiadId}/rounds/${roundId}/remarks`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-500 hover:text-slate-700">
+              Remarks
             </Link>
           </div>
         </div>

@@ -170,8 +170,16 @@ export const results = pgTable('results', {
   score: numeric('score'),
   feedback: text('feedback'),
   status: text('status', {
-    enum: ['auto_marked', 'queued_for_marker', 'moderated', 'remark_requested'],
+    enum: [
+      'auto_marked',
+      'queued_for_marker',
+      'moderated',
+      'remark_requested',
+      'remark_resolved',
+    ],
   }),
+  remarkReason: text('remark_reason'),
+  remarkOutcome: text('remark_outcome'),
 });
 
 export const examSittings = pgTable('exam_sittings', {
@@ -284,3 +292,15 @@ export const notificationLog = pgTable(
     ),
   })
 );
+
+export const inAppNotifications = pgTable('in_app_notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .references(() => users.id, { onDelete: 'cascade' })
+    .notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  isRead: boolean('is_read').default(false).notNull(),
+  linkUrl: text('link_url'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
