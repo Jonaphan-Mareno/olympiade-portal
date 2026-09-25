@@ -309,3 +309,29 @@ export const inAppNotifications = pgTable('in_app_notifications', {
   linkUrl: text('link_url'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const automationRules = pgTable('automation_rules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  portalId: uuid('portal_id')
+    .references(() => portals.id, { onDelete: 'cascade' })
+    .notNull(),
+  name: text('name').notNull(),
+  triggerType: text('trigger_type', {
+    enum: [
+      'round_opening',
+      'round_closing',
+      'results_published',
+      'submission_overdue',
+      'manual',
+    ],
+  }).notNull(),
+  // Offset in minutes relative to the trigger event (negative = before, positive = after)
+  triggerOffsetMinutes: integer('trigger_offset_minutes').default(0).notNull(),
+  // JSON field for conditions like {"missingSubmissionsOnly": true}
+  conditions: jsonb('conditions'),
+  // Subject template
+  templateSubject: text('template_subject').notNull(),
+  // HTML template
+  templateHtml: text('template_html').notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+});
