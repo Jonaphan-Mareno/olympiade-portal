@@ -12,6 +12,7 @@ import SidebarNav from '@/components/educator/SidebarNav';
 import SchoolSwitcher, { SchoolMembership } from '@/components/educator/SchoolSwitcher';
 import CollapsibleSidebar from '@/components/ui/CollapsibleSidebar';
 
+
 export default async function EducatorLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
   const {
@@ -61,18 +62,20 @@ export default async function EducatorLayout({ children }: { children: ReactNode
       sidebarContent={
         <>
           <div className="p-6 border-b border-slate-200">
-            <Link href="/dashboard" className="flex items-center gap-2 no-underline mb-6">
-              <Image
-                src="/images/logo-BIG-v2.jpg"
-                alt="Olympia Logo"
-                width={28}
-                height={28}
-                className="object-contain"
-              />
-              <span className="text-blue-600 font-bold text-xl">
-                Olympia
-              </span>
-            </Link>
+            <div className="flex items-center justify-between mb-6">
+              <Link href="/dashboard" className="flex items-center gap-2 no-underline">
+                <Image
+                  src="/images/logo-BIG-v2.jpg"
+                  alt="Olympia Logo"
+                  width={28}
+                  height={28}
+                  className="object-contain"
+                />
+                <span className="text-blue-600 font-bold text-xl">
+                  Olympia
+                </span>
+              </Link>
+            </div>
             <SchoolSwitcher schools={uniqueSchools} activeSchoolId={activeSchoolId} />
           </div>
 

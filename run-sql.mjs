@@ -8,7 +8,7 @@ async function main() {
   );
 
   const migration = fs.readFileSync(
-    path.join(process.cwd(), 'drizzle', '0005_regular_leper_queen.sql'),
+    path.join(process.cwd(), 'drizzle', '0008_lame_galactus.sql'),
     'utf-8'
   );
   const statements = migration.split('--> statement-breakpoint');

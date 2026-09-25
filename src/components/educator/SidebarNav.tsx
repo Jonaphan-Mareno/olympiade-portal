@@ -22,6 +22,7 @@ export default function SidebarNav() {
           <Link
             key={link.name}
             href={link.href}
+            prefetch={true}
             className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
               isActive
                 ? 'bg-blue-50 text-blue-900'

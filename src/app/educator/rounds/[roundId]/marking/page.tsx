@@ -244,10 +244,11 @@ export default async function EducatorMarkingPage({
             </button>
           )}
           <Link
-            href={`/educator/rounds/${roundId}`}
+            href={`/educator/rounds`}
+            prefetch={true}
             className="text-white hover:text-blue-200 transition-colors text-sm font-medium border border-blue-700 hover:border-blue-500 rounded px-4 py-2"
           >
-            ← Back to Round
+            ← Back to Rounds
           </Link>
         </div>
       </div>

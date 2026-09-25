@@ -17,6 +17,7 @@ import {
   sendResultsPublishedNotifications,
   type DispatchSummary,
 } from '@/domain/notifications/automation-engine';
+import { notifyEducatorsInPortal } from '@/domain/notifications/in-app-notifications';
 import type { Round } from '@/domain/rounds/round.types';
 
 export async function updateRound(formData: FormData) {
@@ -77,6 +78,14 @@ export async function updateRound(formData: FormData) {
       if (!uploadError) {
         const { data } = supabase.storage.from('round-documents').getPublicUrl(uniqueFileName);
         fileUrl = data.publicUrl;
+        
+        // Notify educators that the paper is available
+        await notifyEducatorsInPortal(
+          portalId,
+          'Question Paper Available',
+          `The question paper for ${name} is now available for download.`,
+          `/educator/olympiads/${portalId}/rounds/${roundId}`
+        );
       }
     }
 
