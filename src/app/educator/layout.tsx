@@ -11,7 +11,7 @@ import { cookies } from 'next/headers';
 import SidebarNav from '@/components/educator/SidebarNav';
 import SchoolSwitcher, { SchoolMembership } from '@/components/educator/SchoolSwitcher';
 import CollapsibleSidebar from '@/components/ui/CollapsibleSidebar';
-import NotificationBell from '@/components/educator/NotificationBell';
+
 
 export default async function EducatorLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
@@ -75,7 +75,6 @@ export default async function EducatorLayout({ children }: { children: ReactNode
                   Olympia
                 </span>
               </Link>
-              <NotificationBell />
             </div>
             <SchoolSwitcher schools={uniqueSchools} activeSchoolId={activeSchoolId} />
           </div>

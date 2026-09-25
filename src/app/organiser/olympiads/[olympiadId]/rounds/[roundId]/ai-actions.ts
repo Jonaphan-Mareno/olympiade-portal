@@ -91,9 +91,10 @@ export async function generateTestFromPDF(roundId: string, portalId: string) {
   }
 
   const modelsToTry = [
-    'gemini-flash-latest',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
     'gemini-3.5-flash',
-    'gemini-pro-latest'
+    'gemini-2.5-pro'
   ];
 
   let lastError = null;
@@ -139,13 +140,8 @@ export async function generateTestFromPDF(roundId: string, portalId: string) {
 
       if (!geminiResponse.ok) {
         const errText = await geminiResponse.text();
-        console.warn(`[${model}] Gemini API Error:`, errText);
-        
-        if (geminiResponse.status === 503 || geminiResponse.status === 429) {
-           throw new Error(`Temporary failure on ${model} (Status: ${geminiResponse.status}). Trying next...`);
-        }
-        
-        throw new Error(`Gemini API Error: ${errText}`);
+        console.warn(`[${model}] Gemini API Error (${geminiResponse.status}):`, errText);
+        throw new Error(`[${model}] Error ${geminiResponse.status}: ${errText}`);
       }
 
       const geminiData = await geminiResponse.json();
@@ -159,17 +155,12 @@ export async function generateTestFromPDF(roundId: string, portalId: string) {
 
     } catch (err: any) {
       lastError = err;
-      if (!err.message.includes('Temporary failure')) {
-        throw err;
-      }
+      continue;
     }
   }
 
   if (!textOutput) {
-    if (lastError?.message?.includes('429')) {
-      throw new Error('Gemini API Rate Limit Exceeded (Status 429). The provided PDFs might be too large for your current API key quota, or you are making too many requests. Please wait a minute and try again, or use smaller PDF files.');
-    }
-    throw new Error(`All Gemini models are currently overwhelmed or unavailable. Last error: ${lastError?.message}`);
+    throw new Error(`Gemini test generation failed across all models. Last error: ${lastError?.message || lastError}`);
   }
 
   // 5. Parse and Inject
