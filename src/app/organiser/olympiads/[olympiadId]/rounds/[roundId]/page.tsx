@@ -214,7 +214,7 @@ export default async function ManageRoundPage({
 
             {/* Advancement Thresholds */}
             <div className="mt-6 pt-6 border-t border-slate-100">
-              <h3 className="text-base font-bold text-slate-800 mb-1">Advancement to Next Round</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-1">Advancement to Next Round</h3>
               <p className="text-sm text-slate-500 mb-4">
                 When results are published, students who qualify are automatically enrolled in the next round.
                 Leave both fields empty to disable automatic advancement.
@@ -222,7 +222,7 @@ export default async function ManageRoundPage({
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2" htmlFor="qualifyingThreshold">
+                  <label className="block text-sm font-semibold text-slate-900 mb-2" htmlFor="qualifyingThreshold">
                     Minimum Score (%)
                   </label>
                   <input
@@ -239,7 +239,7 @@ export default async function ManageRoundPage({
                   <p className="text-xs text-slate-400 mt-1">Student must score at least this percentage to advance.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2" htmlFor="thresholdTopN">
+                  <label className="block text-sm font-semibold text-slate-900 mb-2" htmlFor="thresholdTopN">
                     Top N Students
                   </label>
                   <input
