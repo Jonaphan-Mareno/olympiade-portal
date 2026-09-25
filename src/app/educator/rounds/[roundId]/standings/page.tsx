@@ -162,6 +162,7 @@ export default async function EducatorStandingsPage({
       <div className="max-w-6xl mx-auto">
         <Link
           href={`/educator/rounds/${roundId}/marking`}
+          prefetch={true}
           className="text-blue-600 hover:text-blue-800 font-medium mb-6 inline-block"
         >
           &larr; Back to Round Marking
