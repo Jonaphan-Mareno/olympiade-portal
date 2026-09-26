@@ -14,12 +14,18 @@ Our system uses a strictly normalized PostgreSQL relational database to ensure a
 | **`portals`** | Represents Olympiad organizing bodies | `ownerUserId` → `users.id` | `name`, `status` |
 | **`schools`** | Participating educational institutions | `portalId` → `portals.id` | `name` |
 | **`memberships`** | The authorization nexus mapping users to roles | `userId` → `users.id`<br/>`portalId` → `portals.id`<br/>`schoolId` → `schools.id` | `role` (e.g., admin, student), `status`, `inviteToken` |
+| **`organiser_applications`** | Tracks applications to become organizers | `userId` → `users.id` | `pdfUrl`, `status` |
 | **`rounds`** | Distinct phases of a competition | `portalId` → `portals.id` | `name`, `deliveryMethod`, `opensAt` |
 | **`question_papers`** | Contains the actual test material | `roundId` → `rounds.id` | `fileUrl`, `isMultipleChoice` |
 | **`questions`** | Individual questions for online exams | `roundId` → `rounds.id` | `prompt`, `marks`, `questionType` |
 | **`exam_sittings`** | Tracks live online exam sessions | `studentMembershipId` → `memberships.id`<br/>`questionPaperId` → `question_papers.id` | `startedAt`, `status` |
+| **`student_answers`** | Individual answers for online exams | `sittingId` → `exam_sittings.id`<br/>`questionId` → `questions.id` | `answerValue`, `savedAt` |
 | **`submissions`** | Wraps offline/online answers for grading | `roundId` → `rounds.id`<br/>`studentMembershipId` → `memberships.id` | `submissionType`, `fileUrl` |
 | **`results`** | Final graded scores | `submissionId` → `submissions.id` | `score`, `status`, `feedback` |
+| **`notification_log`** | Audit log for sent emails/notifications | `roundId` → `rounds.id`<br/>`recipientMembershipId` → `memberships.id` | `kind`, `status`, `sentAt` |
+| **`certificate_templates`** | Designs for round-specific certificates | `roundId` → `rounds.id` | `minScorePercentage`, `templateUrl` |
+| **`in_app_notifications`** | User-specific notifications | `userId` → `users.id` | `title`, `isRead` |
+| **`automation_rules`** | Triggers for automated portal actions | `portalId` → `portals.id` | `triggerType`, `isActive` |
 
 ## Deployment & Security
 
