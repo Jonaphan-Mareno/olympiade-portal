@@ -16,6 +16,8 @@ When the project began, the team utilized descriptive, natural-language commit m
 
 Initially, the team attempted to use a strict Feature Branching strategy. We quickly discovered that because early UI components and architectural features were tightly coupled across multiple pages, this strategy resulted in massive and complex merge conflicts. Recognizing this inefficiency, the team adapted and pivoted to a **main and dev branch** workflow.
 
+However, based on the advice of the client/marker at the beginning of Sprint 2, we moved back to the original Feature Branching strategy. This transition was much smoother because the features in the Sprint 2 backlog were significantly more decoupled and less dependent on one another.
+
 ## Pull Requests
 
-In our current workflow, all active work is pushed directly to the `dev` branch. Once a sprint goal is met, a Pull Request is opened to merge `dev` into `main`. This PR requires a peer review to ensure that all members are actively contributing and that the codebase remains stable.
+In our current workflow, all active work is pushed to individual feature branches. Once a feature or sprint goal is met, a Pull Request is opened to merge the feature branch into `main`. This PR requires a peer review to ensure that all members are actively contributing and that the codebase remains stable.
