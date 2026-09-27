@@ -145,6 +145,7 @@ export default async function StudentScoresPage() {
                     <th className="px-6 py-4 text-xs font-bold text-blue-950 uppercase tracking-wider">Round</th>
                     <th className="px-6 py-4 text-xs font-bold text-blue-950 uppercase tracking-wider text-center">Score</th>
                     <th className="px-6 py-4 text-xs font-bold text-blue-950 uppercase tracking-wider text-center">Ranking</th>
+                    <th className="px-6 py-4 text-xs font-bold text-blue-950 uppercase tracking-wider text-center">View Paper</th>
                     <th className="px-6 py-4 text-xs font-bold text-blue-950 uppercase tracking-wider text-right">Certificate</th>
                   </tr>
                 </thead>
@@ -173,6 +174,14 @@ export default async function StudentScoresPage() {
                               / {record.totalStudents}
                             </span>
                           </td>
+                          <td className="px-6 py-5 text-center">
+                            <Link 
+                              href={`/results/scores/${record.submissionId}`}
+                              className="text-blue-600 hover:text-blue-800 font-bold text-xs uppercase tracking-wider transition-colors"
+                            >
+                              View Paper &rarr;
+                            </Link>
+                          </td>
                           <td className="px-6 py-5 text-right">
                             <a 
                               href={`/api/certificates/${record.submissionId}`}
@@ -184,7 +193,7 @@ export default async function StudentScoresPage() {
                           </td>
                         </>
                       ) : (
-                        <td colSpan={3} className="px-6 py-5 text-center">
+                        <td colSpan={4} className="px-6 py-5 text-center">
                           <span className="inline-flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 font-bold text-xs uppercase tracking-wider">
                             <svg className="w-4 h-4 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />

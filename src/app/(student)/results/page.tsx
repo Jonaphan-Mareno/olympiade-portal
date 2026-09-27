@@ -128,7 +128,8 @@ export default async function StudentGlobalOverviewPage() {
     .filter(s => s.score !== null && s.status === 'submitted')
     .map(s => {
        const r = roundMap.get(s.roundId);
-       return { ...s, round: r, publishedAt: r?.resultsPublishedAt };
+       const p = portalMap.get(r?.portalId || '');
+       return { ...s, round: r, portal: p, publishedAt: r?.resultsPublishedAt };
     })
     .filter(s => s.publishedAt && s.publishedAt <= now)
     .sort((a, b) => b.publishedAt!.getTime() - a.publishedAt!.getTime());
@@ -256,33 +257,35 @@ export default async function StudentGlobalOverviewPage() {
                     <path d="M12 15.228l-5.32 2.796 1.017-5.928L3.385 7.89l5.952-.866L12 1.636l2.663 5.388 5.952.866-4.312 4.206 1.017 5.928z"/>
                   </svg>
                 </div>
-                <div className="relative z-10 flex flex-row justify-between items-end">
+                <div className="relative z-10 flex flex-col h-full justify-between">
                   <div>
+                    <span className="text-blue-300 font-bold text-xs uppercase tracking-widest mb-1 block">
+                      Ranking
+                    </span>
+                    <p className="text-white text-2xl font-bold mb-6">
+                      #{recentAchievement.rank} <span className="text-sm text-slate-400 font-normal">/ {recentAchievement.totalStudents}</span>
+                    </p>
+                    
                     <span className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-2 block">
                       Latest Result
                     </span>
                     <p className="text-white text-4xl font-bold mb-1">
                       {recentAchievement.score}%
                     </p>
-                    <p className="text-slate-300 font-medium">
-                      in {recentAchievement.round?.name || 'Round'}
+                    <p className="text-slate-300 font-medium mb-6">
+                      in {recentAchievement.portal?.name || 'Olympiad'} - {recentAchievement.round?.name || 'Round'}
                     </p>
-                    <div className="flex gap-4 mt-4">
-                      <Link href={`/results/scores`} className="inline-block text-amber-400 hover:text-amber-300 font-bold text-sm uppercase tracking-wider">
-                        View all results &rarr;
-                      </Link>
-                      <a href={`/api/certificates/${recentAchievement.submissionId}`} download className="inline-block text-white hover:text-blue-200 font-bold text-sm uppercase tracking-wider">
-                        Download Certificate &darr;
-                      </a>
-                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-blue-300 font-bold text-xs uppercase tracking-widest mb-1 block">
-                      Ranking
-                    </span>
-                    <p className="text-white text-2xl font-bold">
-                      #{recentAchievement.rank} <span className="text-sm text-slate-400 font-normal">/ {recentAchievement.totalStudents}</span>
-                    </p>
+                  
+                  <div className="flex flex-col xl:flex-row gap-4 mt-auto">
+                    <Link href={`/results/scores`} className="inline-flex items-center text-amber-400 hover:text-amber-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap group">
+                      View all results
+                      <span className="ml-2 group-hover:translate-x-1 transition-transform">&rarr;</span>
+                    </Link>
+                    <a href={`/api/certificates/${recentAchievement.submissionId}`} download className="inline-flex items-center text-white hover:text-blue-200 font-bold text-sm uppercase tracking-wider whitespace-nowrap group">
+                      Download Certificate
+                      <span className="ml-2 group-hover:translate-y-1 transition-transform">&darr;</span>
+                    </a>
                   </div>
                 </div>
               </div>
@@ -311,20 +314,29 @@ export default async function StudentGlobalOverviewPage() {
             <h2 className="font-serif text-2xl text-blue-950 font-bold mb-4">
               Quick Prep
             </h2>
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-none p-6 h-full flex flex-col justify-center">
-              <span className="text-blue-800 font-bold text-xs uppercase tracking-widest mb-2 block">
-                Practice
-              </span>
-              <h3 className="text-xl font-bold text-blue-950 mb-2">
-                Prepare for your next round
-              </h3>
-              <p className="text-blue-800 mb-6">
-                Access past papers to sharpen your skills before the actual exam.
-              </p>
-              <div>
-                <Link href="/results/past-papers" className="inline-block bg-white border-2 border-blue-950 text-blue-950 font-bold py-2.5 px-6 hover:bg-blue-950 hover:text-white transition-colors text-sm uppercase tracking-wider rounded-none">
-                  Browse Past Papers
-                </Link>
+            <div className="bg-amber-400 border-2 border-amber-500 rounded-none p-6 h-full flex flex-col justify-center relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-20">
+                <svg width="120" height="120" viewBox="0 0 24 24" fill="currentColor" className="text-amber-600">
+                  <path d="M12 15.228l-5.32 2.796 1.017-5.928L3.385 7.89l5.952-.866L12 1.636l2.663 5.388 5.952.866-4.312 4.206 1.017 5.928z"/>
+                </svg>
+              </div>
+              <div className="relative z-10 flex flex-col h-full justify-between">
+                <div>
+                  <span className="text-amber-950 font-bold text-xs uppercase tracking-widest mb-2 block">
+                    Practice
+                  </span>
+                  <h3 className="text-xl font-bold text-blue-950 mb-2">
+                    Prepare for your next round
+                  </h3>
+                  <p className="text-blue-950/80 mb-6 font-medium">
+                    Access past papers to sharpen your skills before the actual exam.
+                  </p>
+                </div>
+                <div className="mt-auto flex justify-center">
+                  <Link href="/results/past-papers" className="inline-block bg-blue-950 border-2 border-blue-950 text-white font-bold py-2.5 px-6 hover:bg-blue-900 hover:border-blue-900 transition-colors text-sm uppercase tracking-wider rounded-none">
+                    Browse Past Papers
+                  </Link>
+                </div>
               </div>
             </div>
           </div>

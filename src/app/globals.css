@@ -37,7 +37,6 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
   background-image:
     radial-gradient(
       circle at 15% 50%,
