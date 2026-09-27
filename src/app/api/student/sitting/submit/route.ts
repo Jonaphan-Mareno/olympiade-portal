@@ -12,36 +12,76 @@ import {
 } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
 
-// Helper to normalize and compare student answers against various jsonb formats
-function isAnswerCorrect(correct: any, studentAns: string | undefined): boolean {
-  if (!studentAns || correct === null || correct === undefined) return false;
+function calculateEarnedMarks(q: any, studentAnsRaw: string | undefined): number {
+  const maxMarks = q.marks ?? 1;
+  if (q.questionType === 'free_text') return 0; // Handled by educators
+  if (!studentAnsRaw) return 0;
 
-  const sVal = studentAns.trim();
+  if (q.questionType === 'matching') {
+     let studentAnsObj: any = {};
+     try { studentAnsObj = JSON.parse(studentAnsRaw); } catch {}
+     if (typeof studentAnsObj !== 'object') return 0;
 
-  // Simple string or quoted string (e.g. "A" or "\"A\"")
-  if (typeof correct === 'string') {
-    return sVal.toLowerCase() === correct.replace(/^"|"$/g, '').trim().toLowerCase();
+     let correctPairs = 0;
+     let totalPairs = 0;
+     if (Array.isArray(q.options)) {
+        q.options.forEach((opt: any, index: number) => {
+           totalPairs++;
+           if (studentAnsObj[`${q.id}_${index}`] === opt.response) {
+               correctPairs++;
+           }
+        });
+     }
+     if (totalPairs === 0) return 0;
+     return (correctPairs / totalPairs) * maxMarks;
   }
 
-  // Numbers or booleans (e.g. true / 42)
-  if (typeof correct === 'number' || typeof correct === 'boolean') {
-    return sVal.toLowerCase() === String(correct).toLowerCase();
+  // Common correct answer normalization
+  let correctSelections: string[] = [];
+  const strCorrect = typeof q.correctAnswer === 'string' || typeof q.correctAnswer === 'number' || typeof q.correctAnswer === 'boolean' ? String(q.correctAnswer) : '';
+  try {
+      const parsed = JSON.parse(strCorrect);
+      correctSelections = Array.isArray(parsed) ? parsed.map(String) : [String(parsed)];
+  } catch {
+      if (!strCorrect.startsWith('[')) {
+          correctSelections = strCorrect.split(',').map((s: string) => s.trim()).filter(Boolean);
+      } else {
+          correctSelections = [strCorrect];
+      }
+  }
+  if (Array.isArray(q.correctAnswer)) {
+      correctSelections = q.correctAnswer.map(String);
+  } else if (typeof q.correctAnswer === 'object' && q.correctAnswer !== null && (q.correctAnswer as any).text !== undefined) {
+      correctSelections = [String((q.correctAnswer as any).text)];
   }
 
-  // Array of valid options (e.g. ["A"])
-  if (Array.isArray(correct)) {
-    return correct.some((c) => String(c).trim().toLowerCase() === sVal.toLowerCase());
+  let studentSelections: string[] = [];
+  try {
+      const parsed = JSON.parse(studentAnsRaw);
+      studentSelections = Array.isArray(parsed) ? parsed.map(String) : [String(studentAnsRaw)];
+  } catch {
+      studentSelections = [studentAnsRaw];
   }
 
-  // Object wrapper (e.g. { value: "A" } or { answer: "A" })
-  if (typeof correct === 'object') {
-    const val = correct.value ?? correct.answer ?? correct.key;
-    if (val !== undefined) {
-      return String(val).trim().toLowerCase() === sVal.toLowerCase();
-    }
+  if (q.questionType === 'multiple_choice') {
+      const totalCorrect = correctSelections.length;
+      if (totalCorrect === 0) return 0;
+      let matches = 0;
+      studentSelections.forEach(s => {
+          if (correctSelections.includes(s)) matches++;
+      });
+      return (matches / totalCorrect) * maxMarks;
   }
 
-  return JSON.stringify(correct) === sVal;
+  // single_choice or true_false
+  const isCorrect = correctSelections.length === 1 && studentSelections.length === 1 && correctSelections[0] === studentSelections[0];
+  if (isCorrect) return maxMarks;
+  
+  const studentStr = studentSelections.join(',').toLowerCase();
+  const correctStr = correctSelections.join(',').toLowerCase();
+  if (studentStr === correctStr) return maxMarks;
+
+  return 0;
 }
 
 export async function POST(request: Request) {
@@ -142,13 +182,13 @@ export async function POST(request: Request) {
       let maxMarks = 0;
 
       for (const q of roundQuestions) {
+        if (q.questionType === 'free_text') continue; // Do not include educator-marked questions in auto-marked maxMarks
+
         const questionMarks = q.marks ?? 1;
         maxMarks += questionMarks;
 
         const studentAns = answersObj[q.id];
-        if (isAnswerCorrect(q.correctAnswer, studentAns)) {
-          totalScore += questionMarks;
-        }
+        totalScore += calculateEarnedMarks(q, studentAns);
       }
 
       // 6. Record or update the grade in the results table

@@ -14,7 +14,7 @@ export default function CollapsibleSidebar({ sidebarContent, children }: { sideb
 
   if (!mounted) {
     return (
-      <div className="min-h-screen flex bg-slate-50 font-sans relative overflow-x-hidden">
+      <div className="min-h-screen flex bg-slate-50 font-sans relative">
         <aside className="bg-white border-r border-slate-200 flex flex-col fixed inset-y-0 z-40 w-64 translate-x-0 h-full">
           {sidebarContent}
         </aside>
@@ -26,7 +26,7 @@ export default function CollapsibleSidebar({ sidebarContent, children }: { sideb
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-50 font-sans relative overflow-x-hidden">
+    <div className="min-h-screen flex bg-slate-50 font-sans relative">
       {/* Sidebar */}
       <aside 
         className={`bg-white border-r border-slate-200 flex flex-col fixed inset-y-0 z-40 transition-transform duration-300 ease-in-out h-full ${

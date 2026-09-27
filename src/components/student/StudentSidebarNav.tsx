@@ -8,7 +8,7 @@ export default function StudentSidebarNav() {
 
   const links = [
     { name: 'Overview', href: `/results` },
-    { name: 'My Rounds', href: `/results/rounds` },
+    { name: 'Upcoming Olympiads', href: `/results/rounds` },
     { name: 'My Results', href: `/results/scores` },
     { name: 'Past Papers', href: `/results/past-papers` },
     { name: 'Notifications', href: `/results/notifications` },
