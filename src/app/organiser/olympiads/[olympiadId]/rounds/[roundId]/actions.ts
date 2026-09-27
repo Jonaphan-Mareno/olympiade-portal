@@ -38,6 +38,7 @@ export async function updateRound(formData: FormData) {
   const closesAt = formData.get('closesAt') as string;
   const deliveryMethod = formData.get('deliveryMethod') as 'paper' | 'online' | 'hybrid';
   const durationMinutes = Math.max(1, parseInt((formData.get('durationMinutes') as string) || '60', 10));
+  const parseSAST = (dateStr: string) => new Date(`${dateStr}+02:00`);
 
   if (new Date(closesAt) <= new Date(opensAt)) {
     throw new Error('Closing time must be after the opening time.');
@@ -54,8 +55,8 @@ export async function updateRound(formData: FormData) {
     .set({
       name,
       orderIndex,
-      opensAt: new Date(opensAt),
-      closesAt: new Date(closesAt),
+      opensAt: parseSAST(opensAt),
+      closesAt: parseSAST(closesAt),
       qualifyingThreshold,
       thresholdTopN,
     })
