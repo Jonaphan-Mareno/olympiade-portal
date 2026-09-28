@@ -335,3 +335,21 @@ export const automationRules = pgTable('automation_rules', {
   templateHtml: text('template_html').notNull(),
   isActive: boolean('is_active').default(true).notNull(),
 });
+
+export const roundQualifications = pgTable(
+  'round_qualifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    roundId: uuid('round_id')
+      .references(() => rounds.id, { onDelete: 'cascade' })
+      .notNull(),
+    studentMembershipId: uuid('student_membership_id')
+      .references(() => memberships.id, { onDelete: 'cascade' })
+      .notNull(),
+    qualifiedAt: timestamp('qualified_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    // A student can only be qualified for a specific round once
+    unq: unique().on(t.roundId, t.studentMembershipId),
+  })
+);

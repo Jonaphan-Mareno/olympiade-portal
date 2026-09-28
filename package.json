@@ -45,7 +45,7 @@
     "@vitejs/plugin-react": "^6.1.0",
     "@vitest/coverage-v8": "^4.1.11",
     "autoprefixer": "^10.5.5",
-    "drizzle-kit": "^0.31.10",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^10.10.0",
     "eslint-config-prettier": "^10.1.8",
     "jsdom": "^29.1.1",

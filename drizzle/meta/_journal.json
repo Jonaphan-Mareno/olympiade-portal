@@ -64,6 +64,13 @@
       "when": 1790303233804,
       "tag": "0008_lame_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790520556536,
+      "tag": "0009_gifted_goblin_queen",
+      "breakpoints": true
     }
   ]
 }
