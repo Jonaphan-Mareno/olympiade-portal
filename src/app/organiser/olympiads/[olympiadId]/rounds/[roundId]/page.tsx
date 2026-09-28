@@ -150,9 +150,11 @@ export default async function ManageRoundPage({
             <Link href={`/organiser/olympiads/${olympiadId}/rounds/${roundId}/certificate`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-500 hover:text-slate-700">
               Certificates
             </Link>
+            {/* Remarks hidden temporarily
             <Link href={`/organiser/olympiads/${olympiadId}/rounds/${roundId}/remarks`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-500 hover:text-slate-700">
               Remarks
             </Link>
+            */}
           </div>
         </div>
 
