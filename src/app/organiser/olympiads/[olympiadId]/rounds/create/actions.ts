@@ -21,6 +21,7 @@ export async function createRound(formData: FormData) {
   const opensAt = formData.get('opensAt') as string;
   const closesAt = formData.get('closesAt') as string;
   const deliveryMethod = formData.get('deliveryMethod') as 'paper' | 'online' | 'hybrid';
+  const parseSAST = (dateStr: string) => new Date(`${dateStr}+02:00`);
 
   if (new Date(closesAt) <= new Date(opensAt)) {
     throw new Error('Closing time must be after the opening time.');
@@ -39,8 +40,8 @@ export async function createRound(formData: FormData) {
       name,
       orderIndex,
       deliveryMethod,
-      opensAt: new Date(opensAt),
-      closesAt: new Date(closesAt),
+      opensAt: parseSAST(opensAt),
+      closesAt: parseSAST(closesAt),
       qualifyingThreshold: qualifyingThreshold ?? undefined,
       thresholdTopN: thresholdTopN ?? undefined,
     })
