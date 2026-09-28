@@ -297,8 +297,8 @@ export default async function ViewPaperStudentPage({
                           } else if (typeof q.correctAnswer === 'object' && q.correctAnswer !== null) {
                             if (Array.isArray(q.correctAnswer)) {
                               correctSelections = q.correctAnswer.map(String);
-                            } else if (q.correctAnswer.text !== undefined) {
-                              correctSelections = [String(q.correctAnswer.text)];
+                            } else if ((q.correctAnswer as any).text !== undefined) {
+                              correctSelections = [String((q.correctAnswer as any).text)];
                             }
                           }
 
