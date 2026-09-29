@@ -2,14 +2,17 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
-import { memberships, rounds, portals } from '@/lib/db/schema';
+import { memberships, rounds, portals, questionPapers } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
-export default async function EducatorAssessmentsPage() {
+export default async function EducatorAssessmentsPage(props: { searchParams: Promise<{ tab?: string }> }) {
+  const searchParams = await props.searchParams;
+  const activeTab = searchParams.tab === 'offline' ? 'offline' : 'online';
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -57,21 +60,57 @@ export default async function EducatorAssessmentsPage() {
         .orderBy(rounds.orderIndex)
     : [];
 
+  const roundIds = allRounds.map(r => r.id);
+
+  const allPapers = roundIds.length > 0 
+    ? await db.select().from(questionPapers).where(inArray(questionPapers.roundId, roundIds))
+    : [];
+
   const now = new Date();
 
   return (
     <div className="min-h-screen bg-white font-sans w-full px-4 md:px-8 pt-10 pb-20">
       <div className="max-w-4xl mx-auto">
-        <h1 className="font-serif text-3xl font-bold text-slate-900 mb-8">
+        <h1 className="font-serif text-3xl font-bold text-slate-900 mb-4">
           Assessments
         </h1>
         <p className="text-slate-600 mb-8">
           Command center for downloading papers and grading submissions.
         </p>
 
+        {/* Tabs */}
+        <div className="flex border-b border-slate-200 mb-8">
+          <Link 
+            href="/educator/rounds?tab=online"
+            className={`px-6 py-3 font-bold uppercase tracking-wider text-sm transition-colors border-b-2 ${
+              activeTab === 'online' 
+                ? 'border-blue-900 text-blue-900' 
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Online Submissions
+          </Link>
+          <Link 
+            href="/educator/rounds?tab=offline"
+            className={`px-6 py-3 font-bold uppercase tracking-wider text-sm transition-colors border-b-2 ${
+              activeTab === 'offline' 
+                ? 'border-blue-900 text-blue-900' 
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Physical Papers
+          </Link>
+        </div>
+
         <div className="flex flex-col gap-12">
           {portalRows.map(portal => {
-            const portalRounds = allRounds.filter(r => r.portalId === portal.id);
+            let portalRounds = allRounds.filter(r => r.portalId === portal.id);
+            
+            if (activeTab === 'online') {
+               portalRounds = portalRounds.filter(r => r.deliveryMethod === 'online' || r.deliveryMethod === 'hybrid');
+            } else {
+               portalRounds = portalRounds.filter(r => r.deliveryMethod === 'paper' || r.deliveryMethod === 'hybrid');
+            }
             
             if (portalRounds.length === 0) {
               return null;
@@ -83,10 +122,13 @@ export default async function EducatorAssessmentsPage() {
                 
                 {portalRounds.map((round) => {
                   const state = deriveRoundState(round, now);
-                  const isPaperOrHybrid = round.deliveryMethod === 'paper' || round.deliveryMethod === 'hybrid';
-                  const unlockTime = new Date(round.opensAt.getTime() - 24 * 60 * 60 * 1000);
-                  const isPrintWindowOpen = now >= unlockTime && state !== 'released' && state !== 'closed';
                   
+                  // Offline grading window logic
+                  const offlineGradingClosesAt = new Date(round.closesAt.getTime() + 24 * 60 * 60 * 1000);
+                  const isWithinOfflineGradingWindow = now >= round.opensAt && now <= offlineGradingClosesAt;
+
+                  const paper = allPapers.find(p => p.roundId === round.id);
+
                   return (
                     <div key={round.id} className="flex flex-col border border-slate-200 rounded-sm overflow-hidden bg-white">
                       <div className="flex flex-row justify-between items-center bg-blue-900 p-4 px-6 border-b border-slate-200">
@@ -111,52 +153,88 @@ export default async function EducatorAssessmentsPage() {
                         </div>
                         
                         <div className="flex flex-wrap gap-3">
-                          {isPaperOrHybrid && (state === 'scheduled' || state === 'open') && (
-                            <button
-                              disabled={!isPrintWindowOpen}
-                              title={!isPrintWindowOpen ? 'Paper unlocks 24 hours before start' : undefined}
-                              className={`inline-flex items-center justify-center px-4 py-2 border font-bold rounded-sm transition-colors ${
-                                isPrintWindowOpen
-                                  ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                                  : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                              }`}
-                            >
-                              {!isPrintWindowOpen && <span className="mr-2">🔒</span>}
-                              Download Question Paper
-                            </button>
+                          {activeTab === 'offline' && (
+                            <>
+                              {(state === 'open' || state === 'closed' || state === 'released') && (
+                                <>
+                                  {paper?.fileUrl ? (
+                                    <a
+                                      href={paper.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center justify-center px-4 py-2 border border-slate-300 bg-white text-slate-700 font-bold rounded-sm hover:bg-slate-50 transition-colors"
+                                    >
+                                      Download Question Paper
+                                    </a>
+                                  ) : (
+                                    <button 
+                                      disabled
+                                      className="inline-flex items-center justify-center px-4 py-2 border border-slate-200 bg-slate-100 text-slate-400 font-bold rounded-sm cursor-not-allowed"
+                                    >
+                                      No Paper Uploaded
+                                    </button>
+                                  )}
+
+                                  {isWithinOfflineGradingWindow ? (
+                                    <Link 
+                                      href={`/educator/rounds/${round.id}/offline-marks`}
+                                      className="inline-flex items-center justify-center px-4 py-2 border border-blue-900 bg-blue-900 text-white font-bold rounded-sm hover:bg-blue-800 transition-colors"
+                                    >
+                                      Enter Offline Marks
+                                    </Link>
+                                  ) : (
+                                    <button 
+                                      disabled
+                                      className="inline-flex items-center justify-center px-4 py-2 border border-slate-200 bg-slate-100 text-slate-400 font-bold rounded-sm cursor-not-allowed"
+                                      title={now > offlineGradingClosesAt ? 'The 24-hour grading window has closed' : 'Grading has not opened yet'}
+                                    >
+                                      <span className="mr-2">🔒</span>
+                                      Enter Offline Marks
+                                    </button>
+                                  )}
+                                </>
+                              )}
+
+                              {state === 'scheduled' && (
+                                <button 
+                                  disabled
+                                  className="inline-flex items-center justify-center px-4 py-2 border border-slate-200 bg-slate-100 text-slate-400 font-bold rounded-sm cursor-not-allowed"
+                                >
+                                  Round Not Yet Open
+                                </button>
+                              )}
+                            </>
                           )}
 
-                          {state === 'open' && isPaperOrHybrid && (
-                            <button className="inline-flex items-center justify-center px-4 py-2 border border-slate-300 bg-white text-slate-700 font-bold rounded-sm hover:bg-slate-50 transition-colors">
-                              Upload Offline Answers
-                            </button>
-                          )}
-                          
-                          {(state === 'closed' || state === 'open') && (
-                            <Link 
-                              href={`/educator/rounds/${round.id}/marking`}
-                              className="inline-flex items-center justify-center px-4 py-2 border border-blue-900 bg-blue-900 text-white font-bold rounded-sm hover:bg-blue-800 transition-colors"
-                            >
-                              Grade Manual Submissions
-                            </Link>
-                          )}
+                          {activeTab === 'online' && (
+                            <>
+                              {(state === 'closed' || state === 'open') && (
+                                <Link 
+                                  href={`/educator/rounds/${round.id}/marking`}
+                                  className="inline-flex items-center justify-center px-4 py-2 border border-blue-900 bg-blue-900 text-white font-bold rounded-sm hover:bg-blue-800 transition-colors"
+                                >
+                                  Grade Manual Submissions
+                                </Link>
+                              )}
 
-                          {state === 'released' && (
-                            <Link 
-                              href={`/educator/results`}
-                              className="inline-flex items-center justify-center px-4 py-2 border border-blue-900 bg-blue-900 text-white font-bold rounded-sm hover:bg-blue-800 transition-colors"
-                            >
-                              View Results
-                            </Link>
-                          )}
+                              {state === 'released' && (
+                                <Link 
+                                  href={`/educator/results`}
+                                  className="inline-flex items-center justify-center px-4 py-2 border border-blue-900 bg-blue-900 text-white font-bold rounded-sm hover:bg-blue-800 transition-colors"
+                                >
+                                  View Results
+                                </Link>
+                              )}
 
-                          {state === 'scheduled' && (!isPaperOrHybrid || !isPrintWindowOpen) && (
-                            <button 
-                              disabled
-                              className="inline-flex items-center justify-center px-4 py-2 border border-slate-200 bg-slate-100 text-slate-400 font-bold rounded-sm cursor-not-allowed"
-                            >
-                              Round Not Yet Open
-                            </button>
+                              {state === 'scheduled' && (
+                                <button 
+                                  disabled
+                                  className="inline-flex items-center justify-center px-4 py-2 border border-slate-200 bg-slate-100 text-slate-400 font-bold rounded-sm cursor-not-allowed"
+                                >
+                                  Round Not Yet Open
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -167,10 +245,17 @@ export default async function EducatorAssessmentsPage() {
             );
           })}
           
-          {allRounds.length === 0 && (
+          {!portalRows.some(portal => {
+            const portalRounds = allRounds.filter(r => r.portalId === portal.id);
+            if (activeTab === 'online') {
+               return portalRounds.some(r => r.deliveryMethod === 'online' || r.deliveryMethod === 'hybrid');
+            } else {
+               return portalRounds.some(r => r.deliveryMethod === 'paper' || r.deliveryMethod === 'hybrid');
+            }
+          }) && (
             <div className="text-center py-12 border border-slate-200 rounded-sm">
               <p className="text-slate-500 mb-0 italic">
-                No assessments are currently available for your Olympiads.
+                No assessments are currently available for your Olympiads in this category.
               </p>
             </div>
           )}
