@@ -46,10 +46,9 @@ export async function generateTestFromBase64PDF(base64Pdf: string, base64Memo?: 
   }
 
   const modelsToTry = [
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-3.5-flash',
-    'gemini-2.5-pro'
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-pro'
   ];
 
   let lastError = null;
