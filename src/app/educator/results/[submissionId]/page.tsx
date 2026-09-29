@@ -14,7 +14,7 @@ import {
 } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import Link from 'next/link';
-import RequestRemarkButton from './RequestRemarkButton';
+// import RequestRemarkButton from './RequestRemarkButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -133,9 +133,11 @@ export default async function ViewFullPaperPage({
           </p>
         </div>
         <div className="flex items-center gap-4">
+          {/* Remarking hidden temporarily
           {subData.result?.status !== 'remark_requested' && subData.result?.status !== 'remark_resolved' && (
             <RequestRemarkButton submissionId={submissionId} />
           )}
+          */}
           <Link
             href="/educator/results"
             className="text-white hover:text-blue-200 transition-colors text-sm font-medium border border-blue-700 hover:border-blue-500 rounded-none px-4 py-2 inline-block"
@@ -146,6 +148,7 @@ export default async function ViewFullPaperPage({
       </div>
 
       <div className="max-w-4xl mx-auto mt-8 px-4 md:px-0 space-y-8">
+        {/* Remarking hidden temporarily
         {(subData.result?.status === 'remark_requested' || subData.result?.status === 'remark_resolved') && (
           <div className={`p-4 rounded-md border ${subData.result.status === 'remark_resolved' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
             <h3 className={`font-bold ${subData.result.status === 'remark_resolved' ? 'text-green-800' : 'text-amber-800'}`}>
@@ -161,6 +164,7 @@ export default async function ViewFullPaperPage({
             )}
           </div>
         )}
+        */}
 
         <div className="bg-white border border-slate-200 p-6 flex justify-between items-center shadow-sm">
           <div>
