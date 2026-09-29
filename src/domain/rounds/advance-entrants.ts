@@ -107,10 +107,10 @@ export async function advanceQualifyingEntrants(
         eq(submissions.status, 'submitted')
       )
     );
-    console.log('--- ADVANCEMENT DEBUG ---');
-    console.log('1. Target Threshold:', currentRound.qualifyingThreshold);
-    console.log('2. Total Marks Available:', totalMarks);
-    console.log('3. Raw Submissions Found:', submissionRows);
+    // console.log('--- ADVANCEMENT DEBUG ---');
+    // console.log('1. Target Threshold:', currentRound.qualifyingThreshold);
+    // console.log('2. Total Marks Available:', totalMarks);
+    // console.log('3. Raw Submissions Found:', submissionRows);
     
     // (Keep your existing 'scored' mapping logic here)
     
@@ -128,7 +128,7 @@ export async function advanceQualifyingEntrants(
     })
     .sort((a, b) => b.score - a.score);
 
-  console.log('4. Calculated Percentages:', scored);
+  //console.log('4. Calculated Percentages:', scored);
 
   // 6. Apply filters
   let qualifiers = scored;
