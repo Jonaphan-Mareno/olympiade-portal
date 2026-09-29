@@ -5,6 +5,7 @@ import { createPortal } from '@/app/organiser/actions';
 import SchoolPicker from '@/components/schools/SchoolPicker';
 import { Spinner } from '@/components/ui/Spinner';
 import type { PickedSchool } from '@/lib/schools/types';
+import { useRouter } from 'next/navigation';
 
 type SchoolEntry = {
   school: PickedSchool | null;
@@ -25,6 +26,7 @@ export default function CreatePortalForm({
 }: {
   onClose?: () => void;
 }) {
+  const router = useRouter();
   const [entries, setEntries] = useState<SchoolEntry[]>([emptyEntry()]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -106,7 +108,11 @@ export default function CreatePortalForm({
       } else {
         setSuccess(true);
         setEntries([emptyEntry()]);
-        if (onClose) onClose();
+        if (result.portalId) {
+          router.push(`/organiser/olympiads/${result.portalId}`);
+        } else {
+          if (onClose) onClose();
+        }
       }
     });
   }
@@ -115,17 +121,8 @@ export default function CreatePortalForm({
     return (
       <div className="p-6 text-center flex flex-col items-center justify-center h-full">
         <div className="bg-emerald-50 text-emerald-600 p-4 rounded-lg border border-emerald-100 mb-6 font-medium">
-          Portal created successfully!
+          Olympiad created successfully! Redirecting...
         </div>
-        {onClose && (
-          <button
-            type="button"
-            className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-medium py-2.5 px-6 rounded-lg transition-colors border-none cursor-pointer"
-            onClick={onClose}
-          >
-            Close
-          </button>
-        )}
       </div>
     );
   }
