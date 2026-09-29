@@ -107,6 +107,14 @@ export async function advanceQualifyingEntrants(
         eq(submissions.status, 'submitted')
       )
     );
+    console.log('--- ADVANCEMENT DEBUG ---');
+    console.log('1. Target Threshold:', currentRound.qualifyingThreshold);
+    console.log('2. Total Marks Available:', totalMarks);
+    console.log('3. Raw Submissions Found:', submissionRows);
+    
+    // (Keep your existing 'scored' mapping logic here)
+    
+    
 
   // 5. Convert scores to numbers and sort descending
   type ScoredEntry = { membershipId: string; score: number; pct: number };
@@ -119,6 +127,8 @@ export async function advanceQualifyingEntrants(
       return { membershipId: r.studentMembershipId as string, score: scoreNum, pct };
     })
     .sort((a, b) => b.score - a.score);
+
+  console.log('4. Calculated Percentages:', scored);
 
   // 6. Apply filters
   let qualifiers = scored;

@@ -227,7 +227,7 @@ export default async function DashboardPage() {
                     View your results, submissions, and upcoming rounds.
                   </p>
                   <Link href="/results" style={cardLinkStyle}>
-                    Go to Results
+                    Go to Student Portal
                   </Link>
                 </div>
               )}

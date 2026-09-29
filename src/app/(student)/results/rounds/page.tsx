@@ -105,7 +105,10 @@ export default async function StudentRoundsPage() {
                         return (
                           <div key={round.id} className="p-6 md:p-8 flex flex-col md:flex-row justify-between items-center gap-6">
                             <div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-3">
+                                <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-bold border border-slate-200 tracking-wide">
+                                  Round {round.orderIndex}
+                                </span>
                                 <h4 className="text-xl font-bold text-slate-800">{round.name}</h4>
                                 {isLocked && <span title="Locked: Not Qualified">🔒</span>}
                               </div>
