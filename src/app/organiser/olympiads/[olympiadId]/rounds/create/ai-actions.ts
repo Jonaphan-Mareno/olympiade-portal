@@ -3,7 +3,7 @@
 export async function generateTestFromBase64PDF(base64Pdf: string, base64Memo?: string | null) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is missing from the environment variables.');
+    return { error: 'GEMINI_API_KEY is missing from your environment variables. Please add it to your deployment settings.' };
   }
 
   // Construct Gemini Prompt
@@ -114,7 +114,7 @@ export async function generateTestFromBase64PDF(base64Pdf: string, base64Memo?: 
         throw new Error('LLM could not find any questions in the PDF.');
       }
 
-      return extractedQuestions.map((q: any) => ({
+      const formattedQuestions = extractedQuestions.map((q: any) => ({
         id: crypto.randomUUID(), // for QuestionBuilder keys
         type: q.type === 'mcq' || q.type === 'text' ? (q.type === 'mcq' ? 'single_choice' : 'short_text') : 'short_text',
         prompt: q.questionText || 'Unknown question',
@@ -123,6 +123,8 @@ export async function generateTestFromBase64PDF(base64Pdf: string, base64Memo?: 
         correctAnswer: q.correctAnswer || null,
       }));
 
+      return { data: formattedQuestions };
+
     } catch (err: any) {
       lastError = err;
       // Try next model if one model fails
@@ -130,5 +132,5 @@ export async function generateTestFromBase64PDF(base64Pdf: string, base64Memo?: 
     }
   }
 
-  throw new Error(`Gemini test generation failed across all models. Last error: ${lastError?.message || lastError}`);
+  return { error: `Gemini test generation failed across all models. Last error: ${lastError?.message || lastError}` };
 }

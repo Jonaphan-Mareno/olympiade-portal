@@ -104,8 +104,12 @@ export default function CreateRoundPage({
         selectedAnswerKey ? fileToBase64(selectedAnswerKey) : Promise.resolve(null),
       ]);
 
-      const questions = await generateTestFromBase64PDF(base64Paper, base64Memo);
-      setGeneratedQuestions(questions);
+      const result = await generateTestFromBase64PDF(base64Paper, base64Memo);
+      if (result && 'error' in result && result.error) {
+        alert(result.error);
+      } else if (result && 'data' in result && result.data) {
+        setGeneratedQuestions(result.data);
+      }
     } catch (err: any) {
       console.error(err);
       alert(err.message || 'Failed to generate test.');
