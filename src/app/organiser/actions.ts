@@ -142,6 +142,8 @@ export async function createPortal(formData: FormData) {
     inviteToken: string;
   }[] = [];
 
+  let createdPortalId = '';
+
   try {
     await db.transaction(async (tx) => {
       // Create the portal
@@ -153,6 +155,11 @@ export async function createPortal(formData: FormData) {
           status: 'pending',
         })
         .returning();
+
+      createdPortalId = newPortal.id;
+
+      // Track processed emails to prevent unique constraint violations on memberships
+      const processedEmails = new Set<string>();
 
       // Process each school entry: find-or-create the portal's row for the
       // picked school (re-used across entries within this transaction).
@@ -168,6 +175,9 @@ export async function createPortal(formData: FormData) {
           const uniqueEmails = [...new Set(entry.teacherEmails)];
 
           for (const email of uniqueEmails) {
+            if (processedEmails.has(email)) continue;
+            processedEmails.add(email);
+
             const existingUserId = existingUserMap.get(email);
 
             if (existingUserId) {
@@ -224,5 +234,5 @@ export async function createPortal(formData: FormData) {
   }
 
   revalidatePath('/organiser/dashboard');
-  return { success: true };
+  return { success: true, portalId: createdPortalId };
 }
