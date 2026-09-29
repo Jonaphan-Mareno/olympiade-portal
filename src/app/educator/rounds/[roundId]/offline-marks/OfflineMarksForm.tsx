@@ -38,7 +38,8 @@ export default function OfflineMarksForm({
       const parsed = parseFloat(value);
       if (!isNaN(parsed)) {
         if (parsed < 0) newScore = '0';
-        if (parsed > maxMarks) newScore = maxMarks.toString();
+        // Only clamp if maxMarks > 0
+        if (maxMarks > 0 && parsed > maxMarks) newScore = maxMarks.toString();
       }
     }
 
@@ -110,13 +111,15 @@ export default function OfflineMarksForm({
                         type="number"
                         step="0.25"
                         min="0"
-                        max={maxMarks}
+                        max={maxMarks > 0 ? maxMarks : undefined}
                         value={marks[student.membershipId] ?? ''}
                         onChange={(e) => handleScoreChange(student.membershipId, e.target.value)}
                         className="w-20 px-3 py-2 border-2 border-slate-300 rounded-none focus:border-blue-900 focus:ring-0 font-medium text-center"
                         placeholder="--"
                       />
-                      <span className="text-slate-400 font-bold text-sm">/ {maxMarks}</span>
+                      {maxMarks > 0 && (
+                        <span className="text-slate-400 font-bold text-sm">/ {maxMarks}</span>
+                      )}
                     </div>
                   </td>
                 </tr>
