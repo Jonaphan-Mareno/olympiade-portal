@@ -103,12 +103,12 @@ export default function CreatePortalForm({
 
     startTransition(async () => {
       const result = await createPortal(formData);
-      if (result?.error) {
+      if (result && 'error' in result && result.error) {
         setError(result.error);
       } else {
         setSuccess(true);
         setEntries([emptyEntry()]);
-        if (result.portalId) {
+        if (result && 'portalId' in result && result.portalId) {
           router.push(`/organiser/olympiads/${result.portalId}`);
         } else {
           if (onClose) onClose();
