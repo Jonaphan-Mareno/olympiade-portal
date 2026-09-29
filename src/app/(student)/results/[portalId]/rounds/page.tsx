@@ -10,6 +10,7 @@ import {
   questionPapers,
   examSittings,
   questions,
+  roundQualifications, 
 } from '@/lib/db/schema';
 import { eq, and, inArray, sum } from 'drizzle-orm';
 import RoundTabs from '../RoundTabs';
@@ -51,6 +52,15 @@ export default async function PortalRoundsPage({
   }
 
   const membership = studentMemberships[0];
+
+  // Fetch the rounds this student has explicitly qualified for
+  const qualifications = await db
+    .select()
+    .from(roundQualifications)
+    .where(eq(roundQualifications.studentMembershipId, membership.id));
+
+  // Create a quick lookup Set of round IDs they are allowed to access
+  const qualifiedRoundIds = new Set(qualifications.map((q) => q.roundId));
 
   const portalRounds = await db
     .select()
@@ -109,7 +119,7 @@ export default async function PortalRoundsPage({
   );
 
   const onlineRounds = portalRounds.filter(
-    (r) => r.deliveryMethod === 'online'
+    (r) => r.deliveryMethod === 'online' || r.deliveryMethod === 'hybrid'
   );
 
   const paperRows =
@@ -156,7 +166,13 @@ export default async function PortalRoundsPage({
       : undefined;
 
     return {
-      ...round,
+      id: round.id,
+      name: round.name,
+      opensAt: round.opensAt,
+      closesAt: round.closesAt,
+      qualifyingThreshold: round.qualifyingThreshold,
+      deliveryMethod: round.deliveryMethod as 'online' | 'paper' | 'hybrid', 
+      isQualified: round.orderIndex === 1 || qualifiedRoundIds.has(round.id),
       state: deriveRoundState(round),
       myResult: round.resultsPublishedAt
         ? {
@@ -168,7 +184,7 @@ export default async function PortalRoundsPage({
         : null,
       durationMinutes: paper?.durationMinutes ?? 60,
       sittingId: sitting?.id ?? null,
-      sittingStatus: sitting?.status ?? null,
+      sittingStatus: sitting?.status as 'active' | 'submitted' | 'abandoned' | null,
     };
   });
 

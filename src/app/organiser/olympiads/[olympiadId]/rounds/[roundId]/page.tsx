@@ -35,6 +35,11 @@ export default async function ManageRoundPage({
 
   const { olympiadId, roundId } = await params;
 
+  // GUARD: If someone hits 'create', stop executing the UUID query
+  if (roundId === 'create') {
+    redirect(`/organiser/olympiads/${olympiadId}/rounds/create`);
+  }
+
   const [round] = await db.select().from(rounds).where(eq(rounds.id, roundId));
 
   if (!round) {
