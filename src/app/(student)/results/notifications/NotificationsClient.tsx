@@ -1,4 +1,5 @@
 'use client';
+// Trigger rebuild for Vercel deployment
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
