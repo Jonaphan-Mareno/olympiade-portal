@@ -32,6 +32,7 @@ Our automated testing suite is separated into distinct layers to optimize execut
   * **Automated Notification Engine (`src/domain/notifications/automation-engine.ts`):** Validates email queue filtering, idempotency constraints, and threshold detection for round opening/closing reminders.
   * **Public API Gates & Queries (`src/domain/public-api/`):** Verifies the anonymous read queries behind `/api/public/*` — deduplicated school directory, portal catalogue, round list, published scores, paper URLs — and the visibility gates layered on the round state machine: papers/questions become readable once a round has closed, marks only once results are released.
   * **School Directory Search (`src/lib/schools/`):** Verifies token-based fuzzy matching over the committed South African high-school snapshot (`searchHighSchools`) and the response mapping / error handling of the proxied hipolabs universities API (`searchUniversities`).
+  * **Certificate Availability (`src/domain/certificates/availability.ts`):** Verifies `getRoundIdsWithCertificates`, the guard that reports which rounds actually have a certificate template configured so students are never offered a download that would 404. Covers the with/without-template split, the empty-input short-circuit (no query issued), and blank / duplicate round-ID handling.
 * **Characteristics:** 100% deterministic, executed in under 1 second.
 
 ---
@@ -58,6 +59,7 @@ Our automated testing suite is separated into distinct layers to optimize execut
   * **Drizzle ORM Mocking:** Database query builders and relational joins are mocked using chained fluent mock interfaces (supporting `.select().from().innerJoin().where().limit()`), ensuring DB interactions are verified without requiring live Postgres instances.
   * **Supabase Server Auth:** Mocking `createClient()` to simulate anonymous users, student members, educators, and platform admins.
   * **Domain Query Mocking (Public API):** The `/api/public/*` route tests mock the shared read functions in `src/domain/public-api/queries.ts`, verifying each route's parameter validation, visibility gating, and response envelope independently of SQL.
+  * **Binary Asset & Library Mocking:** The certificate route test doubles `pdf-lib` (`PDFDocument` plus its page / font / image handles) and stubs the global `fetch` used to pull the template image, exercising the PDF-generation branches (image vs. PDF templates, unsupported formats) without a network call or a real PDF engine. Where a handler issues two `db.select()` calls, the mock tells them apart by query shape (a supplied field list vs. none) and returns a chainable, thenable builder so both `.where()` and `.where().orderBy()` can be awaited.
 * **Key API Test Suites:**
   * `/api/health`: Validates system heartbeat and infrastructure readiness.
   * `/api/schools/suggest`: Tests school-picker suggestions — `q`/`type` validation, session auth, local high-school snapshot search, and 502 mapping when the universities API is unavailable.
@@ -69,6 +71,7 @@ Our automated testing suite is separated into distinct layers to optimize execut
   * `/api/public/schools`, `/api/public/portals`, `/api/public/rounds`: Test the always-readable directories — response shapes, ISO date serialization, status exposure, and the wildcard CORS header with no session required.
   * `/api/public/results`: Tests the release gate (403 until the results are published), `round_id` validation (400/404), and the anonymous highest-first `{ score }` payload.
   * `/api/public/question-papers`, `/api/public/questions`: Test the post-closing gate (403 while a round is scheduled or open), paper URL mapping, and the full question bank with correct answers included.
+  * `/api/certificates/[submissionId]`: Tests the on-demand certificate PDF generator — 404 for an unknown submission, **404 when the organiser never configured a template** (the exact case the student-side download guard prevents), 403 when the score clears no tier, highest-eligible-tier selection with the student name drawn onto the PDF, the direct `.pdf` template load branch, and the 500 / 400 image-fetch and unsupported-format failures.
 
 ---
 
@@ -175,14 +178,23 @@ Testers complete structured user journeys followed by an evaluation survey captu
 
 ---
 
-## 4. Test Suite Inventory
+## 4. Performance Report
+
+Application performance is audited with **Google PageSpeed Insights** (Lighthouse) against the production deployment. The linked report measures the desktop form factor across the Core Web Vitals metrics and the Lighthouse performance, accessibility, best-practices, and SEO categories.
+
+* **Latest Desktop Analysis:** [Google PageSpeed Insights — Olympiad Portal (Desktop)](https://pagespeed.web.dev/analysis/https-olympiad-portal-eta-verel-app/t76ytlrxx9?form_factor=desktop)
+
+---
+
+## 5. Test Suite Inventory
 
 | Suite Location | Scope / Target | Focus Area |
 | :--- | :--- | :--- |
-| `tests/domain/round-state-machine.test.ts` | Unit | Time-based phase calculation & state transitions |
+| `tests/domain/round-state-machine.test.ts`  hide appeal button ( advanced feature , shouldnt be imple| Unit | Time-based phase calculation & state transitions |
 | `tests/domain/automation-engine.test.ts` | Unit | Notification queue logic & idempotency |
 | `tests/domain/public-api-queries.test.ts` | Unit | Public read queries: key mapping, portal grouping, numeric coercion & file-URL filtering |
 | `tests/domain/public-api-access.test.ts` | Unit | Visibility gates: closed/released availability for papers and published marks |
+| `tests/domain/certificate-availability.test.ts` | Unit | Certificate download guard: rounds-with-templates set, empty-input short-circuit & ID de-duplication |
 | `tests/lib/high-schools.test.ts` | Unit | Token-based fuzzy search over the SA high-school snapshot |
 | `tests/lib/universities.test.ts` | Unit | Hipolabs universities proxy mapping & failure handling |
 | `tests/components/OrganisationApplicationForm.test.tsx` | Component | Form validation, user input, server action dispatch |
@@ -193,6 +205,7 @@ Testers complete structured user journeys followed by an evaluation survey captu
 | `tests/components/schools/SchoolPicker.test.tsx` | Component | Combobox type toggle, debounced fetching & keyboard navigation |
 | `tests/api/health.test.ts` | API Integration | System uptime & endpoint availability |
 | `tests/api/schools.suggest.test.ts` | API Integration | School picker suggestions, auth, validation & proxy 502 mapping |
+| `tests/api/certificates.test.ts` | API Integration | Certificate PDF generation: no-template 404, tier 403, highest-eligible-tier selection & image/PDF branches |
 | `tests/api/public/schools.test.ts` | API Integration | Public school directory: response shape, no-auth & CORS header |
 | `tests/api/public/portals.test.ts` | API Integration | Portal catalogue: status/schools exposure & ISO date serialization |
 | `tests/api/public/rounds.test.ts` | API Integration | Round list: portal nesting, threshold coercion & CORS |
@@ -200,6 +213,7 @@ Testers complete structured user journeys followed by an evaluation survey captu
 | `tests/api/public/question-papers.test.ts` | API Integration | Post-closing gate & paper `public_url` mapping |
 | `tests/api/public/questions.test.ts` | API Integration | Post-closing gate & full question bank with correct answers |
 | `tests/app/send-invitations.test.ts` | Server Action | Picked-school parsing, find-or-create of school rows & invite emails |
+| `tests/app/create-round.test.ts` | Server Action | Atomic round creation: marks coercion, advancement thresholds, paper/hybrid uploads, per-question images & transaction rollback on failure |
 | `tests/api/student/sitting.start.test.ts` | API Integration | Exam session initiation & uniqueness constraints |
 | `tests/api/student/sitting.save.test.ts` | API Integration | Answer draft persistence & payload checks |
 | `tests/api/student/sitting.submit.test.ts` | API Integration | Exam completion & submission immutability |

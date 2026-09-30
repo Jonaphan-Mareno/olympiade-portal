@@ -22,6 +22,7 @@ Our system uses a strictly normalized PostgreSQL relational database to ensure a
 | **`student_answers`** | Individual answers for online exams | `sittingId` → `exam_sittings.id`<br/>`questionId` → `questions.id` | `answerValue`, `savedAt` |
 | **`submissions`** | Wraps offline/online answers for grading | `roundId` → `rounds.id`<br/>`studentMembershipId` → `memberships.id` | `submissionType`, `fileUrl` |
 | **`results`** | Final graded scores | `submissionId` → `submissions.id` | `score`, `status`, `feedback` |
+| **`round_qualifications`** | Records which students have advanced into a given round (written when the previous round's results are published) | `roundId` → `rounds.id`<br/>`studentMembershipId` → `memberships.id` | `qualifiedAt`; unique on (`roundId`, `studentMembershipId`) |
 | **`notification_log`** | Audit log for sent emails/notifications | `roundId` → `rounds.id`<br/>`recipientMembershipId` → `memberships.id` | `kind`, `status`, `sentAt` |
 | **`certificate_templates`** | Designs for round-specific certificates | `roundId` → `rounds.id` | `minScorePercentage`, `templateUrl` |
 | **`in_app_notifications`** | User-specific notifications | `userId` → `users.id` | `title`, `isRead` |

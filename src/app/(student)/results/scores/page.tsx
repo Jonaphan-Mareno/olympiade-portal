@@ -11,6 +11,7 @@ import {
 import { eq, and, inArray } from 'drizzle-orm';
 import Link from 'next/link';
 import HeroBanner from '@/components/ui/HeroBanner';
+import { getRoundIdsWithCertificates } from '@/domain/certificates/availability';
 
 export const dynamic = 'force-dynamic';
 
@@ -116,6 +117,12 @@ export default async function StudentScoresPage() {
     return (b.publishedAt?.getTime() || 0) - (a.publishedAt?.getTime() || 0);
   });
 
+  // Only rounds where the organiser configured a certificate template can be
+  // downloaded — otherwise /api/certificates/[submissionId] returns a 404.
+  const roundIdsWithCertificates = await getRoundIdsWithCertificates(
+    recordsWithRanks.map((r) => r.roundId)
+  );
+
   const displayName = user.user_metadata?.full_name || user.email;
   const firstName = displayName?.split(' ')[0] || 'Student';
   const initial = (user.user_metadata?.full_name?.charAt(0) || user.email?.charAt(0) || '?').toUpperCase();
@@ -183,13 +190,22 @@ export default async function StudentScoresPage() {
                             </Link>
                           </td>
                           <td className="px-6 py-5 text-right">
-                            <a 
-                              href={`/api/certificates/${record.submissionId}`}
-                              className="inline-flex items-center gap-2 bg-blue-950 text-white font-bold text-xs uppercase tracking-wider py-2 px-4 hover:bg-blue-800 transition-colors"
-                              download
-                            >
-                              Download
-                            </a>
+                            {roundIdsWithCertificates.has(record.roundId) ? (
+                              <a 
+                                href={`/api/certificates/${record.submissionId}`}
+                                className="inline-flex items-center gap-2 bg-blue-950 text-white font-bold text-xs uppercase tracking-wider py-2 px-4 hover:bg-blue-800 transition-colors"
+                                download
+                              >
+                                Download
+                              </a>
+                            ) : (
+                              <span 
+                                className="inline-flex items-center gap-2 bg-slate-100 text-slate-400 border border-slate-200 font-bold text-xs uppercase tracking-wider py-2 px-4 cursor-not-allowed"
+                                title="No certificate has been configured for this round yet"
+                              >
+                                Unavailable
+                              </span>
+                            )}
                           </td>
                         </>
                       ) : (
