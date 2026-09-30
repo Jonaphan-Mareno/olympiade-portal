@@ -195,7 +195,7 @@ export default function CreateRoundPage({
                   className="w-full p-3 border border-slate-300 rounded-md text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
-              <RoundFormInputs isOnline={deliveryMethod === 'online' || deliveryMethod === 'hybrid'} />
+              <RoundFormInputs />
             </div>
 
             {/* Advancement Thresholds */}

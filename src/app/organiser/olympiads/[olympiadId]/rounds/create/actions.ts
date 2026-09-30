@@ -21,15 +21,19 @@ export async function createRound(formData: FormData) {
   const opensAt = formData.get('opensAt') as string;
   const closesAt = formData.get('closesAt') as string;
   const deliveryMethod = formData.get('deliveryMethod') as 'paper' | 'online' | 'hybrid';
-  const durationMinutes = Math.max(
-    1,
-    parseInt((formData.get('durationMinutes') as string) || '60', 10)
-  );
   const parseSAST = (dateStr: string) => new Date(`${dateStr}+02:00`);
 
   if (new Date(closesAt) <= new Date(opensAt)) {
     throw new Error('Closing time must be after the opening time.');
   }
+
+  // The test time limit is derived from the round window (open -> close) rather
+  // than entered by hand, so it can never disagree with the published schedule.
+  // The create-round form no longer submits a durationMinutes field.
+  const durationMinutes = Math.max(
+    1,
+    Math.round((parseSAST(closesAt).getTime() - parseSAST(opensAt).getTime()) / 60000)
+  );
 
   const qualifyingThresholdRaw = formData.get('qualifyingThreshold') as string | null;
   const thresholdTopNRaw = formData.get('thresholdTopN') as string | null;

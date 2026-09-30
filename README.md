@@ -52,3 +52,7 @@ cd Documentation
 npm install
 npm run start
 ```
+---
+## AI Declaration
+
+All code and documentation in this repository was generated and/or reviewed with the assistance of multiple AI models and agents, under the direction and final review of the developers.

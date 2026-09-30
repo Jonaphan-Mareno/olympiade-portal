@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { computeAttemptDeadline } from '@/domain/rounds/attempt-deadline';
 
 export interface QuestionData {
   id: string;
@@ -21,6 +22,7 @@ interface ExamInterfaceProps {
   sittingId: string;
   durationMinutes: number;
   startedAt: string;
+  closesAt: string;
   initialAnswers: Record<string, string>;
   questions: QuestionData[];
   testTitle: string;
@@ -30,6 +32,7 @@ export default function ExamInterface({
   sittingId,
   durationMinutes,
   startedAt,
+  closesAt,
   initialAnswers,
   questions,
   testTitle,
@@ -177,13 +180,18 @@ export default function ExamInterface({
     }
   }, [localKey, sittingId, submitted, syncLocalAnswers]);
 
+  // The attempt ends at the earlier of (start + duration) and the round close,
+  // so opening the test late never grants time past the published window.
+  const attemptDeadline = useMemo(
+    () => computeAttemptDeadline(new Date(startedAt), durationMinutes, new Date(closesAt)),
+    [startedAt, durationMinutes, closesAt]
+  );
+  const attemptTotalMs = Math.max(1, attemptDeadline - new Date(startedAt).getTime());
+
   // Server-based timer: refreshing the page does not restart the clock.
   useEffect(() => {
-    const startTime = new Date(startedAt).getTime();
-    const endTime = startTime + durationMinutes * 60 * 1000;
-
     const tick = () => {
-      const remaining = Math.max(0, endTime - Date.now());
+      const remaining = Math.max(0, attemptDeadline - Date.now());
       setTimeLeft(remaining);
       if (remaining <= 0) submitAttempt(true);
     };
@@ -191,7 +199,7 @@ export default function ExamInterface({
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [startedAt, durationMinutes, submitAttempt]);
+  }, [attemptDeadline, submitAttempt]);
 
   // Retry queued answers whenever the connection comes back.
   useEffect(() => {
@@ -321,7 +329,7 @@ export default function ExamInterface({
       {/* Progress bar */}
       <div 
         className="fixed top-0 left-0 h-1 bg-blue-500 z-50 transition-all duration-1000 ease-linear"
-        style={{ width: `${Math.max(0, (timeLeft / (durationMinutes * 60 * 1000))) * 100}%` }}
+        style={{ width: `${Math.max(0, (timeLeft / attemptTotalMs)) * 100}%` }}
       />
       
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 font-sans transition-colors">

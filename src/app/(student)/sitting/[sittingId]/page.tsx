@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { examSittings, questionPapers, rounds, studentAnswers, questions, memberships } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
 import ExamInterface from '@/components/student/ExamInterface';
+import { computeAttemptDeadline } from '@/domain/rounds/attempt-deadline';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,16 +14,21 @@ export default async function SittingPage({ params }: { params: Promise<{ sittin
   if (!user) redirect('/login');
 
   const { sittingId } = await params;
-  const [row] = await db.select({ sitting: examSittings, paper: questionPapers, membership: memberships })
+  const [row] = await db.select({ sitting: examSittings, paper: questionPapers, membership: memberships, round: rounds })
     .from(examSittings)
     .innerJoin(memberships, eq(memberships.id, examSittings.studentMembershipId))
     .innerJoin(questionPapers, eq(questionPapers.id, examSittings.questionPaperId))
+    .innerJoin(rounds, eq(rounds.id, questionPapers.roundId))
     .where(and(eq(examSittings.id, sittingId), eq(memberships.userId, user.id)))
     .limit(1);
 
   if (!row) return <div className="p-8 text-slate-700">Sitting not found.</div>;
 
-  const deadline = row.sitting.startedAt.getTime() + (row.paper.durationMinutes ?? 60) * 60_000;
+  const deadline = computeAttemptDeadline(
+    row.sitting.startedAt,
+    row.paper.durationMinutes ?? 60,
+    row.round.closesAt
+  );
   if (row.sitting.status === 'active' && Date.now() >= deadline) {
     await db.update(examSittings).set({ status: 'submitted', endedAt: new Date() }).where(eq(examSittings.id, sittingId));
     return <div className="max-w-2xl mx-auto p-8 text-center"><h1 className="text-2xl font-bold text-slate-900">Time expired</h1><p className="mt-2 text-slate-600">Your attempt has been submitted automatically. Awaiting Final Results.</p></div>;
@@ -31,7 +37,6 @@ export default async function SittingPage({ params }: { params: Promise<{ sittin
     return <div className="max-w-2xl mx-auto p-8 text-center"><h1 className="text-2xl font-bold text-slate-900">Test Submitted</h1><p className="mt-2 text-slate-600">Awaiting Final Results.</p></div>;
   }
 
-  const [round] = await db.select().from(rounds).where(eq(rounds.id, row.paper.roundId));
   const answers = await db.select().from(studentAnswers).where(eq(studentAnswers.sittingId, sittingId));
   const initialAnswers: Record<string, string> = {};
   answers.forEach((ans) => { if (ans.questionId) initialAnswers[ans.questionId] = ans.answerValue; });
@@ -43,9 +48,10 @@ export default async function SittingPage({ params }: { params: Promise<{ sittin
       sittingId={row.sitting.id}
       durationMinutes={row.paper.durationMinutes ?? 60}
       startedAt={row.sitting.startedAt.toISOString()}
+      closesAt={row.round.closesAt.toISOString()}
       initialAnswers={initialAnswers}
       questions={questionsData as any}
-      testTitle={round?.name || 'Online Olympiad Exam'}
+      testTitle={row.round.name || 'Online Olympiad Exam'}
     />
   );
 }

@@ -121,7 +121,6 @@ function buildForm(
 const onlineForm = (qs: any[], fields: Record<string, string> = {}) =>
   buildForm({
     deliveryMethod: 'online',
-    durationMinutes: '90',
     questionsData: JSON.stringify(qs),
     ...fields,
   });
@@ -133,7 +132,6 @@ const hybridForm = (qs: any[], fields: Record<string, string> = {}) =>
   buildForm(
     {
       deliveryMethod: 'hybrid',
-      durationMinutes: '75',
       questionsData: JSON.stringify(qs),
       ...fields,
     },
@@ -173,10 +171,12 @@ describe('createRound', () => {
       orderIndex: 1,
       deliveryMethod: 'online',
     });
-    // Online rounds still get a question paper row carrying the time limit.
+    // Online rounds still get a question paper row carrying the time limit,
+    // now derived from the open->close window (buildForm defaults to a 2-day
+    // window = 2880 minutes) rather than a submitted durationMinutes field.
     expect(insertFor(questionPapers)?.values).toMatchObject({
       roundId: 'round-1',
-      durationMinutes: 90,
+      durationMinutes: 2880,
       fileUrl: null,
     });
     expect(redirect).toHaveBeenCalledWith('/organiser/olympiads/portal-1');
@@ -241,7 +241,7 @@ describe('createRound', () => {
     await createRound(hybridForm([mcq()]));
 
     expect(h.state.uploads).toHaveLength(1);
-    expect(insertFor(questionPapers)?.values).toMatchObject({ durationMinutes: 75 });
+    expect(insertFor(questionPapers)?.values).toMatchObject({ durationMinutes: 2880 });
     expect(insertFor(questions)!.values).toHaveLength(1);
   });
 
@@ -284,6 +284,19 @@ describe('createRound', () => {
 
     expect(h.state.txInserts).toHaveLength(0);
     expect(h.state.uploads).toHaveLength(0);
+  });
+
+  it('derives the time limit from the open->close window (create no longer submits durationMinutes)', async () => {
+    // 09:00 -> 11:30 on the same day is exactly 150 minutes. The manual field is
+    // gone from the create form, so this value can only come from the window.
+    await createRound(
+      onlineForm([mcq()], {
+        opensAt: '2026-10-01T09:00',
+        closesAt: '2026-10-01T11:30',
+      })
+    );
+
+    expect(insertFor(questionPapers)?.values).toMatchObject({ durationMinutes: 150 });
   });
 
   it('rejects a closing time that is not after the opening time', async () => {

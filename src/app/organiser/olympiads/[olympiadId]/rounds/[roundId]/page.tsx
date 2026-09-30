@@ -74,7 +74,6 @@ export default async function ManageRoundPage({
     .slice(0, 16);
 
   let hasLiveSittings = false;
-  let durationMinutes = 60;
   let questionPaperUrl = '';
   let answerKeyUrl = '';
   
@@ -85,7 +84,6 @@ export default async function ManageRoundPage({
     .limit(1);
 
   if (paper && paper.length > 0) {
-    durationMinutes = paper[0].durationMinutes ?? 60;
     questionPaperUrl = paper[0].fileUrl || '';
     
     // Attempt to extract answer key url from answerKeyJson if it exists
@@ -211,11 +209,9 @@ export default async function ManageRoundPage({
                   className="w-full p-3 border border-slate-300 rounded-md text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
-              <RoundFormInputs 
-                defaultOpensAt={opensAtLocal} 
-                defaultClosesAt={closesAtLocal} 
-                defaultDuration={durationMinutes} 
-                isOnline={round.deliveryMethod === 'online'} 
+              <RoundFormInputs
+                defaultOpensAt={opensAtLocal}
+                defaultClosesAt={closesAtLocal}
               />
             </div>
 

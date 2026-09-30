@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { memberships, rounds, submissions, results, users, portals, schools, questions } from '@/lib/db/schema';
 import { eq, and, inArray, desc, isNotNull } from 'drizzle-orm';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
+import { getRoundIdsWithCertificates } from '@/domain/certificates/availability';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -159,6 +160,10 @@ export default async function EducatorResultsPage({
     }
   }
 
+  // Only rounds where the organiser configured a certificate template can be
+  // downloaded — otherwise /api/certificates/[submissionId] returns a 404.
+  const roundIdsWithCertificates = await getRoundIdsWithCertificates(roundIds);
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans w-full px-4 md:px-8 pt-10 pb-20">
       <div className="max-w-6xl mx-auto">
@@ -265,13 +270,22 @@ export default async function EducatorResultsPage({
                                         <span className="font-bold text-slate-900">{student.percentage}%</span>
                                       </td>
                                       <td className="px-6 py-4 text-center">
-                                        <a 
-                                          href={`/api/certificates/${student.submissionId}`}
-                                          className="text-blue-600 hover:text-blue-800 font-bold text-xs uppercase tracking-wider transition-colors inline-block" 
-                                          download
-                                        >
-                                          Download &darr;
-                                        </a>
+                                        {roundIdsWithCertificates.has(activeRoundForPortal.id) ? (
+                                          <a 
+                                            href={`/api/certificates/${student.submissionId}`}
+                                            className="text-blue-600 hover:text-blue-800 font-bold text-xs uppercase tracking-wider transition-colors inline-block" 
+                                            download
+                                          >
+                                            Download &darr;
+                                          </a>
+                                        ) : (
+                                          <span
+                                            className="text-slate-400 font-bold text-xs uppercase tracking-wider inline-block cursor-not-allowed"
+                                            title="No certificate has been configured for this round yet"
+                                          >
+                                            Unavailable
+                                          </span>
+                                        )}
                                       </td>
                                       <td className="px-6 py-4 text-right">
                                         <Link
