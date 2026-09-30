@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
-import { examSittings, memberships, questionPapers, studentAnswers, questions } from '@/lib/db/schema';
+import { examSittings, memberships, questionPapers, studentAnswers, questions, rounds } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
+import { computeAttemptDeadline } from '@/domain/rounds/attempt-deadline';
 
 export async function POST(request: Request) {
   try {
@@ -16,17 +17,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const [row] = await db.select({ sitting: examSittings, membership: memberships, paper: questionPapers })
+    const [row] = await db.select({ sitting: examSittings, membership: memberships, paper: questionPapers, round: rounds })
       .from(examSittings)
       .innerJoin(memberships, eq(memberships.id, examSittings.studentMembershipId))
       .innerJoin(questionPapers, eq(questionPapers.id, examSittings.questionPaperId))
+      .innerJoin(rounds, eq(rounds.id, questionPapers.roundId))
       .where(and(eq(examSittings.id, sittingId), eq(memberships.userId, user.id)))
       .limit(1);
 
     if (!row) return NextResponse.json({ error: 'Sitting not found' }, { status: 404 });
     if (row.sitting.status !== 'active') return NextResponse.json({ error: 'Exam sitting is not active' }, { status: 400 });
 
-    const deadline = row.sitting.startedAt.getTime() + (row.paper.durationMinutes ?? 60) * 60_000;
+    // The attempt deadline is capped at the round's close, so a student who
+    // started late cannot keep saving answers past the published window.
+    const deadline = computeAttemptDeadline(
+      row.sitting.startedAt,
+      row.paper.durationMinutes ?? 60,
+      row.round.closesAt
+    );
     if (Date.now() >= deadline) {
       await db.update(examSittings).set({ status: 'submitted', endedAt: new Date() }).where(eq(examSittings.id, sittingId));
       return NextResponse.json({ error: 'Time has expired' }, { status: 400 });

@@ -32,6 +32,8 @@ Our automated testing suite is separated into distinct layers to optimize execut
   * **Automated Notification Engine (`src/domain/notifications/automation-engine.ts`):** Validates email queue filtering, idempotency constraints, and threshold detection for round opening/closing reminders.
   * **Public API Gates & Queries (`src/domain/public-api/`):** Verifies the anonymous read queries behind `/api/public/*` — deduplicated school directory, portal catalogue, round list, published scores, paper URLs — and the visibility gates layered on the round state machine: papers/questions become readable once a round has closed, marks only once results are released.
   * **School Directory Search (`src/lib/schools/`):** Verifies token-based fuzzy matching over the committed South African high-school snapshot (`searchHighSchools`) and the response mapping / error handling of the proxied hipolabs universities API (`searchUniversities`).
+  * **Certificate Availability (`src/domain/certificates/availability.ts`):** Verifies `getRoundIdsWithCertificates`, the guard that reports which rounds actually have a certificate template configured so students are never offered a download that would 404. Covers the with/without-template split, the empty-input short-circuit (no query issued), and blank / duplicate round-ID handling.
+  * **Attempt Deadline (`src/domain/rounds/attempt-deadline.ts`):** Verifies `computeAttemptDeadline`, the shared rule that caps an online attempt at the earlier of "start + duration" and the round's close, so a student who opens a test late never gains time past the published window. Covers the relative-limit-governs case, the close-cap case, the exact-equality boundary, and a late starter whose duration equals the whole open-to-close window.
 * **Characteristics:** 100% deterministic, executed in under 1 second.
 
 ---
@@ -58,17 +60,19 @@ Our automated testing suite is separated into distinct layers to optimize execut
   * **Drizzle ORM Mocking:** Database query builders and relational joins are mocked using chained fluent mock interfaces (supporting `.select().from().innerJoin().where().limit()`), ensuring DB interactions are verified without requiring live Postgres instances.
   * **Supabase Server Auth:** Mocking `createClient()` to simulate anonymous users, student members, educators, and platform admins.
   * **Domain Query Mocking (Public API):** The `/api/public/*` route tests mock the shared read functions in `src/domain/public-api/queries.ts`, verifying each route's parameter validation, visibility gating, and response envelope independently of SQL.
+  * **Binary Asset & Library Mocking:** The certificate route test doubles `pdf-lib` (`PDFDocument` plus its page / font / image handles) and stubs the global `fetch` used to pull the template image, exercising the PDF-generation branches (image vs. PDF templates, unsupported formats) without a network call or a real PDF engine. Where a handler issues two `db.select()` calls, the mock tells them apart by query shape (a supplied field list vs. none) and returns a chainable, thenable builder so both `.where()` and `.where().orderBy()` can be awaited.
 * **Key API Test Suites:**
   * `/api/health`: Validates system heartbeat and infrastructure readiness.
   * `/api/schools/suggest`: Tests school-picker suggestions — `q`/`type` validation, session auth, local high-school snapshot search, and 502 mapping when the universities API is unavailable.
-  * `/api/student/sitting/start`: Tests sitting creation, timer initialization, and active sitting conflicts.
-  * `/api/student/sitting/save`: Tests real-time answer persistence, payload integrity, and auto-save throttling.
-  * `/api/student/sitting/submit`: Validates submission finalization, lock-out enforcement, and auto-marking trigger.
+  * `/api/student/sitting/save`: Tests real-time answer persistence and payload integrity, plus the server-side attempt deadline — the answer is rejected and the sitting force-submitted once the earlier of "start + duration" or the round close has passed (the closesAt cap), alongside the auth, missing-field, not-found and wrong-question guards.
+  * `/api/student/sitting/start`: Tests online-attempt initiation — the auth, missing-`roundId`, round-not-found, not-enrolled (403) and not-online guards, the open/close window checks, auto-creation of a default 60-minute paper when the round has none, and resuming an existing active sitting versus starting a new one.
+  * `/api/student/sitting/submit`: Tests final submission and auto-marking — the auth, missing-`sittingId` and not-found guards, idempotency for an already-submitted sitting, the free-text-excluded score computation (single_choice full credit, multiple_choice partial credit), and updating an existing submission/result rather than inserting duplicates.
   * `/api/student/sitting/sync`: Tests offline/online answer synchronization and conflict resolution.
   * `/api/webhooks/round-scheduler`: Tests cron authentication tokens (`CRON_SECRET`) and bulk notification scheduling.
   * `/api/public/schools`, `/api/public/portals`, `/api/public/rounds`: Test the always-readable directories — response shapes, ISO date serialization, status exposure, and the wildcard CORS header with no session required.
   * `/api/public/results`: Tests the release gate (403 until the results are published), `round_id` validation (400/404), and the anonymous highest-first `{ score }` payload.
   * `/api/public/question-papers`, `/api/public/questions`: Test the post-closing gate (403 while a round is scheduled or open), paper URL mapping, and the full question bank with correct answers included.
+  * `/api/certificates/[submissionId]`: Tests the on-demand certificate PDF generator — 404 for an unknown submission, **404 when the organiser never configured a template** (the exact case the student-side download guard prevents), 403 when the score clears no tier, highest-eligible-tier selection with the student name drawn onto the PDF, the direct `.pdf` template load branch, and the 500 / 400 image-fetch and unsupported-format failures.
 
 ---
 
@@ -175,34 +179,66 @@ Testers complete structured user journeys followed by an evaluation survey captu
 
 ---
 
-## 4. Test Suite Inventory
+## 4. Performance Report
+
+Application performance is audited with **Google PageSpeed Insights** (Lighthouse) against the production deployment. The linked report measures the desktop form factor across the Core Web Vitals metrics and the Lighthouse performance, accessibility, best-practices, and SEO categories.
+
+* **Latest Desktop Analysis:** [Google PageSpeed Insights — Olympiad Portal (Desktop)](https://pagespeed.web.dev/analysis/https-olympiad-portal-eta-verel-app/t76ytlrxx9?form_factor=desktop)
+
+---
+
+## 5. Test Suite Inventory
 
 | Suite Location | Scope / Target | Focus Area |
 | :--- | :--- | :--- |
 | `tests/domain/round-state-machine.test.ts` | Unit | Time-based phase calculation & state transitions |
 | `tests/domain/automation-engine.test.ts` | Unit | Notification queue logic & idempotency |
+| `tests/domain/round-scheduler.test.ts` | Unit | Scheduler sweep: due-round detection & reminder/notification enqueue |
 | `tests/domain/public-api-queries.test.ts` | Unit | Public read queries: key mapping, portal grouping, numeric coercion & file-URL filtering |
 | `tests/domain/public-api-access.test.ts` | Unit | Visibility gates: closed/released availability for papers and published marks |
+| `tests/domain/certificate-availability.test.ts` | Unit | Certificate download guard: rounds-with-templates set, empty-input short-circuit & ID de-duplication |
+| `tests/domain/attempt-deadline.test.ts` | Unit | Attempt deadline rule: relative limit vs. round-close cap, exact-equality boundary & late-starter window |
+| `tests/domain/email-templates.test.ts` | Unit | Email template content: round open/close reminders, overdue follow-up & results-published notices |
 | `tests/lib/high-schools.test.ts` | Unit | Token-based fuzzy search over the SA high-school snapshot |
 | `tests/lib/universities.test.ts` | Unit | Hipolabs universities proxy mapping & failure handling |
+| `tests/lib/auth-redirect.test.ts` | Unit | Role-based post-authentication redirect resolution |
 | `tests/components/OrganisationApplicationForm.test.tsx` | Component | Form validation, user input, server action dispatch |
 | `tests/components/SubmitButton.test.tsx` | Component | Pending state, button disabling, loading spinners |
 | `tests/components/ui/ConfirmDialog.test.tsx` | Component | Confirmation modal: focus trap, Escape/backdrop cancel & busy dismissal lock |
 | `tests/components/ui/PendingButton.test.tsx` | Component | Double-click guard, async pending state & external pending flag |
 | `tests/components/student/ExamInterface.test.tsx` | Component | Exam rendering, answer autosave & finish-attempt confirmation flow |
+| `tests/components/student/RoundTabs.test.tsx` | Component | Round tabs result display rendering |
 | `tests/components/schools/SchoolPicker.test.tsx` | Component | Combobox type toggle, debounced fetching & keyboard navigation |
+| `tests/components/organiser/AddEducatorButton.test.tsx` | Component | Add-educator button: dialog launch & pending/disabled behaviour |
+| `tests/components/organiser/QuestionBuilder.test.tsx` | Component | Question builder: question entry, marks & answer-option editing |
+| `tests/app/signup.page.test.tsx` | Page | Signup page render & form validation |
+| `tests/app/forgot-password.page.test.tsx` | Page | Forgot-password page render & reset-request form |
+| `tests/app/welcome.page.test.tsx` | Page | Welcome page render & onboarding state |
+| `tests/app/review-page.test.tsx` | Page | Review page score display rendering |
 | `tests/api/health.test.ts` | API Integration | System uptime & endpoint availability |
 | `tests/api/schools.suggest.test.ts` | API Integration | School picker suggestions, auth, validation & proxy 502 mapping |
+| `tests/api/certificates.test.ts` | API Integration | Certificate PDF generation: no-template 404, tier 403, highest-eligible-tier selection & image/PDF branches |
+| `tests/api/round-scheduler-webhook.test.ts` | API Integration | Round scheduler webhook: CRON_SECRET authentication & bulk reminder scheduling |
 | `tests/api/public/schools.test.ts` | API Integration | Public school directory: response shape, no-auth & CORS header |
 | `tests/api/public/portals.test.ts` | API Integration | Portal catalogue: status/schools exposure & ISO date serialization |
 | `tests/api/public/rounds.test.ts` | API Integration | Round list: portal nesting, threshold coercion & CORS |
 | `tests/api/public/results.test.ts` | API Integration | Results release gate (403), 400/404 handling & anonymous scores |
 | `tests/api/public/question-papers.test.ts` | API Integration | Post-closing gate & paper `public_url` mapping |
 | `tests/api/public/questions.test.ts` | API Integration | Post-closing gate & full question bank with correct answers |
-| `tests/app/send-invitations.test.ts` | Server Action | Picked-school parsing, find-or-create of school rows & invite emails |
-| `tests/api/student/sitting.start.test.ts` | API Integration | Exam session initiation & uniqueness constraints |
-| `tests/api/student/sitting.save.test.ts` | API Integration | Answer draft persistence & payload checks |
-| `tests/api/student/sitting.submit.test.ts` | API Integration | Exam completion & submission immutability |
+| `tests/app/auth-callback.route.test.ts` | API Integration | Auth callback route: code exchange, session establishment & redirect |
+| `tests/api/student/sitting.save.test.ts` | API Integration | Answer draft persistence plus the server-side attempt-deadline cap: force-submit once start + duration or the round close has passed |
+| `tests/api/student/sitting.start.test.ts` | API Integration | Online-attempt initiation: auth/enrolment/open-close-window guards, default 60-minute paper auto-creation & resume-vs-new sitting |
+| `tests/api/student/sitting.submit.test.ts` | API Integration | Final submission & auto-marking: idempotency, free-text-excluded scoring (single_choice full / multiple_choice partial credit) & submission/result upsert |
 | `tests/api/student/sitting.sync.test.ts` | API Integration | Offline/online answer synchronization |
+| `tests/app/send-invitations.test.ts` | Server Action | Picked-school parsing, find-or-create of school rows & invite emails |
+| `tests/app/add-educators.test.ts` | Server Action | Add educators: find-or-create school, membership upsert & invite dispatch |
+| `tests/app/auth.actions.test.ts` | Server Action | Login & logout server actions: session handling & redirects |
+| `tests/app/auth-actions.test.ts` | Server Action | Signup/login auto-claim of pending invitations for the email |
+| `tests/app/password-reset.test.ts` | Server Action | Password reset: request-token issuance & reset completion |
+| `tests/app/create-round.test.ts` | Server Action | Atomic round creation: marks coercion, advancement thresholds, paper/hybrid uploads, per-question images & transaction rollback on failure |
+| `tests/app/update-round.test.ts` | Server Action | Round edit derives the time limit from the open/close window (update & insert paths) and enforces the closing-after-opening and auth guards |
 | `tests/e2e/signup.spec.ts` | Playwright E2E | User registration flow & client-side routing |
+| `tests/e2e/login.spec.ts` | Playwright E2E | Login flow & authenticated redirect |
+| `tests/e2e/forgot-password.spec.ts` | Playwright E2E | Password-reset request flow |
 | `tests/e2e/organiser.spec.ts` | Playwright E2E | Protected route access & middleware redirect rules |
+| `tests/sanity.test.ts` | Unit | Trivial smoke test confirming the Vitest runner executes |

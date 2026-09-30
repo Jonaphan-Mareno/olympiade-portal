@@ -28,6 +28,10 @@ const mockQuestions: any[] = [
   },
 ];
 
+// Far enough in the future that the 60-minute relative limit (not the round
+// close) governs the countdown, preserving these tests' original intent.
+const mockClosesAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
@@ -59,6 +63,7 @@ describe('ExamInterface', () => {
         sittingId="sitting1"
         durationMinutes={60}
         startedAt={new Date().toISOString()}
+        closesAt={mockClosesAt}
         initialAnswers={{}}
         questions={mockQuestions}
         testTitle="Math Exam"
@@ -79,6 +84,7 @@ describe('ExamInterface', () => {
         sittingId="sitting1"
         durationMinutes={60}
         startedAt={new Date().toISOString()}
+        closesAt={mockClosesAt}
         initialAnswers={{}}
         questions={mockQuestions}
         testTitle="Math Exam"
@@ -117,6 +123,7 @@ describe('ExamInterface', () => {
         sittingId="sitting1"
         durationMinutes={60}
         startedAt={new Date().toISOString()}
+        closesAt={mockClosesAt}
         initialAnswers={{}}
         questions={mockQuestions}
         testTitle="Math Exam"

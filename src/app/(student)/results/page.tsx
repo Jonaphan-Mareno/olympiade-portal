@@ -14,6 +14,7 @@ import {
 } from '@/lib/db/schema';
 import { eq, and, inArray, isNotNull, desc } from 'drizzle-orm';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
+import { getRoundIdsWithCertificates } from '@/domain/certificates/availability';
 import HeroBanner from '@/components/ui/HeroBanner';
 import Link from 'next/link';
 
@@ -154,6 +155,18 @@ export default async function StudentGlobalOverviewPage() {
     recentAchievement.totalStudents = scores.length;
   }
 
+  // Guard the certificate download: only offer it when the organiser has
+  // configured a template for this round (otherwise the API returns a 404).
+  let recentAchievementHasCertificate = false;
+  if (recentAchievement) {
+    const idsWithCertificates = await getRoundIdsWithCertificates([
+      recentAchievement.roundId,
+    ]);
+    recentAchievementHasCertificate = idsWithCertificates.has(
+      recentAchievement.roundId
+    );
+  }
+
   const pendingSubmissions = studentSubmissions
     .filter(s => s.status === 'submitted')
     .map(s => {
@@ -282,10 +295,16 @@ export default async function StudentGlobalOverviewPage() {
                       View all results
                       <span className="ml-2 group-hover:translate-x-1 transition-transform">&rarr;</span>
                     </Link>
-                    <a href={`/api/certificates/${recentAchievement.submissionId}`} download className="inline-flex items-center text-white hover:text-blue-200 font-bold text-sm uppercase tracking-wider whitespace-nowrap group">
-                      Download Certificate
-                      <span className="ml-2 group-hover:translate-y-1 transition-transform">&darr;</span>
-                    </a>
+                    {recentAchievementHasCertificate ? (
+                      <a href={`/api/certificates/${recentAchievement.submissionId}`} download className="inline-flex items-center text-white hover:text-blue-200 font-bold text-sm uppercase tracking-wider whitespace-nowrap group">
+                        Download Certificate
+                        <span className="ml-2 group-hover:translate-y-1 transition-transform">&darr;</span>
+                      </a>
+                    ) : (
+                      <span className="inline-flex items-center text-slate-400 font-bold text-sm uppercase tracking-wider whitespace-nowrap cursor-not-allowed" title="No certificate has been configured for this round yet">
+                        Certificate Unavailable
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

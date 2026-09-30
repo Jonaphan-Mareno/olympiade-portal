@@ -1,15 +1,19 @@
-# Meeting Minutes: Client Status Update
+# Meeting Minutes
+
+This document tracks formal interactions with our client (Tafara), recorded chronologically to provide evidence of Agile methodology execution, stakeholder engagement, and feedback integration.
+
+## Client Meeting 1: Client Status Update
 
 **Date:** August 18, 2026  
 **Client:** Tafara  
 **Attendees:** Jonaphan, Simphiwe, Sivu, Thabiso
 
-## 1. Progress Review
+### 1. Progress Review
 
 - The team presented the current file structure and the overall work completed on the project so far.
 - **Client Feedback:** Tafara reviewed the progress and stated that the work done to date is satisfactory and on the right track.
 
-## 2. Action Items & Next Steps
+### 2. Action Items & Next Steps
 
 Based on the client's advice, the team needs to complete the following before or during the first sprint:
 
@@ -18,3 +22,54 @@ Based on the client's advice, the team needs to complete the following before or
 - **Sprint 1 Configuration:** Set up the foundational technical requirements for the first sprint, specifically:
   - Configure the CI/CD pipeline.
   - Set up the testing environment and initial tests.
+
+## Client Meeting 2: Online
+
+**Date:** September 25, 2026  
+**Client:** Tafara  
+**Attendees:** Development Team  
+**Format:** Online  
+**Focus:** Organiser Console scope and public API exposure limits.
+
+### 1. Organiser Console Feature
+
+The team asked the client about the intended scope of the **Organiser Console** feature. The client was not yet certain of the requirements and undertook to get back to the team with a decision at a later stage.
+
+### 2. Public API Exposure
+
+The team asked how much of the platform's data could be exposed through the public-facing APIs. After discussing the public-facing URLs, the client confirmed that any **POPI-compliant** endpoints are acceptable — specifically the public portals and the schools we store — provided that **no user data is exposed**.
+
+## Client Meeting 3: In Person
+
+**Date:** September 28, 2026  
+**Client:** Tafara  
+**Attendees:** Development Team  
+**Format:** Physical (in person)  
+**Focus:** Sprint 3 rubric walkthrough, bug triage, and documentation guidance.
+
+### 1. Sprint 3 Rubric Walkthrough
+
+The meeting opened with a walkthrough of the **Sprint 3 rubric** to confirm the expected deliverables.
+
+The client then evaluated the current state of the web application, noting that it was **slightly buggy**. The specific issues raised, together with the agreed actions, are summarised below.
+
+### 2. Feedback & Action Items
+
+| Area | Feedback | Agreed Action |
+| :--- | :--- | :--- |
+| **Appeals** | The appeals feature should not be visible in the UI yet. | Hide the appeal button — appeals are an advanced feature that should not be implemented at this stage. |
+| **Round creation** | A Node error occurs when creating a round. | Needs a quick fix. |
+| **Performance** | Performance evidence is missing from the documentation. | Incorporate a performance report into the project documentation (now under *Quality Assurance → Performance Report*). |
+| **User feedback** | User feedback evidence is missing from the documentation. | Incorporate user feedback (password reset, school picker, show/hide password, etc.) into the documentation. |
+
+### 3. Organiser Console Decision
+
+Following up on the question raised in Meeting 2, the client responded that the Organiser Console should display **metadata of the portal**. This still needs to be implemented.
+
+### 4. Client Advice: Randomised Marking
+
+The client suggested **randomised marking** as a possible enhancement. The team noted that this could be argued as an advanced feature and will discuss it with Brendan before deciding whether to schedule it.
+
+---
+
+*Note: These minutes demonstrate that our development is directly driven by client requirements and validated through regular agile ceremonies.*
