@@ -1,5 +1,6 @@
 import './globals.css';
 import { Inter, Lora } from 'next/font/google';
+import RealtimeProvider from '@/components/providers/RealtimeProvider';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const lora = Lora({ subsets: ['latin'], variable: '--font-lora' });
@@ -20,6 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${lora.variable}`}>
       <body className="font-sans antialiased bg-white overscroll-y-none">
+        <RealtimeProvider />
         {children}
       </body>
     </html>
