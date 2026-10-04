@@ -18,10 +18,10 @@ import {
   submissions,
   results as resultsTable,
   memberships,
-  questions,
   roundQualifications,
 } from '@/lib/db/schema';
 import { and, eq, gt, asc } from 'drizzle-orm';
+import { getRoundTotalMarks } from './score-percentage';
 
 export type AdvancementSummary = {
   advancedCount: number;
@@ -83,14 +83,10 @@ export async function advanceQualifyingEntrants(
 
   const nextRound = nextRounds[0];
 
-  // 3. Compute the total marks available for this round (for % calculation)
-  const allQuestions = await db
-    .select({ marks: questions.marks })
-    .from(questions)
-    .where(eq(questions.roundId, currentRoundId));
-
-  // FIX: Force marks to be treated as Numbers to prevent string concatenation
-  const totalMarks = allQuestions.reduce((sum, q) => sum + Number(q.marks ?? 0), 0);
+  // 3. Total marks available for this round (for % calculation): the
+  // question bank, or the stated total for paper rounds
+  const totalMarks =
+    (await getRoundTotalMarks([currentRoundId])).get(currentRoundId) ?? 0;
 
   // 4. Load all submitted results for this round
   const submissionRows = await db

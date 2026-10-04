@@ -12,6 +12,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 import Link from 'next/link';
 import HeroBanner from '@/components/ui/HeroBanner';
 import { getRoundIdsWithCertificates } from '@/domain/certificates/availability';
+import { formatScoreDisplay, getRoundTotalMarks } from '@/domain/rounds/score-percentage';
 
 export const dynamic = 'force-dynamic';
 
@@ -123,6 +124,12 @@ export default async function StudentScoresPage() {
     recordsWithRanks.map((r) => r.roundId)
   );
 
+  // Scores are stored as raw marks; the percentage is marks obtained over
+  // the round's total marks obtainable.
+  const roundTotalMarks = await getRoundTotalMarks(
+    recordsWithRanks.map((r) => r.roundId)
+  );
+
   const displayName = user.user_metadata?.full_name || user.email;
   const firstName = displayName?.split(' ')[0] || 'Student';
   const initial = (user.user_metadata?.full_name?.charAt(0) || user.email?.charAt(0) || '?').toUpperCase();
@@ -171,7 +178,9 @@ export default async function StudentScoresPage() {
                       {record.isPublished ? (
                         <>
                           <td className="px-6 py-5 text-center">
-                            <span className="font-bold text-slate-900 text-lg">{record.score}%</span>
+                            <span className="font-bold text-slate-900 text-lg">
+                              {formatScoreDisplay(record.score, roundTotalMarks.get(record.roundId))}
+                            </span>
                           </td>
                           <td className="px-6 py-5 text-center">
                             <span className="font-bold text-blue-950 text-lg">

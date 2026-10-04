@@ -1,13 +1,15 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { submissions, results, memberships } from '@/lib/db/schema';
+import { submissions, results, memberships, rounds } from '@/lib/db/schema';
 import { createClient } from '@/lib/supabase/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { getMarkingWindowStatus } from '@/domain/rounds/paper-marking';
+import { getRoundTotalMarks } from '@/domain/rounds/score-percentage';
 
 export async function submitBulkOfflineMarks(
-  roundId: string, 
+  roundId: string,
   marksData: { studentMembershipId: string, score: number }[]
 ) {
   const supabase = await createClient();
@@ -19,31 +21,83 @@ export async function submitBulkOfflineMarks(
     return { error: 'Not authenticated' };
   }
 
+  const [round] = await db.select().from(rounds).where(eq(rounds.id, roundId));
+  if (!round) return { error: 'Round not found' };
+  if (round.deliveryMethod === 'online') {
+    return { error: 'This round is written online, so marks cannot be entered manually.' };
+  }
+
+  const markingWindow = getMarkingWindowStatus(round);
+  if (markingWindow.status !== 'open') return { error: markingWindow.reason };
+
+  // The educator's accepted memberships in this olympiad, by school
   const educatorMemberships = await db
     .select()
     .from(memberships)
-    .where(and(eq(memberships.userId, user.id), eq(memberships.role, 'educator')));
-
+    .where(
+      and(
+        eq(memberships.userId, user.id),
+        eq(memberships.portalId, round.portalId),
+        eq(memberships.role, 'educator'),
+        eq(memberships.status, 'accepted')
+      )
+    );
   if (educatorMemberships.length === 0) {
     return { error: 'Not authorized' };
   }
-  
-  // Use the first educator membership for the graded_by_membership_id
-  const gradedByMembershipId = educatorMemberships[0].id;
+  const educatorBySchool = new Map(
+    educatorMemberships.map((m) => [m.schoolId, m.id])
+  );
+
+  const totalMarks = (await getRoundTotalMarks([roundId])).get(roundId) ?? 0;
+
+  const entries = marksData.filter((m) => !isNaN(m.score));
+  for (const mark of entries) {
+    if (mark.score < 0 || (totalMarks > 0 && mark.score > totalMarks)) {
+      return {
+        error: totalMarks > 0
+          ? `Marks must be between 0 and ${totalMarks}.`
+          : 'Marks cannot be negative.',
+      };
+    }
+  }
+
+  // Every student must be an entrant of this olympiad at one of the
+  // educator's schools
+  const studentIds = entries.map((m) => m.studentMembershipId);
+  const students = studentIds.length > 0
+    ? await db
+        .select({ id: memberships.id, schoolId: memberships.schoolId })
+        .from(memberships)
+        .where(
+          and(
+            inArray(memberships.id, studentIds),
+            eq(memberships.portalId, round.portalId),
+            eq(memberships.role, 'student')
+          )
+        )
+    : [];
+  const studentSchool = new Map(students.map((s) => [s.id, s.schoolId]));
+  if (studentIds.some((id) => !educatorBySchool.has(studentSchool.get(id) ?? null))) {
+    return { error: 'You can only enter marks for entrants at your school.' };
+  }
 
   try {
-    // We need to upsert submissions and results for these students
-    for (const mark of marksData) {
-      if (isNaN(mark.score)) continue;
+    for (const mark of entries) {
+      const gradedByMembershipId = educatorBySchool.get(
+        studentSchool.get(mark.studentMembershipId) ?? null
+      )!;
 
-      // check if an offline submission already exists
       const existingSubmissions = await db.select().from(submissions).where(
         and(
           eq(submissions.roundId, roundId),
           eq(submissions.studentMembershipId, mark.studentMembershipId)
         )
       );
-      
+
+      // Never overwrite a script the entrant wrote online
+      if (existingSubmissions.some((s) => s.submissionType === 'online')) continue;
+
       let submissionId: string;
 
       if (existingSubmissions.length > 0) {

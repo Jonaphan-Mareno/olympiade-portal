@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
+import { formatSAST } from '@/lib/sast';
 import {
   memberships,
   portals,
@@ -15,6 +16,7 @@ import {
 import { eq, and, inArray, isNotNull, desc } from 'drizzle-orm';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 import { getRoundIdsWithCertificates } from '@/domain/certificates/availability';
+import { formatScoreDisplay, getRoundTotalMarks } from '@/domain/rounds/score-percentage';
 import HeroBanner from '@/components/ui/HeroBanner';
 import Link from 'next/link';
 
@@ -153,6 +155,13 @@ export default async function StudentGlobalOverviewPage() {
     const rank = scores.indexOf(studentScore) + 1;
     recentAchievement.rank = rank;
     recentAchievement.totalStudents = scores.length;
+
+    // Scores are stored as raw marks; show marks obtained / marks obtainable.
+    const totals = await getRoundTotalMarks([recentAchievement.roundId]);
+    recentAchievement.scoreDisplay = formatScoreDisplay(
+      recentAchievement.score,
+      totals.get(recentAchievement.roundId)
+    );
   }
 
   // Guard the certificate download: only offer it when the organiser has
@@ -213,8 +222,8 @@ export default async function StudentGlobalOverviewPage() {
                 <p className="text-3xl font-bold text-slate-900">
                   {/* Since I don't have a ClientCountdown component guaranteed, I'll just render the date nicely */}
                   {urgentRoundState === 'open' 
-                    ? `Closes ${new Date(urgentRound.closesAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}`
-                    : `Opens ${new Date(urgentRound.opensAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}`
+                    ? `Closes ${formatSAST(urgentRound.closesAt, { dateStyle: 'short', timeStyle: 'short' })}`
+                    : `Opens ${formatSAST(urgentRound.opensAt, { dateStyle: 'short', timeStyle: 'short' })}`
                   }
                 </p>
                 {urgentRound.deliveryMethod === 'paper' && urgentRoundState === 'open' && (
@@ -283,7 +292,7 @@ export default async function StudentGlobalOverviewPage() {
                       Latest Result
                     </span>
                     <p className="text-white text-4xl font-bold mb-1">
-                      {recentAchievement.score}%
+                      {recentAchievement.scoreDisplay}
                     </p>
                     <p className="text-slate-300 font-medium mb-6">
                       in {recentAchievement.portal?.name || 'Olympiad'} - {recentAchievement.round?.name || 'Round'}

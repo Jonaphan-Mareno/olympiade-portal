@@ -40,11 +40,11 @@ export default function RoundFormInputs({
   return (
     <>
       <div className="md:col-span-1">
-        <label className="block text-sm font-semibold text-slate-900 mb-2" htmlFor="opensAt">Opening Time</label>
+        <label className="block text-sm font-semibold text-slate-900 mb-2" htmlFor="opensAt">Opening Time (SAST)</label>
         <input type="datetime-local" id="opensAt" name="opensAt" required value={opensAt} onChange={handleOpensAtChange} className="w-full p-3 border border-slate-300 rounded-md text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
       </div>
       <div className="md:col-span-1">
-        <label className="block text-sm font-semibold text-slate-900 mb-2" htmlFor="closesAt">Closing Time</label>
+        <label className="block text-sm font-semibold text-slate-900 mb-2" htmlFor="closesAt">Closing Time (SAST)</label>
         <input type="datetime-local" id="closesAt" name="closesAt" required value={closesAt} onChange={handleClosesAtChange} className="w-full p-3 border border-slate-300 rounded-md text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
         {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
       </div>

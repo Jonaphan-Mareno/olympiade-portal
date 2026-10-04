@@ -8,13 +8,18 @@ import {
   users,
   questions,
   examSittings,
+  questionPapers,
   studentAnswers,
   rounds,
   portals,
+  remarkRequests,
 } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import Link from 'next/link';
-import RequestRemarkButton from './RequestRemarkButton';
+import RemarkSection from './RemarkSection';
+import { getRemarkEligibility } from '@/domain/remarks/remarks';
+import { formatScoreDisplay } from '@/domain/rounds/score-percentage';
+import { calculateEarnedMarks } from '@/domain/marking/auto-mark';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +47,7 @@ export default async function ViewPaperStudentPage({
       result: results,
       roundName: rounds.name,
       roundId: rounds.id,
+      resultsPublishedAt: rounds.resultsPublishedAt,
       portalName: portals.name,
     })
     .from(submissions)
@@ -61,6 +67,28 @@ export default async function ViewPaperStudentPage({
     return notFound();
   }
 
+  const [remark] = await db
+    .select()
+    .from(remarkRequests)
+    .where(eq(remarkRequests.submissionId, submissionId));
+  const remarkEligibility = getRemarkEligibility({
+    resultsPublishedAt: subData.resultsPublishedAt,
+    hasScore: subData.result?.score != null,
+    hasExistingRequest: Boolean(remark),
+  });
+  const remarkSection = (
+    <RemarkSection
+      submissionId={submissionId}
+      remark={remark ?? null}
+      eligibility={remarkEligibility}
+    />
+  );
+  // A completed remark's per-question marks replace the original marks
+  const remarkedMarks =
+    remark?.status === 'resolved' && remark.questionMarks
+      ? (remark.questionMarks as Record<string, number>)
+      : null;
+
   // If this is a paper/offline submission, we might not have digital questions to show.
   // The user prompt mentioned: "obviously the written test won't be available for viewing like their answers... So regarding the written tests, with the written tests, the learners should be able to [CUT OFF]"
   // For now, if it's paper, we just show a placeholder message.
@@ -77,7 +105,11 @@ export default async function ViewPaperStudentPage({
             <p className="text-slate-500 font-medium">
               This was a written exam. Digital review of specific answers is not available for offline tests.
             </p>
+            <p className="text-slate-900 font-bold mt-4">
+              Your mark: {subData.result?.score ?? 'Not yet marked'}
+            </p>
           </div>
+          <div className="mt-8">{remarkSection}</div>
         </div>
       </div>
     );
@@ -91,11 +123,19 @@ export default async function ViewPaperStudentPage({
 
   // Fetch student answers and marks from the sitting
   let savedAnswers: Record<string, any> = {};
-  const sitting = await db.query.examSittings.findFirst({
-    where: and(
-      eq(examSittings.studentMembershipId, subData.submission.studentMembershipId!)
-    ),
-  });
+  // The sitting for *this* round's paper (a student has one per round)
+  const [sittingRow] = await db
+    .select({ sitting: examSittings })
+    .from(examSittings)
+    .innerJoin(questionPapers, eq(questionPapers.id, examSittings.questionPaperId))
+    .where(
+      and(
+        eq(examSittings.studentMembershipId, subData.submission.studentMembershipId!),
+        eq(questionPapers.roundId, subData.roundId)
+      )
+    )
+    .limit(1);
+  const sitting = sittingRow?.sitting;
 
   if (sitting) {
     const answersList = await db
@@ -108,9 +148,10 @@ export default async function ViewPaperStudentPage({
     });
   }
 
+  const answersJson = subData.submission.answersJson as Record<string, string> | null;
+
   const getStudentAnswerRaw = (questionId: string) => {
-    const jsonAnswers = subData.submission.answersJson as Record<string, string>;
-    return jsonAnswers?.[questionId] || 'No answer provided';
+    return answersJson?.[questionId] || 'No answer provided';
   };
 
   const getStudentAnswerFormatted = (questionId: string) => {
@@ -147,46 +188,6 @@ export default async function ViewPaperStudentPage({
     return String(correctAnswer);
   };
 
-  const isAutomatedQuestion = (qType: string | null) => {
-    return qType === 'multiple_choice' || qType === 'true_false' || qType === 'short_answer';
-  };
-
-  const checkIsCorrect = (q: any, studentAnsRaw: string) => {
-    if (q.correctAnswer === undefined || q.correctAnswer === null) return false;
-    
-    let studentAnsParsed: any = studentAnsRaw;
-    try {
-      studentAnsParsed = JSON.parse(studentAnsRaw);
-    } catch {}
-
-    let correctParsed: any = q.correctAnswer;
-    if (typeof q.correctAnswer === 'string' || typeof q.correctAnswer === 'number' || typeof q.correctAnswer === 'boolean') {
-      try {
-        correctParsed = JSON.parse(String(q.correctAnswer));
-      } catch {
-        correctParsed = String(q.correctAnswer);
-      }
-    } else if (typeof q.correctAnswer === 'object' && q.correctAnswer !== null && q.correctAnswer.text !== undefined) {
-      correctParsed = q.correctAnswer.text;
-    }
-
-    if (Array.isArray(studentAnsParsed) && Array.isArray(correctParsed)) {
-      if (studentAnsParsed.length !== correctParsed.length) return false;
-      const sortedStudent = [...studentAnsParsed].sort();
-      const sortedCorrect = [...correctParsed].sort();
-      return sortedStudent.every((val, index) => String(val).trim().toLowerCase() === String(sortedCorrect[index]).trim().toLowerCase());
-    }
-
-    const studentStr = Array.isArray(studentAnsParsed) ? studentAnsParsed.join(',') : String(studentAnsParsed);
-    const correctStr = Array.isArray(correctParsed) ? correctParsed.join(',') : String(correctParsed);
-    
-    // Normalize commas to prevent false negatives from formatting changes
-    const normStudent = studentStr.replace(/\s*,\s*/g, ',').trim().toLowerCase();
-    const normCorrect = correctStr.replace(/\s*,\s*/g, ',').trim().toLowerCase();
-    
-    return normStudent === normCorrect;
-  };
-
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-20">
       <div className="bg-blue-950 p-6 md:px-12 md:py-8 text-white">
@@ -207,29 +208,16 @@ export default async function ViewPaperStudentPage({
               Final Score
             </span>
             <span className="text-3xl font-bold text-white">
-              {subData.result?.score ?? '-'}%
+              {formatScoreDisplay(
+                subData.result?.score,
+                roundQuestions.reduce((total, q) => total + (q.marks ?? 0), 0)
+              )}
             </span>
           </div>
         </div>
       </div>
 
       <div className="max-w-5xl mx-auto mt-8 px-4 md:px-0 space-y-8">
-        {(subData.result?.status === 'remark_requested' || subData.result?.status === 'remark_resolved') && (
-          <div className={`p-6 border-2 flex flex-col ${subData.result.status === 'remark_resolved' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
-            <h3 className={`font-bold uppercase tracking-wider text-sm mb-2 ${subData.result.status === 'remark_resolved' ? 'text-green-800' : 'text-amber-800'}`}>
-              {subData.result.status === 'remark_resolved' ? 'Remark Resolved' : 'Remark Requested'}
-            </h3>
-            <p className="text-slate-700 font-medium">
-              <span className="opacity-70 mr-2">Reason:</span> {subData.result.remarkReason}
-            </p>
-            {subData.result.status === 'remark_resolved' && subData.result.remarkOutcome && (
-              <p className="text-slate-900 font-bold mt-2 pt-2 border-t border-black/5">
-                <span className="text-green-800 mr-2">Outcome:</span> {subData.result.remarkOutcome}
-              </p>
-            )}
-          </div>
-        )}
-
         {roundQuestions.length === 0 ? (
           <div className="bg-white p-12 text-center border-2 border-slate-200 text-slate-500 font-medium">
             This round has no questions to display.
@@ -237,12 +225,19 @@ export default async function ViewPaperStudentPage({
         ) : (
           <div className="space-y-6">
             {roundQuestions.map((q, idx) => {
-              const isManual = !isAutomatedQuestion(q.questionType);
+              // Free-text answers carry the educator's mark; everything else
+              // is marked by the same function that produced the stored score
+              const isManual = q.questionType === 'free_text';
               const studentAnsRaw = getStudentAnswerRaw(q.id);
               const studentAnsFormatted = getStudentAnswerFormatted(q.id);
               const savedAns = savedAnswers[q.id];
-              const isCorrect = isManual ? (savedAns?.manualScore === q.marks) : checkIsCorrect(q, studentAnsRaw);
-              const awardedMarks = isManual ? (savedAns?.manualScore ?? 0) : (isCorrect ? q.marks : 0);
+              const rawAwarded =
+                remarkedMarks?.[q.id] !== undefined
+                  ? Number(remarkedMarks[q.id])
+                  : isManual
+                    ? Number(savedAns?.manualScore ?? 0)
+                    : calculateEarnedMarks(q, answersJson?.[q.id]);
+              const awardedMarks = Math.round(rawAwarded * 100) / 100;
               
               return (
                 <div key={q.id} className="bg-white border-2 border-slate-200 shadow-sm flex flex-col">
@@ -493,20 +488,8 @@ export default async function ViewPaperStudentPage({
           </div>
         )}
 
-        {/* Action area at the end of the paper */}
-        {subData.result?.status !== 'remark_requested' && subData.result?.status !== 'remark_resolved' && subData.submission.submissionType === 'online' && (
-          <div className="bg-white border-2 border-slate-200 p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
-            <div>
-              <h3 className="text-lg font-bold text-blue-950 mb-1">Think there was a mistake?</h3>
-              <p className="text-slate-500 font-medium text-sm">
-                If you believe your answers were wrongfully marked against the correct memo, you can request an educator to review your paper again.
-              </p>
-            </div>
-            <div className="shrink-0">
-              <RequestRemarkButton submissionId={submissionId} />
-            </div>
-          </div>
-        )}
+        {/* Remark status, or the option to appeal */}
+        {remarkSection}
       </div>
     </div>
   );

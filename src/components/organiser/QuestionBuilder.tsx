@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export interface QuestionType {
   id: string; // purely for local keying
@@ -14,8 +14,14 @@ export interface QuestionType {
 
 export default function QuestionBuilder({
   initialQuestions,
+  onChange,
 }: {
   initialQuestions?: QuestionType[];
+  /** Called whenever questions or locally-selected image previews change. */
+  onChange?: (
+    questions: QuestionType[],
+    imagePreviews: Record<string, string>
+  ) => void;
 }) {
   const [questions, setQuestions] = useState<QuestionType[]>(
     initialQuestions && initialQuestions.length > 0
@@ -45,6 +51,10 @@ export default function QuestionBuilder({
       return initial;
     }
   );
+
+  useEffect(() => {
+    onChange?.(questions, imagePreviews);
+  }, [questions, imagePreviews, onChange]);
 
   const updateQuestion = (id: string, updates: Partial<QuestionType>) => {
     setQuestions(

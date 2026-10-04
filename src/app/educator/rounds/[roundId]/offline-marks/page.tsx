@@ -2,7 +2,10 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
-import { memberships, rounds, users, submissions, results, questions, roundQualifications } from '@/lib/db/schema';
+import { formatSAST } from '@/lib/sast';
+import { memberships, rounds, users, submissions, results, roundQualifications } from '@/lib/db/schema';
+import { getMarkingWindowStatus } from '@/domain/rounds/paper-marking';
+import { getRoundTotalMarks } from '@/domain/rounds/score-percentage';
 import { eq, and, inArray } from 'drizzle-orm';
 import Link from 'next/link';
 import OfflineMarksForm from './OfflineMarksForm';
@@ -47,17 +50,22 @@ export default async function OfflineMarksPage(props: { params: Promise<{ roundI
   }
   const round = roundRows[0];
 
-  // Verify the 24 hour window
+  // Only educators of this olympiad, for paper/hybrid rounds
+  if (
+    round.deliveryMethod === 'online' ||
+    !activeSchoolMemberships.some((m) => m.portalId === round.portalId)
+  ) {
+    redirect('/educator/rounds?tab=offline');
+  }
+
   const now = new Date();
-  const offlineGradingClosesAt = new Date(round.closesAt.getTime() + 24 * 60 * 60 * 1000);
-  
-  // Enforce the 24 hour window
-  if (now > offlineGradingClosesAt) {
+  const markingWindow = getMarkingWindowStatus(round, now);
+  if (markingWindow.status !== 'open') {
     return (
       <div className="min-h-screen bg-white font-sans w-full px-4 md:px-8 pt-10 pb-20">
         <div className="max-w-4xl mx-auto">
           <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
-            <p className="text-red-700 font-medium">The 24-hour grading window for this round has closed.</p>
+            <p className="text-red-700 font-medium">{markingWindow.reason}</p>
           </div>
           <Link href="/educator/rounds?tab=offline" className="text-blue-900 font-bold hover:underline">
             ← Back to Assessments
@@ -67,9 +75,8 @@ export default async function OfflineMarksPage(props: { params: Promise<{ roundI
     );
   }
 
-  // Fetch maximum marks for the round
-  const roundQuestions = await db.select().from(questions).where(eq(questions.roundId, roundId));
-  const maxMarks = roundQuestions.reduce((sum, q) => sum + q.marks, 0);
+  // Marks obtainable: the question bank, or the organiser's paper total
+  const maxMarks = (await getRoundTotalMarks([roundId])).get(roundId) ?? 0;
 
   // 1. Fetch all student memberships for this school
   const studentMemberships = await db
@@ -177,9 +184,32 @@ export default async function OfflineMarksPage(props: { params: Promise<{ roundI
         <h1 className="font-serif text-3xl font-bold text-slate-900 mb-2">
           Offline Marks Entry
         </h1>
-        <p className="text-slate-600 mb-8">
+        <p className="text-slate-600 mb-4">
           {round.name} • {formattedStudents.length} eligible students
         </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50 border border-amber-200 p-4 mb-8">
+          <p className="text-amber-900 text-sm font-medium m-0">
+            Marking deadline: <strong>{formatSAST(markingWindow.deadline)}</strong>. Marks
+            can be changed until then; after results are published, changes go
+            through a remark.
+          </p>
+          <div className="flex gap-3 shrink-0">
+            <a href={`/api/rounds/${roundId}/paper?kind=paper`} className="text-sm font-bold text-blue-900 hover:underline">
+              Question paper
+            </a>
+            {now >= round.closesAt && (
+              <a href={`/api/rounds/${roundId}/paper?kind=memo`} className="text-sm font-bold text-blue-900 hover:underline">
+                Memo
+              </a>
+            )}
+          </div>
+        </div>
+        {maxMarks === 0 && (
+          <p className="text-sm text-slate-500 mb-6">
+            The organiser hasn&apos;t set a total for this paper, so marks can&apos;t be
+            checked against a maximum or shown as percentages.
+          </p>
+        )}
 
         <OfflineMarksForm 
           roundId={roundId} 

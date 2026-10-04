@@ -1,11 +1,20 @@
 import { createClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
-import { automationRules, rounds } from '@/lib/db/schema';
+import { automationRules, portals, rounds } from '@/lib/db/schema';
 import { eq, asc } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { createRule, deleteRule, toggleRuleState } from './actions';
-import DryRunButton from './DryRunButton';
+import {
+  evaluateRuleTiming,
+  toRuleConfig,
+} from '@/domain/notifications/automation-rules';
+import type { Round } from '@/domain/rounds/round.types';
+import { formatSAST } from '@/lib/sast';
+import { addRecommendedRules } from './actions';
+import RuleCard, { type RuleCardData } from './RuleCard';
+import RuleForm from './RuleForm';
+
+export const dynamic = 'force-dynamic';
 
 export default async function AutomationsPage({
   params,
@@ -23,19 +32,74 @@ export default async function AutomationsPage({
 
   const { olympiadId } = await params;
 
-  const rules = await db
-    .select()
-    .from(automationRules)
-    .where(eq(automationRules.portalId, olympiadId));
+  const [portal] = await db
+    .select({ name: portals.name, ownerUserId: portals.ownerUserId })
+    .from(portals)
+    .where(eq(portals.id, olympiadId));
 
-  const portalRounds = await db
-    .select({ id: rounds.id, name: rounds.name })
-    .from(rounds)
-    .where(eq(rounds.portalId, olympiadId))
-    .orderBy(asc(rounds.orderIndex));
+  if (!portal || portal.ownerUserId !== user.id) {
+    redirect('/organiser/dashboard');
+  }
+
+  const [ruleRows, roundRows] = await Promise.all([
+    db
+      .select()
+      .from(automationRules)
+      .where(eq(automationRules.portalId, olympiadId)),
+    db
+      .select()
+      .from(rounds)
+      .where(eq(rounds.portalId, olympiadId))
+      .orderBy(asc(rounds.orderIndex)),
+  ]);
+
+  const portalRounds: Round[] = roundRows.map((r) => ({
+    id: r.id,
+    portalId: r.portalId,
+    portalName: portal.name,
+    name: r.name,
+    orderIndex: r.orderIndex,
+    deliveryMethod: r.deliveryMethod,
+    opensAt: r.opensAt,
+    closesAt: r.closesAt,
+    qualifyingThreshold: r.qualifyingThreshold,
+    resultsPublishedAt: r.resultsPublishedAt,
+  }));
+  const roundOptions = portalRounds.map((r) => ({ id: r.id, name: r.name }));
+
+  const now = new Date();
+  const rules: RuleCardData[] = ruleRows
+    .map(toRuleConfig)
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+    .map((rule) => {
+      // Earliest upcoming send across the rounds the rule applies to
+      let nextSend: { roundName: string; fireAt: Date } | null = null;
+      for (const round of portalRounds) {
+        const timing = evaluateRuleTiming(rule, round, now);
+        if (
+          (timing.status === 'waiting' || timing.status === 'due') &&
+          (!nextSend || timing.fireAt < nextSend.fireAt)
+        ) {
+          nextSend = { roundName: round.name, fireAt: timing.fireAt };
+        }
+      }
+      return {
+        id: rule.id!,
+        name: rule.name,
+        triggerType: rule.triggerType,
+        triggerOffsetMinutes: rule.triggerOffsetMinutes,
+        conditions: rule.conditions,
+        subject: rule.subject,
+        note: rule.note,
+        isActive: rule.isActive,
+        nextSend: nextSend
+          ? { roundName: nextSend.roundName, at: formatSAST(nextSend.fireAt) }
+          : null,
+      };
+    });
 
   return (
-    <div className="min-h-screen bg-slate-50 py-10 px-4 md:px-8">
+    <div className="min-h-screen bg-slate-50 py-10 px-4 md:px-8 text-slate-900">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -45,49 +109,50 @@ export default async function AutomationsPage({
           >
             &larr; Back to Olympiad
           </Link>
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <h1 className="text-3xl font-bold text-slate-900 m-0">
-              Automation Rules
-            </h1>
-          </div>
-          <p className="text-slate-600 text-lg mb-6">
-            Configure custom triggers and email templates for your rounds.
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">
+            Automations
+          </h1>
+          <p className="text-slate-600 text-lg">
+            Decide which reminders the portal sends to schools, when, and to
+            whom. Each rule uses the portal&apos;s standard email for its
+            trigger — no template writing needed. Try any rule against a round
+            before it goes live.
           </p>
         </div>
 
         {/* Existing Rules List */}
         <div className="mb-12">
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Active Rules</h2>
+          <h2 className="text-xl font-bold text-slate-900 mb-4">Your rules</h2>
           {rules.length === 0 ? (
-            <div className="bg-white p-8 border border-dashed border-slate-300 rounded-lg text-center text-slate-500">
-              No custom automation rules configured yet.
+            <div className="bg-white p-8 border border-dashed border-slate-300 rounded-lg text-center text-slate-600">
+              <p className="mb-4">
+                No automations yet, so the portal won&apos;t email schools
+                about this olympiad&apos;s rounds.
+              </p>
+              <form action={addRecommendedRules.bind(null, olympiadId)}>
+                <button
+                  type="submit"
+                  className="bg-blue-700 hover:bg-blue-800 text-white font-semibold py-2 px-5 rounded"
+                >
+                  Add the recommended rules
+                </button>
+              </form>
+              <p className="text-xs text-slate-500 mt-3">
+                Opening reminder 7 days before, closing reminders 3 days and 1
+                hour before, a missing-submissions follow-up 2 days after
+                closing, and a results-out email. You can edit or remove any
+                of them.
+              </p>
             </div>
           ) : (
             <div className="space-y-4">
               {rules.map((rule) => (
-                <div key={rule.id} className="bg-white p-6 border border-slate-200 rounded-lg shadow-sm">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="font-bold text-lg text-blue-900">{rule.name}</h3>
-                      <div className="text-sm text-slate-500 flex gap-4 mt-1">
-                        <span><strong>Trigger:</strong> {rule.triggerType}</span>
-                        <span><strong>Offset:</strong> {rule.triggerOffsetMinutes} mins</span>
-                      </div>
-                    </div>
-                    <form action={deleteRule.bind(null, rule.id, olympiadId)}>
-                      <button type="submit" className="text-red-500 hover:text-red-700 text-sm font-semibold">
-                        Delete
-                      </button>
-                    </form>
-                  </div>
-                  
-                  <div className="bg-slate-50 p-3 rounded border border-slate-100 text-sm font-mono text-slate-600 mb-4">
-                    <div className="mb-1"><strong>Subject:</strong> {rule.templateSubject}</div>
-                    <div className="truncate"><strong>HTML:</strong> {rule.templateHtml}</div>
-                  </div>
-
-                  <DryRunButton ruleId={rule.id} rounds={portalRounds} />
-                </div>
+                <RuleCard
+                  key={rule.id}
+                  portalId={olympiadId}
+                  rule={rule}
+                  rounds={roundOptions}
+                />
               ))}
             </div>
           )}
@@ -96,62 +161,9 @@ export default async function AutomationsPage({
         {/* Create Rule Form */}
         <div className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-200">
           <h2 className="text-xl font-bold text-slate-900 mb-6 border-b border-slate-100 pb-3">
-            Create New Rule
+            New rule
           </h2>
-          <form action={createRule} className="space-y-6">
-            <input type="hidden" name="portalId" value={olympiadId} />
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-slate-900 mb-2">Rule Name</label>
-                <input type="text" name="name" required placeholder="e.g. 24h Closing Reminder" className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500" />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-semibold text-slate-900 mb-2">Trigger Event</label>
-                <select name="triggerType" required className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 bg-white">
-                  <option value="round_opening">Round Opening</option>
-                  <option value="round_closing">Round Closing</option>
-                  <option value="submission_overdue">Submission Overdue (After Closing)</option>
-                  <option value="results_published">Results Published</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-semibold text-slate-900 mb-2">Offset (Minutes)</label>
-                <input type="number" name="triggerOffsetMinutes" defaultValue="0" required className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500" />
-                <p className="text-xs text-slate-500 mt-1">Negative for before the event, positive for after.</p>
-              </div>
-
-              <div className="flex items-center h-full pt-6">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" name="missingSubmissionsOnly" value="true" className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-semibold text-slate-900">Only target schools with missing submissions</span>
-                </label>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-100 pt-6 mt-6">
-              <h3 className="text-md font-bold text-slate-800 mb-4">Email Template</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-900 mb-2">Subject</label>
-                  <input type="text" name="templateSubject" required placeholder="e.g. Action Required: {{roundName}} is closing" className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-900 mb-2">HTML Body</label>
-                  <textarea name="templateHtml" required placeholder="<p>Hello,</p><p>Please note that {{roundName}}...</p>" className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 h-32 font-mono text-sm" />
-                  <p className="text-xs text-slate-500 mt-1">Variables available: {'{{roundName}}'}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-4">
-              <button type="submit" className="bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-6 rounded shadow-sm">
-                Save Rule
-              </button>
-            </div>
-          </form>
+          <RuleForm portalId={olympiadId} rounds={roundOptions} />
         </div>
       </div>
     </div>

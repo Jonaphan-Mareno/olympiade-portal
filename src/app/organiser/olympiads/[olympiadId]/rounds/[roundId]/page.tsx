@@ -14,6 +14,8 @@ import { updateRound } from './actions';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 import PublishResultsButton from './PublishResultsButton';
 import { SubmitButton } from '@/components/SubmitButton';
+import { formatSAST, toSASTInputValue } from '@/lib/sast';
+import PaperMarkingFields from '@/components/organiser/PaperMarkingFields';
 import RoundFormInputs from '@/components/organiser/RoundFormInputs';
 import DeleteRoundButton from './DeleteRoundButton';
 import GenerateTestButton from './GenerateTestButton';
@@ -62,16 +64,10 @@ export default async function ManageRoundPage({
     correctAnswer: q.correctAnswer,
   }));
 
-  const opensAtLocal = new Date(
-    round.opensAt.getTime() - round.opensAt.getTimezoneOffset() * 60000
-  )
-    .toISOString()
-    .slice(0, 16);
-  const closesAtLocal = new Date(
-    round.closesAt.getTime() - round.closesAt.getTimezoneOffset() * 60000
-  )
-    .toISOString()
-    .slice(0, 16);
+  // Shown and parsed in SAST regardless of the server's time zone
+  const opensAtLocal = toSASTInputValue(round.opensAt);
+  const closesAtLocal = toSASTInputValue(round.closesAt);
+  const markingClosesAtSAST = toSASTInputValue(round.markingClosesAt);
 
   let hasLiveSittings = false;
   let questionPaperUrl = '';
@@ -153,11 +149,9 @@ export default async function ManageRoundPage({
             <Link href={`/organiser/olympiads/${olympiadId}/rounds/${roundId}/certificate`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-500 hover:text-slate-700">
               Certificates
             </Link>
-            {/* Remarks hidden temporarily
             <Link href={`/organiser/olympiads/${olympiadId}/rounds/${roundId}/remarks`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-500 hover:text-slate-700">
               Remarks
             </Link>
-            */}
           </div>
         </div>
 
@@ -269,6 +263,10 @@ export default async function ManageRoundPage({
                   Upload Documents
                 </h2>
                 <div className="space-y-6 mt-4">
+                  <PaperMarkingFields
+                    defaultMarkingClosesAt={markingClosesAtSAST}
+                    defaultPaperTotalMarks={round.paperTotalMarks}
+                  />
                   <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">Question Paper PDF</label>
                     {questionPaperUrl ? (
@@ -347,7 +345,7 @@ export default async function ManageRoundPage({
                 <p className="text-slate-700">
                   Results were published on{' '}
                   <strong>
-                    {round.resultsPublishedAt?.toLocaleString() ?? 'unknown'}
+                    {round.resultsPublishedAt ? formatSAST(round.resultsPublishedAt) : 'unknown'}
                   </strong>
                   . Educators and entrants have been notified; any failed sends
                   are retried automatically by the daily reminder sweep.

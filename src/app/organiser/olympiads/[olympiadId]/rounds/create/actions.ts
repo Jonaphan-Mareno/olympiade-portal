@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { parseSASTInput } from '@/lib/sast';
 import { db } from '@/lib/db';
 import { rounds, questionPapers, questions } from '@/lib/db/schema';
 import { redirect } from 'next/navigation';
@@ -18,12 +19,15 @@ export async function createRound(formData: FormData) {
   const portalId = formData.get('portalId') as string;
   const name = formData.get('name') as string;
   const orderIndex = parseInt(formData.get('orderIndex') as string, 10);
-  const opensAt = formData.get('opensAt') as string;
-  const closesAt = formData.get('closesAt') as string;
+  // Entered as SAST wall-clock time, whatever the server's time zone
+  const opensAt = parseSASTInput(formData.get('opensAt') as string | null);
+  const closesAt = parseSASTInput(formData.get('closesAt') as string | null);
   const deliveryMethod = formData.get('deliveryMethod') as 'paper' | 'online' | 'hybrid';
-  const parseSAST = (dateStr: string) => new Date(`${dateStr}+02:00`);
 
-  if (new Date(closesAt) <= new Date(opensAt)) {
+  if (!opensAt || !closesAt) {
+    throw new Error('Enter a valid opening and closing time.');
+  }
+  if (closesAt <= opensAt) {
     throw new Error('Closing time must be after the opening time.');
   }
 
@@ -32,7 +36,7 @@ export async function createRound(formData: FormData) {
   // The create-round form no longer submits a durationMinutes field.
   const durationMinutes = Math.max(
     1,
-    Math.round((parseSAST(closesAt).getTime() - parseSAST(opensAt).getTime()) / 60000)
+    Math.round((closesAt.getTime() - opensAt.getTime()) / 60000)
   );
 
   const qualifyingThresholdRaw = formData.get('qualifyingThreshold') as string | null;
@@ -45,6 +49,22 @@ export async function createRound(formData: FormData) {
     thresholdTopNRaw && thresholdTopNRaw.trim() !== ''
       ? parseInt(thresholdTopNRaw.trim(), 10)
       : null;
+
+  // Physical marking settings (paper/hybrid rounds only)
+  const isPaperRound = deliveryMethod === 'paper' || deliveryMethod === 'hybrid';
+  const markingClosesAtRaw = (formData.get('markingClosesAt') as string | null)?.trim() ?? '';
+  const paperTotalMarksRaw = (formData.get('paperTotalMarks') as string | null)?.trim() ?? '';
+  const markingClosesAt = isPaperRound && markingClosesAtRaw ? parseSASTInput(markingClosesAtRaw) : null;
+  if (isPaperRound && markingClosesAtRaw && !markingClosesAt) {
+    throw new Error('Enter a valid marking deadline.');
+  }
+  if (markingClosesAt && markingClosesAt <= closesAt) {
+    throw new Error('The marking deadline must be after the round closes.');
+  }
+  const paperTotalMarks = isPaperRound && paperTotalMarksRaw ? parseInt(paperTotalMarksRaw, 10) : null;
+  if (paperTotalMarks !== null && (!Number.isFinite(paperTotalMarks) || paperTotalMarks < 1)) {
+    throw new Error('Total marks must be a whole number of at least 1.');
+  }
 
   // ---------------------------------------------------------------------------
   // All Supabase Storage uploads happen BEFORE any database write. Storage
@@ -179,10 +199,12 @@ export async function createRound(formData: FormData) {
         name,
         orderIndex,
         deliveryMethod,
-        opensAt: parseSAST(opensAt),
-        closesAt: parseSAST(closesAt),
+        opensAt,
+        closesAt,
         qualifyingThreshold: qualifyingThreshold ?? undefined,
         thresholdTopN: thresholdTopN ?? undefined,
+        markingClosesAt,
+        paperTotalMarks,
       })
       .returning({ id: rounds.id });
 

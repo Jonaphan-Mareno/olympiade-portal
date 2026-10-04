@@ -104,8 +104,9 @@ vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
 vi.mock('@/domain/notifications/in-app-notifications', () => ({
   notifyEducatorsInPortal: vi.fn(async () => {}),
 }));
-vi.mock('@/domain/notifications/automation-engine', () => ({
-  sendResultsPublishedNotifications: vi.fn(async () => ({ sent: 0, skipped: 0, failed: 0 })),
+vi.mock('@/domain/notifications/automation-rules', () => ({
+  loadActiveRules: vi.fn(async () => new Map()),
+  runDueRules: vi.fn(async () => ({ triggered: [], summary: { sent: 0, skipped: 0, failed: 0 } })),
 }));
 vi.mock('@/domain/rounds/advance-entrants', () => ({
   advanceQualifyingEntrants: vi.fn(async () => null),

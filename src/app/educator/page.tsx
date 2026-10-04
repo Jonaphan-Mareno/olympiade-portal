@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import HeroBanner from '@/components/ui/HeroBanner';
 import { db } from '@/lib/db';
-import { memberships, rounds } from '@/lib/db/schema';
+import { memberships, remarkRequests, rounds, submissions } from '@/lib/db/schema';
+import Link from 'next/link';
 import { eq, and, inArray, count } from 'drizzle-orm';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 
@@ -44,6 +45,23 @@ export default async function EducatorOverviewPage() {
 
   const schoolId = activeSchoolMemberships[0].schoolId;
   const portalIds = activeSchoolMemberships.map(m => m.portalId);
+
+  // Appeals from this school's entrants still waiting to be remarked
+  const [{ value: pendingRemarks }] = portalIds.length > 0
+    ? await db
+        .select({ value: count() })
+        .from(remarkRequests)
+        .innerJoin(submissions, eq(submissions.id, remarkRequests.submissionId))
+        .innerJoin(memberships, eq(memberships.id, submissions.studentMembershipId))
+        .innerJoin(rounds, eq(rounds.id, submissions.roundId))
+        .where(
+          and(
+            eq(remarkRequests.status, 'pending'),
+            eq(memberships.schoolId, schoolId),
+            inArray(rounds.portalId, portalIds)
+          )
+        )
+    : [{ value: 0 }];
 
   // Fetch Total Entrants for this school across all its olympiads
   const totalEntrantsResult = portalIds.length > 0 
@@ -177,8 +195,9 @@ export default async function EducatorOverviewPage() {
             <span className="text-3xl font-bold text-slate-900">{nextRoundDiff}</span>
           </div>
 
-          {/* Card 4 - Remarks hidden temporarily
-          <div
+          {/* Card 4 - Remark requests awaiting this school */}
+          <Link
+            href="/educator/remarks"
             className="hover:border-blue-300 transition-all duration-200 bg-white"
             style={{
               padding: '1.5rem',
@@ -190,9 +209,8 @@ export default async function EducatorOverviewPage() {
             }}
           >
             <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">Pending Remarks</span>
-            <span className="text-3xl font-bold text-slate-900">0</span>
-          </div>
-          */}
+            <span className="text-3xl font-bold text-slate-900">{pendingRemarks}</span>
+          </Link>
 
         </div>
 

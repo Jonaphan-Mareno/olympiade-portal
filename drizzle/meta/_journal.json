@@ -71,6 +71,27 @@
       "when": 1790520556536,
       "tag": "0009_gifted_goblin_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791131928463,
+      "tag": "0010_automation_rule_dispatch",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791134654759,
+      "tag": "0011_remark_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791135703854,
+      "tag": "0012_paper_marking",
+      "breakpoints": true
     }
   ]
 }

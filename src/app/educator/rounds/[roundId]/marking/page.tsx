@@ -6,7 +6,6 @@ import { eq, and } from 'drizzle-orm';
 import EducatorGradingForm from './EducatorGradingForm';
 import Link from 'next/link';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
-import { publishRoundResults } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -207,14 +206,10 @@ export default async function EducatorMarkingPage({
                 Results Published
               </button>
             ) : (
-              <form action={publishRoundResults.bind(null, roundId)}>
-                <button
-                  type="submit"
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-bold uppercase tracking-wider transition-colors border-2 border-green-700 rounded-none inline-block shadow-sm"
-                >
-                  Publish Results
-                </button>
-              </form>
+              // Results are released olympiad-wide by the organiser
+              <span className="bg-green-50 text-green-800 px-4 py-2 text-sm font-bold uppercase tracking-wider border-2 border-green-200 rounded-none inline-block">
+                Marking complete — awaiting organiser
+              </span>
             )
           )}
           {round.deliveryMethod === 'online' ? null : now < round.closesAt ? (

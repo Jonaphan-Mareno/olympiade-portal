@@ -1,0 +1,4 @@
+ALTER TABLE "notification_log" DROP CONSTRAINT "notification_log_kind_round_recipient_unique";--> statement-breakpoint
+ALTER TABLE "notification_log" ADD COLUMN "rule_id" uuid;--> statement-breakpoint
+ALTER TABLE "notification_log" ADD CONSTRAINT "notification_log_rule_id_automation_rules_id_fk" FOREIGN KEY ("rule_id") REFERENCES "public"."automation_rules"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "notification_log" ADD CONSTRAINT "notification_log_kind_round_recipient_rule_unique" UNIQUE NULLS NOT DISTINCT("kind","round_id","recipient_membership_id","rule_id");

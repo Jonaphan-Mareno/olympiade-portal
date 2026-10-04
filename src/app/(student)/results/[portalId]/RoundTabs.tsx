@@ -62,7 +62,9 @@ export default function RoundTabs({ rounds }: { rounds: Round[] }) {
   }
 
   const formatDateTime = (dateString: Date | string) => {
+    // Always SAST, whatever time zone the entrant's device is set to
     return new Intl.DateTimeFormat('en-ZA', {
+      timeZone: 'Africa/Johannesburg',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',

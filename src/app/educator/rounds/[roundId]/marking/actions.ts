@@ -1,23 +1,11 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { results, studentAnswers, examSittings, questionPapers, submissions, memberships, questions, rounds } from '@/lib/db/schema';
+import { results, studentAnswers, examSittings, questionPapers, submissions, memberships, questions } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-
-function isAnswerCorrect(correct: any, studentAns: string | undefined): boolean {
-  if (!studentAns || correct === null || correct === undefined) return false;
-  const sVal = studentAns.trim();
-  if (typeof correct === 'string') return sVal.toLowerCase() === correct.replace(/^"|"$/g, '').trim().toLowerCase();
-  if (typeof correct === 'number' || typeof correct === 'boolean') return sVal.toLowerCase() === String(correct).toLowerCase();
-  if (Array.isArray(correct)) return correct.some((c) => String(c).trim().toLowerCase() === sVal.toLowerCase());
-  if (typeof correct === 'object') {
-    const val = correct.value ?? correct.answer ?? correct.key;
-    if (val !== undefined) return String(val).trim().toLowerCase() === sVal.toLowerCase();
-  }
-  return JSON.stringify(correct) === sVal;
-}
+import { calculateEarnedMarks } from '@/domain/marking/auto-mark';
 
 export async function submitMarksForModeration(
   roundId: string,
@@ -135,10 +123,7 @@ export async function submitMarksForModeration(
       
       for (const q of roundQuestions) {
         if (q.questionType !== 'free_text') {
-          const studentAns = answersObj[q.id];
-          if (isAnswerCorrect(q.correctAnswer, studentAns)) {
-            totalScore += (q.marks ?? 1);
-          }
+          totalScore += calculateEarnedMarks(q, answersObj[q.id]);
         }
       }
     }
@@ -167,22 +152,5 @@ export async function submitMarksForModeration(
   } catch (err: any) {
     console.error('Failed to submit marks:', err);
     return { error: err.message || 'Failed to submit marks' };
-  }
-}
-
-export async function publishRoundResults(roundId: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Unauthorized');
-
-  try {
-    await db.update(rounds).set({
-      resultsPublishedAt: new Date()
-    }).where(eq(rounds.id, roundId));
-
-    revalidatePath(`/educator/rounds/${roundId}/marking`);
-    revalidatePath(`/results`);
-  } catch (err: any) {
-    console.error('Failed to publish results:', err);
   }
 }

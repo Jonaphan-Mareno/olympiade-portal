@@ -2,7 +2,9 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
-import { memberships, rounds, portals, questionPapers } from '@/lib/db/schema';
+import { formatSAST } from '@/lib/sast';
+import { memberships, rounds, portals, questionPapers, questions } from '@/lib/db/schema';
+import { getMarkingDeadline, getMarkingWindowStatus } from '@/domain/rounds/paper-marking';
 import { eq, and, inArray } from 'drizzle-orm';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 import Link from 'next/link';
@@ -66,6 +68,18 @@ export default async function EducatorAssessmentsPage(props: { searchParams: Pro
     ? await db.select().from(questionPapers).where(inArray(questionPapers.roundId, roundIds))
     : [];
 
+  // Rounds with a question bank can have their paper/memo generated
+  const roundIdsWithQuestions = new Set(
+    roundIds.length > 0
+      ? (
+          await db
+            .selectDistinct({ roundId: questions.roundId })
+            .from(questions)
+            .where(inArray(questions.roundId, roundIds))
+        ).map((q) => q.roundId)
+      : []
+  );
+
   const now = new Date();
 
   return (
@@ -123,11 +137,19 @@ export default async function EducatorAssessmentsPage(props: { searchParams: Pro
                 {portalRounds.map((round) => {
                   const state = deriveRoundState(round, now);
                   
-                  // Offline grading window logic
-                  const offlineGradingClosesAt = new Date(round.closesAt.getTime() + 24 * 60 * 60 * 1000);
-                  const isWithinOfflineGradingWindow = now >= round.opensAt && now <= offlineGradingClosesAt;
+                  // Physical marking window (organiser's deadline, or 24h after close)
+                  const markingWindow = getMarkingWindowStatus(round, now);
+                  const markingDeadline = getMarkingDeadline(round);
 
+                  // Downloadable when a PDF was uploaded or the round has a
+                  // question bank to generate one from
                   const paper = allPapers.find(p => p.roundId === round.id);
+                  const hasPaper = Boolean(paper?.fileUrl) || roundIdsWithQuestions.has(round.id);
+                  const hasMemo =
+                    Boolean((paper?.answerKeyJson as { memoUrl?: string } | null)?.memoUrl) ||
+                    roundIdsWithQuestions.has(round.id);
+                  const canDownloadPaper = hasPaper && state !== 'scheduled';
+                  const canDownloadMemo = hasMemo && (state === 'closed' || state === 'released');
 
                   return (
                     <div key={round.id} className="flex flex-col border border-slate-200 rounded-sm overflow-hidden bg-white">
@@ -144,12 +166,18 @@ export default async function EducatorAssessmentsPage(props: { searchParams: Pro
                         <div className="flex flex-col gap-2">
                           <p className="text-slate-700 font-medium text-sm">
                             <span className="text-slate-500 uppercase tracking-wide text-xs">Opens: </span>
-                            {round.opensAt ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(round.opensAt)) : 'Not set'}
+                            {formatSAST(round.opensAt)}
                           </p>
                           <p className="text-slate-700 font-medium text-sm">
                             <span className="text-slate-500 uppercase tracking-wide text-xs">Closes: </span>
-                            {round.closesAt ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(round.closesAt)) : 'Not set'}
+                            {formatSAST(round.closesAt)}
                           </p>
+                          {activeTab === 'offline' && (
+                            <p className="text-slate-700 font-medium text-sm">
+                              <span className="text-slate-500 uppercase tracking-wide text-xs">Marking deadline: </span>
+                              {formatSAST(markingDeadline)}
+                            </p>
+                          )}
                         </div>
                         
                         <div className="flex flex-wrap gap-3">
@@ -157,11 +185,9 @@ export default async function EducatorAssessmentsPage(props: { searchParams: Pro
                             <>
                               {(state === 'open' || state === 'closed' || state === 'released') && (
                                 <>
-                                  {paper?.fileUrl ? (
+                                  {canDownloadPaper ? (
                                     <a
-                                      href={paper.fileUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                      href={`/api/rounds/${round.id}/paper?kind=paper`}
                                       className="inline-flex items-center justify-center px-4 py-2 border border-slate-300 bg-white text-slate-700 font-bold rounded-sm hover:bg-slate-50 transition-colors"
                                     >
                                       Download Question Paper
@@ -175,7 +201,16 @@ export default async function EducatorAssessmentsPage(props: { searchParams: Pro
                                     </button>
                                   )}
 
-                                  {isWithinOfflineGradingWindow ? (
+                                  {canDownloadMemo && (
+                                    <a
+                                      href={`/api/rounds/${round.id}/paper?kind=memo`}
+                                      className="inline-flex items-center justify-center px-4 py-2 border border-slate-300 bg-white text-slate-700 font-bold rounded-sm hover:bg-slate-50 transition-colors"
+                                    >
+                                      Download Memo
+                                    </a>
+                                  )}
+
+                                  {markingWindow.status === 'open' ? (
                                     <Link 
                                       href={`/educator/rounds/${round.id}/offline-marks`}
                                       className="inline-flex items-center justify-center px-4 py-2 border border-blue-900 bg-blue-900 text-white font-bold rounded-sm hover:bg-blue-800 transition-colors"
@@ -186,7 +221,7 @@ export default async function EducatorAssessmentsPage(props: { searchParams: Pro
                                     <button 
                                       disabled
                                       className="inline-flex items-center justify-center px-4 py-2 border border-slate-200 bg-slate-100 text-slate-400 font-bold rounded-sm cursor-not-allowed"
-                                      title={now > offlineGradingClosesAt ? 'The 24-hour grading window has closed' : 'Grading has not opened yet'}
+                                      title={markingWindow.reason}
                                     >
                                       <span className="mr-2">🔒</span>
                                       Enter Offline Marks
@@ -208,6 +243,14 @@ export default async function EducatorAssessmentsPage(props: { searchParams: Pro
 
                           {activeTab === 'online' && (
                             <>
+                              {canDownloadPaper && (
+                                <a
+                                  href={`/api/rounds/${round.id}/paper?kind=paper`}
+                                  className="inline-flex items-center justify-center px-4 py-2 border border-slate-300 bg-white text-slate-700 font-bold rounded-sm hover:bg-slate-50 transition-colors"
+                                >
+                                  Download Paper
+                                </a>
+                              )}
                               {(state === 'closed' || state === 'open') && (
                                 <Link 
                                   href={`/educator/rounds/${round.id}/marking`}

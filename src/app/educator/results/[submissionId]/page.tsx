@@ -11,10 +11,10 @@ import {
   examSittings,
   studentAnswers,
   rounds,
+  remarkRequests,
 } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import Link from 'next/link';
-// import RequestRemarkButton from './RequestRemarkButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,6 +72,11 @@ export default async function ViewFullPaperPage({
       </div>
     );
   }
+
+  const [remark] = await db
+    .select()
+    .from(remarkRequests)
+    .where(eq(remarkRequests.submissionId, submissionId));
 
   // Fetch all questions for this round
   const roundQuestions = await db
@@ -133,11 +138,6 @@ export default async function ViewFullPaperPage({
           </p>
         </div>
         <div className="flex items-center gap-4">
-          {/* Remarking hidden temporarily
-          {subData.result?.status !== 'remark_requested' && subData.result?.status !== 'remark_resolved' && (
-            <RequestRemarkButton submissionId={submissionId} />
-          )}
-          */}
           <Link
             href="/educator/results"
             className="text-white hover:text-blue-200 transition-colors text-sm font-medium border border-blue-700 hover:border-blue-500 rounded-none px-4 py-2 inline-block"
@@ -148,23 +148,26 @@ export default async function ViewFullPaperPage({
       </div>
 
       <div className="max-w-4xl mx-auto mt-8 px-4 md:px-0 space-y-8">
-        {/* Remarking hidden temporarily
-        {(subData.result?.status === 'remark_requested' || subData.result?.status === 'remark_resolved') && (
-          <div className={`p-4 rounded-md border ${subData.result.status === 'remark_resolved' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
-            <h3 className={`font-bold ${subData.result.status === 'remark_resolved' ? 'text-green-800' : 'text-amber-800'}`}>
-              {subData.result.status === 'remark_resolved' ? 'Remark Resolved' : 'Remark Requested'}
-            </h3>
-            <p className="text-sm mt-1 mb-2 text-slate-700">
-              <span className="font-semibold">Reason:</span> {subData.result.remarkReason}
+        {remark && (
+          <div className={`p-4 rounded-md border ${remark.status === 'resolved' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h3 className={`font-bold ${remark.status === 'resolved' ? 'text-green-800' : 'text-amber-800'}`}>
+                {remark.status === 'resolved' ? 'Remark completed' : 'Remark requested by the entrant'}
+              </h3>
+              <Link href={`/educator/remarks/${remark.id}`} className="text-sm font-semibold text-blue-700 hover:underline">
+                {remark.status === 'resolved' ? 'View outcome' : 'Remark this paper'} &rarr;
+              </Link>
+            </div>
+            <p className="text-sm mt-1 text-slate-700">
+              <span className="font-semibold">Reason:</span> {remark.reason}
             </p>
-            {subData.result.status === 'remark_resolved' && subData.result.remarkOutcome && (
-              <p className="text-sm text-slate-700">
-                <span className="font-semibold text-green-900">Outcome:</span> {subData.result.remarkOutcome}
+            {remark.status === 'resolved' && remark.responseNote && (
+              <p className="text-sm text-slate-700 mt-1">
+                <span className="font-semibold text-green-900">Outcome:</span> {remark.previousScore} → {remark.newScore}. {remark.responseNote}
               </p>
             )}
           </div>
         )}
-        */}
 
         <div className="bg-white border border-slate-200 p-6 flex justify-between items-center shadow-sm">
           <div>

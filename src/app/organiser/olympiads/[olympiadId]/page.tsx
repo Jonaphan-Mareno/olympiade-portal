@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { formatSAST } from '@/lib/sast';
 import { memberships, portals, rounds, schools, users } from '@/lib/db/schema';
 import { and, count, eq, inArray } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
@@ -192,8 +193,8 @@ export default async function OlympiadDetailsPage({
                           </span>
                         </h3>
                         <p className="text-sm text-slate-600 m-0">
-                          Opens: {round.opensAt.toLocaleString()} | Closes:{' '}
-                          {round.closesAt.toLocaleString()}
+                          Opens: {formatSAST(round.opensAt)} | Closes:{' '}
+                          {formatSAST(round.closesAt)}
                         </p>
                       </div>
                       <Link

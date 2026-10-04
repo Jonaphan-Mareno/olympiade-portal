@@ -46,9 +46,9 @@ export async function generateTestFromBase64PDF(base64Pdf: string, base64Memo?: 
   }
 
   const modelsToTry = [
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
-    'gemini-pro'
+    'gemini-3.8-flash',
+    'gemini-flash-latest',
+    'gemini-3.5-flash'
   ];
 
   let lastError = null;
@@ -98,7 +98,10 @@ export async function generateTestFromBase64PDF(base64Pdf: string, base64Memo?: 
       }
 
       const geminiData = await geminiResponse.json();
-      const textOutput = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const textOutput = (geminiData?.candidates?.[0]?.content?.parts ?? [])
+        .filter((p: any) => typeof p.text === 'string' && !p.thought)
+        .map((p: any) => p.text)
+        .join('');
       if (!textOutput) {
         throw new Error('Invalid response from LLM.');
       }
@@ -113,14 +116,31 @@ export async function generateTestFromBase64PDF(base64Pdf: string, base64Memo?: 
         throw new Error('LLM could not find any questions in the PDF.');
       }
 
-      const formattedQuestions = extractedQuestions.map((q: any) => ({
-        id: crypto.randomUUID(), // for QuestionBuilder keys
-        type: q.type === 'mcq' || q.type === 'text' ? (q.type === 'mcq' ? 'single_choice' : 'short_text') : 'short_text',
-        prompt: q.questionText || 'Unknown question',
-        marks: q.marks || 1,
-        options: Array.isArray(q.options) ? q.options : (q.type === 'mcq' ? ['Option 1'] : []),
-        correctAnswer: q.correctAnswer || null,
-      }));
+      const formattedQuestions = extractedQuestions.map((q: any) => {
+        const isMcq = q.type === 'mcq';
+        const options: string[] = Array.isArray(q.options) ? q.options.map(String) : (isMcq ? ['Option 1'] : []);
+
+        // The builder matches the correct answer against option text exactly, so
+        // map things like "B" or differently-cased text onto the real option.
+        let correctAnswer: string | null = q.correctAnswer ? String(q.correctAnswer).trim() : null;
+        if (isMcq && correctAnswer) {
+          const exact = options.find((o) => o === correctAnswer);
+          const ci = options.find((o) => o.trim().toLowerCase() === correctAnswer!.toLowerCase());
+          const letterIdx = /^[A-Za-z][.)]?$/.test(correctAnswer)
+            ? correctAnswer.toUpperCase().charCodeAt(0) - 65
+            : -1;
+          correctAnswer = exact ?? ci ?? (letterIdx >= 0 && letterIdx < options.length ? options[letterIdx] : null);
+        }
+
+        return {
+          id: crypto.randomUUID(), // for QuestionBuilder keys
+          type: isMcq ? 'single_choice' : 'free_text',
+          prompt: q.questionText || 'Unknown question',
+          marks: q.marks || 1,
+          options: isMcq ? options : null,
+          correctAnswer: isMcq ? correctAnswer : (correctAnswer ?? ''),
+        };
+      });
 
       return { data: formattedQuestions };
 

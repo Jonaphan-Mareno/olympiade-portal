@@ -1,10 +1,17 @@
 import { createClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
-import { results, submissions, users, memberships } from '@/lib/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import {
+  memberships,
+  portals,
+  remarkRequests,
+  results,
+  schools,
+  submissions,
+  users,
+} from '@/lib/db/schema';
+import { and, desc, eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import ResolveRemarkForm from './ResolveRemarkForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,40 +21,48 @@ export default async function ManageRemarksPage({
   params: Promise<{ olympiadId: string; roundId: string }>;
 }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect('/login');
-  }
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
 
   const { olympiadId, roundId } = await params;
 
-  // Fetch all remarks for this round
-  const allRemarks = await db
+  const [portal] = await db
+    .select({ ownerUserId: portals.ownerUserId })
+    .from(portals)
+    .where(eq(portals.id, olympiadId));
+  if (!portal || portal.ownerUserId !== user.id) redirect('/organiser/dashboard');
+
+  const rows = await db
     .select({
-      result: results,
-      submission: submissions,
+      id: remarkRequests.id,
+      status: remarkRequests.status,
+      reason: remarkRequests.reason,
+      previousScore: remarkRequests.previousScore,
+      newScore: remarkRequests.newScore,
+      responseNote: remarkRequests.responseNote,
+      submissionType: submissions.submissionType,
       studentName: users.name,
       studentEmail: memberships.invitedEmail,
+      schoolName: schools.name,
+      currentScore: results.score,
     })
-    .from(results)
-    .innerJoin(submissions, eq(results.submissionId, submissions.id))
-    .innerJoin(memberships, eq(submissions.studentMembershipId, memberships.id))
-    .leftJoin(users, eq(memberships.userId, users.id))
-    .where(
-      and(
-        eq(submissions.roundId, roundId),
-        // Filter by remark status in code or here
-      )
-    );
+    .from(remarkRequests)
+    .innerJoin(submissions, eq(submissions.id, remarkRequests.submissionId))
+    .innerJoin(memberships, eq(memberships.id, submissions.studentMembershipId))
+    .leftJoin(users, eq(users.id, memberships.userId))
+    .leftJoin(schools, eq(schools.id, memberships.schoolId))
+    .leftJoin(results, eq(results.submissionId, submissions.id))
+    .where(and(eq(submissions.roundId, roundId)))
+    .orderBy(desc(remarkRequests.createdAt));
 
-  const remarkRequests = allRemarks.filter(r => r.result.status === 'remark_requested' || r.result.status === 'remark_resolved');
-  
-  const pendingRequests = remarkRequests.filter(r => r.result.status === 'remark_requested');
-  const resolvedRequests = remarkRequests.filter(r => r.result.status === 'remark_resolved');
+  const pending = rows.filter((r) => r.status === 'pending');
+  const resolved = rows.filter((r) => r.status === 'resolved');
+  const base = `/organiser/olympiads/${olympiadId}/rounds/${roundId}`;
 
   return (
-    <div className="min-h-screen bg-slate-50 py-10 px-4 md:px-8">
+    <div className="min-h-screen bg-slate-50 py-10 px-4 md:px-8 text-slate-900">
       <div className="max-w-5xl mx-auto">
         <div className="mb-8">
           <Link
@@ -56,92 +71,82 @@ export default async function ManageRemarksPage({
           >
             &larr; Back to Olympiad
           </Link>
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <h1 className="text-3xl font-bold text-slate-900 m-0">
-              Manage Remarks
-            </h1>
-          </div>
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">Remarks</h1>
           <p className="text-slate-600 text-lg mb-6">
-            Review and resolve remark requests from educators.
+            Entrants&apos; appeals for this round. Their school&apos;s educators
+            re-mark them from the educator dashboard; you can review every
+            outcome here and re-mark any pending appeal yourself.
           </p>
           <div className="flex gap-4 border-b border-slate-200">
-            <Link href={`/organiser/olympiads/${olympiadId}/rounds/${roundId}`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-500 hover:text-slate-700">
+            <Link href={base} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-500 hover:text-slate-700">
               Manage Round
             </Link>
-            <Link href={`/organiser/olympiads/${olympiadId}/rounds/${roundId}/certificate`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-500 hover:text-slate-700">
+            <Link href={`${base}/certificate`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-500 hover:text-slate-700">
               Certificates
             </Link>
-            <Link href={`/organiser/olympiads/${olympiadId}/rounds/${roundId}/remarks`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-slate-900 text-slate-900">
+            <Link href={`${base}/remarks`} className="pb-3 text-sm font-bold uppercase tracking-wider border-b-2 border-slate-900 text-slate-900">
               Remarks
             </Link>
           </div>
         </div>
 
-        <div className="space-y-8">
-          <div className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="text-xl font-bold text-slate-900 mb-6 border-b border-slate-100 pb-3 flex items-center justify-between">
-              Pending Remarks ({pendingRequests.length})
-            </h2>
-            
-            {pendingRequests.length === 0 ? (
-              <p className="text-slate-500 italic text-center py-8">No pending remark requests.</p>
-            ) : (
-              <div className="space-y-6">
-                {pendingRequests.map(req => (
-                  <div key={req.result.id} className="border border-amber-200 bg-amber-50 rounded-lg p-5">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="font-bold text-slate-900">{req.studentName || req.studentEmail}</h3>
-                        <p className="text-sm text-slate-600">Current Score: {req.result.score}</p>
+        <section className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-200 mb-8">
+          <h2 className="text-xl font-bold mb-4">Pending ({pending.length})</h2>
+          {pending.length === 0 ? (
+            <p className="text-slate-500 italic text-center py-6">No pending appeals.</p>
+          ) : (
+            <div className="space-y-3">
+              {pending.map((r) => (
+                <Link
+                  key={r.id}
+                  href={`${base}/remarks/${r.id}`}
+                  className="block border border-amber-200 bg-amber-50 rounded-lg p-4 hover:border-amber-400"
+                >
+                  <div className="flex justify-between gap-4">
+                    <div>
+                      <div className="font-bold">{r.studentName || r.studentEmail}</div>
+                      <div className="text-sm text-slate-600">
+                        {r.schoolName ?? 'No school'} · {r.submissionType === 'online' ? 'Online' : 'Paper'} · mark {r.currentScore ?? '—'}
                       </div>
-                      <Link 
-                        href={`/organiser/olympiads/${olympiadId}/rounds/${roundId}/marking?submissionId=${req.submission.id}`}
-                        className="text-sm font-medium text-blue-600 hover:underline bg-white px-3 py-1.5 border border-blue-200 rounded-md"
-                        target="_blank"
-                      >
-                        Review Submission
-                      </Link>
                     </div>
-                    
-                    <div className="bg-white p-4 rounded border border-amber-100 mb-4">
-                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Educator's Reason</h4>
-                      <p className="text-slate-800 text-sm">{req.result.remarkReason}</p>
-                    </div>
-                    
-                    <ResolveRemarkForm resultId={req.result.id} />
+                    <span className="text-sm font-semibold text-blue-700 shrink-0">Review &rarr;</span>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  <p className="text-sm text-slate-700 mt-2 line-clamp-2">{r.reason}</p>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
 
-          <div className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="text-xl font-bold text-slate-900 mb-6 border-b border-slate-100 pb-3">
-              Resolved Remarks ({resolvedRequests.length})
-            </h2>
-            
-            {resolvedRequests.length === 0 ? (
-              <p className="text-slate-500 italic text-center py-8">No resolved remark requests yet.</p>
-            ) : (
-              <div className="space-y-4">
-                {resolvedRequests.map(req => (
-                  <div key={req.result.id} className="border border-green-200 bg-green-50 rounded-lg p-5 flex flex-col md:flex-row gap-6">
-                    <div className="flex-1">
-                      <h3 className="font-bold text-slate-900 mb-1">{req.studentName || req.studentEmail}</h3>
-                      <p className="text-sm text-slate-600 mb-3">Score: {req.result.score}</p>
-                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Reason</h4>
-                      <p className="text-slate-800 text-sm">{req.result.remarkReason}</p>
+        <section className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-200">
+          <h2 className="text-xl font-bold mb-4">Resolved ({resolved.length})</h2>
+          {resolved.length === 0 ? (
+            <p className="text-slate-500 italic text-center py-6">No resolved appeals yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {resolved.map((r) => (
+                <Link
+                  key={r.id}
+                  href={`${base}/remarks/${r.id}`}
+                  className="block border border-green-200 bg-green-50 rounded-lg p-4 hover:border-green-400"
+                >
+                  <div className="flex justify-between gap-4">
+                    <div>
+                      <div className="font-bold">{r.studentName || r.studentEmail}</div>
+                      <div className="text-sm text-slate-600">{r.schoolName ?? 'No school'}</div>
                     </div>
-                    <div className="flex-1 bg-white p-4 rounded border border-green-100">
-                      <h4 className="text-xs font-bold text-green-700 uppercase tracking-wider mb-1">Resolution Outcome</h4>
-                      <p className="text-green-900 text-sm font-medium">{req.result.remarkOutcome}</p>
+                    <div className="text-sm shrink-0">
+                      {r.previousScore ?? '—'} → <strong>{r.newScore ?? '—'}</strong>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+                  {r.responseNote && (
+                    <p className="text-sm text-green-900 mt-2 line-clamp-2">{r.responseNote}</p>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

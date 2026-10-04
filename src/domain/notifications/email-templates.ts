@@ -29,15 +29,44 @@ function formatDate(date: Date): string {
 
 // Shared shell so every automated email looks like it came from the same
 // product (mirrors the styling of the invitation email in src/lib/email).
-function shell(body: string): string {
+// This is the portal's single general template: each trigger only fills in
+// the body, and an organiser's automation rule can add a plain-text note
+// that is rendered (escaped) beneath it.
+function shell(body: string, note?: string | null): string {
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
       ${body}
+      ${noteBlock(note)}
       <p style="color: #a1a1aa; font-size: 0.85rem; margin-top: 24px;">
         This is an automated message from the Olympiad Portal.
       </p>
     </div>
   `;
+}
+
+function noteBlock(note?: string | null): string {
+  const trimmed = note?.trim();
+  if (!trimmed) return '';
+  return `
+    <div style="border-left: 3px solid #6366f1; padding: 8px 12px; margin-top: 16px; background: #f4f4f5; color: #3f3f46;">
+      <p style="margin: 0 0 4px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #71717a;">Message from the organisers</p>
+      <p style="margin: 0;">${escapeHtml(trimmed).replace(/\r?\n/g, '<br />')}</p>
+    </div>
+  `;
+}
+
+/**
+ * Fills {{roundName}}, {{portalName}} and {{schoolName}} in an organiser's
+ * optional subject line. Unknown placeholders are left as-is.
+ */
+export function fillSubjectTemplate(
+  template: string,
+  vars: { roundName: string; portalName: string; schoolName?: string | null }
+): string {
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key: string) => {
+    const value = (vars as Record<string, string | null | undefined>)[key];
+    return value ?? match;
+  });
 }
 
 function button(href: string, label: string): string {
@@ -57,6 +86,7 @@ export function roundOpeningReminderEmail(params: {
   closesAt: Date;
   deliveryMethod: 'online' | 'paper' | 'hybrid';
   dashboardUrl: string;
+  note?: string | null;
 }): { subject: string; html: string } {
   return {
     subject: `Heads up: ${params.roundName} opens ${formatDate(params.opensAt)}`,
@@ -70,7 +100,7 @@ export function roundOpeningReminderEmail(params: {
       <p>Delivery is <strong>${params.deliveryMethod === 'online' ? 'online (students sit the paper in the portal)' : params.deliveryMethod === 'paper' ? 'on paper (scans are submitted to the portal)' : 'hybrid (online or paper submissions)'}</strong>.
       Please make sure ${params.schoolName}'s entrants are ready to take part.</p>
       ${button(params.dashboardUrl, 'Go to your dashboard')}
-    `),
+    `, params.note),
   };
 }
 
@@ -84,6 +114,7 @@ export function roundClosingReminderEmail(params: {
   submittedCount: number;
   entrantCount: number;
   dashboardUrl: string;
+  note?: string | null;
 }): { subject: string; html: string } {
   const progress =
     params.entrantCount > 0
@@ -105,7 +136,7 @@ export function roundClosingReminderEmail(params: {
       <p><strong>${formatDate(params.closesAt)}</strong></p>
       <p>Submissions so far from ${params.schoolName}: <strong>${progress}</strong> submitted.</p>
       ${button(params.dashboardUrl, 'Check submissions')}
-    `),
+    `, params.note),
   };
 }
 
@@ -117,6 +148,7 @@ export function submissionOverdueFollowupEmail(params: {
   missingCount: number;
   missingEntrantNames: string[];
   dashboardUrl: string;
+  note?: string | null;
 }): { subject: string; html: string } {
   const names =
     params.missingEntrantNames.length > 0
@@ -135,7 +167,7 @@ export function submissionOverdueFollowupEmail(params: {
       ${names}
       <p>Please contact the organisers if you believe this is an error, or submit the outstanding work if it is still possible.</p>
       ${button(params.dashboardUrl, 'Review submissions')}
-    `),
+    `, params.note),
   };
 }
 
@@ -146,6 +178,7 @@ export function resultsPublishedSchoolEmail(params: {
   entrantCount: number;
   submittedCount: number;
   resultsUrl: string;
+  note?: string | null;
 }): { subject: string; html: string } {
   return {
     subject: `Results are out: ${params.roundName}`,
@@ -159,7 +192,7 @@ export function resultsPublishedSchoolEmail(params: {
       </ul>
       <p>Entrants have been emailed their own results and can also view them by signing in to the portal.</p>
       ${button(params.resultsUrl, 'View school results')}
-    `),
+    `, params.note),
   };
 }
 
@@ -170,13 +203,23 @@ export function resultsPublishedEntrantEmail(params: {
   score: string | null;
   feedback: string | null;
   qualifyingThreshold: string | null;
+  // Marks obtainable in the round; when known the score is shown as
+  // "obtained / obtainable (percentage)"
+  totalMarks?: number | null;
   resultsUrl: string;
+  note?: string | null;
 }): { subject: string; html: string } {
+  const scoreText =
+    params.score && params.totalMarks && params.totalMarks > 0
+      ? `${params.score} / ${params.totalMarks} (${
+          Math.round((Number(params.score) / params.totalMarks) * 1000) / 10
+        }%)`
+      : params.score;
   const greeting = params.entrantName
     ? `Hi ${escapeHtml(params.entrantName)},`
     : 'Hi,';
   const scoreLine = params.score
-    ? `<p>Your score: <strong>${escapeHtml(params.score)}</strong>${
+    ? `<p>Your score: <strong>${escapeHtml(scoreText ?? '')}</strong>${
         params.qualifyingThreshold
           ? ` (qualifying threshold: ${escapeHtml(params.qualifyingThreshold)})`
           : ''
@@ -195,7 +238,7 @@ export function resultsPublishedEntrantEmail(params: {
       ${feedbackLine}
       <p>Sign in to the portal to view your full breakdown.</p>
       ${button(params.resultsUrl, 'View my result')}
-    `),
+    `, params.note),
   };
 }
 

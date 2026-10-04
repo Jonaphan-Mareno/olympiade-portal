@@ -11,13 +11,16 @@ export default function SidebarNav() {
     { name: 'Manage Olympiads', href: '/educator/entrants' },
     { name: 'Assessments', href: '/educator/rounds' },
     { name: 'Results & Standings', href: '/educator/results' },
+    { name: 'Remark Requests', href: '/educator/remarks' },
     { name: 'Notifications', href: '/educator/notifications' },
   ];
 
   return (
     <nav className="flex-1 p-4 space-y-1">
       {links.map((link) => {
-        const isActive = pathname === link.href;
+        const isActive =
+          pathname === link.href ||
+          (link.href !== '/educator' && pathname.startsWith(`${link.href}/`));
         return (
           <Link
             key={link.name}

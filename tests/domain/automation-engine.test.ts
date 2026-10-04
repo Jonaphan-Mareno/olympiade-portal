@@ -357,8 +357,6 @@ describe('sendResultsPublishedNotifications', () => {
         },
       ],
       [{ studentMembershipId: 'stu-1' }],
-      // dispatch() log lookup for the educator summary email
-      [],
       [
         {
           submissionId: 'sub-1',
@@ -367,7 +365,15 @@ describe('sendResultsPublishedNotifications', () => {
           feedback: 'Excellent work',
         },
       ],
-      // dispatch() log lookup for the entrant own-result email
+      // Question marks for the round total (50 marks obtainable)
+      [
+        { roundId: 'round-1', marks: 30 },
+        { roundId: 'round-1', marks: 20 },
+      ],
+      // Round row (no paper total; the question bank supplies the total)
+      [{ id: 'round-1', paperTotalMarks: null }],
+      // dispatch() log lookups: educator summary, then entrant own result
+      [],
       [],
     ];
 
@@ -389,7 +395,7 @@ describe('sendResultsPublishedNotifications', () => {
     expect(state.sentEmails[1].to).toBe('lisa@example.com');
     expect(state.sentEmails[1].subject).toContain('Your result for Round 1');
     expect(state.sentEmails[1].html).toContain('Lisa Simpson');
-    expect(state.sentEmails[1].html).toContain('<strong>42</strong>');
+    expect(state.sentEmails[1].html).toContain('<strong>42 / 50 (84%)</strong>');
     expect(state.sentEmails[1].html).toContain('Excellent work');
     // Milhouse did not submit -> never named in any email
     expect(state.sentEmails.map((e) => e.html).join('')).not.toContain(
@@ -400,5 +406,50 @@ describe('sendResultsPublishedNotifications', () => {
       'results_published_school',
       'results_published_entrant',
     ]);
+  });
+});
+
+describe('rule options', () => {
+  it('applies the rule subject, note and missing-submissions condition', async () => {
+    state.queue = [
+      [
+        {
+          membershipId: 'edu-1',
+          invitedEmail: 'a@springfield.edu',
+          schoolId: 'school-1',
+          schoolName: 'Springfield High',
+        },
+        {
+          membershipId: 'edu-2',
+          invitedEmail: 'b@shelbyville.edu',
+          schoolId: 'school-2',
+          schoolName: 'Shelbyville High',
+        },
+      ],
+      [
+        { membershipId: 'stu-1', invitedEmail: 'l@x.com', schoolId: 'school-1', schoolName: 'Springfield High', name: 'Lisa' },
+        { membershipId: 'stu-2', invitedEmail: 'm@x.com', schoolId: 'school-2', schoolName: 'Shelbyville High', name: 'Milhouse' },
+      ],
+      // Springfield has submitted everything; Shelbyville has not
+      [{ studentMembershipId: 'stu-1' }],
+      [],
+    ];
+
+    const summary = await sendRoundClosingReminders(
+      round,
+      new Date('2026-09-09T17:00:00Z'),
+      {
+        ruleId: 'rule-1',
+        subjectTemplate: '{{schoolName}}: {{roundName}} closes soon',
+        note: 'Upload <scans> as one PDF',
+        missingSubmissionsOnly: true,
+      }
+    );
+
+    expect(summary).toEqual({ sent: 1, skipped: 0, failed: 0 });
+    expect(state.sentEmails[0].to).toBe('b@shelbyville.edu');
+    expect(state.sentEmails[0].subject).toBe('Shelbyville High: Round 1 closes soon');
+    expect(state.sentEmails[0].html).toContain('Upload &lt;scans&gt; as one PDF');
+    expect(state.inserts[0].ruleId).toBe('rule-1');
   });
 });

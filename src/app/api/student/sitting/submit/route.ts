@@ -11,78 +11,7 @@ import {
   results,
 } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
-
-function calculateEarnedMarks(q: any, studentAnsRaw: string | undefined): number {
-  const maxMarks = q.marks ?? 1;
-  if (q.questionType === 'free_text') return 0; // Handled by educators
-  if (!studentAnsRaw) return 0;
-
-  if (q.questionType === 'matching') {
-     let studentAnsObj: any = {};
-     try { studentAnsObj = JSON.parse(studentAnsRaw); } catch {}
-     if (typeof studentAnsObj !== 'object') return 0;
-
-     let correctPairs = 0;
-     let totalPairs = 0;
-     if (Array.isArray(q.options)) {
-        q.options.forEach((opt: any, index: number) => {
-           totalPairs++;
-           if (studentAnsObj[`${q.id}_${index}`] === opt.response) {
-               correctPairs++;
-           }
-        });
-     }
-     if (totalPairs === 0) return 0;
-     return (correctPairs / totalPairs) * maxMarks;
-  }
-
-  // Common correct answer normalization
-  let correctSelections: string[] = [];
-  const strCorrect = typeof q.correctAnswer === 'string' || typeof q.correctAnswer === 'number' || typeof q.correctAnswer === 'boolean' ? String(q.correctAnswer) : '';
-  try {
-      const parsed = JSON.parse(strCorrect);
-      correctSelections = Array.isArray(parsed) ? parsed.map(String) : [String(parsed)];
-  } catch {
-      if (!strCorrect.startsWith('[')) {
-          correctSelections = strCorrect.split(',').map((s: string) => s.trim()).filter(Boolean);
-      } else {
-          correctSelections = [strCorrect];
-      }
-  }
-  if (Array.isArray(q.correctAnswer)) {
-      correctSelections = q.correctAnswer.map(String);
-  } else if (typeof q.correctAnswer === 'object' && q.correctAnswer !== null && (q.correctAnswer as any).text !== undefined) {
-      correctSelections = [String((q.correctAnswer as any).text)];
-  }
-
-  let studentSelections: string[] = [];
-  try {
-      const parsed = JSON.parse(studentAnsRaw);
-      studentSelections = Array.isArray(parsed) ? parsed.map(String) : [String(studentAnsRaw)];
-  } catch {
-      studentSelections = [studentAnsRaw];
-  }
-
-  if (q.questionType === 'multiple_choice') {
-      const totalCorrect = correctSelections.length;
-      if (totalCorrect === 0) return 0;
-      let matches = 0;
-      studentSelections.forEach(s => {
-          if (correctSelections.includes(s)) matches++;
-      });
-      return (matches / totalCorrect) * maxMarks;
-  }
-
-  // single_choice or true_false
-  const isCorrect = correctSelections.length === 1 && studentSelections.length === 1 && correctSelections[0] === studentSelections[0];
-  if (isCorrect) return maxMarks;
-  
-  const studentStr = studentSelections.join(',').toLowerCase();
-  const correctStr = correctSelections.join(',').toLowerCase();
-  if (studentStr === correctStr) return maxMarks;
-
-  return 0;
-}
+import { calculateEarnedMarks } from '@/domain/marking/auto-mark';
 
 export async function POST(request: Request) {
   try {

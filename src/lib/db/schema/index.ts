@@ -110,6 +110,12 @@ export const rounds = pgTable('rounds', {
   // Top-N advancement: if set, only the N highest-scoring students advance.
   // Can be combined with qualifyingThreshold (both conditions must be met).
   thresholdTopN: integer('threshold_top_n'),
+  // Paper/hybrid rounds: when schools must have entered their physical
+  // marks by. Null means the default (24 hours after closesAt).
+  markingClosesAt: timestamp('marking_closes_at', { withTimezone: true }),
+  // Paper rounds have no question bank, so the organiser states the marks
+  // obtainable; used for percentages, mark validation and advancement.
+  paperTotalMarks: integer('paper_total_marks'),
   // drives the "results are out" emails to educators and entrants
   resultsPublishedAt: timestamp('results_published_at', { withTimezone: true }),
   certificateTemplateUrl: text('certificate_template_url'),
@@ -185,6 +191,36 @@ export const results = pgTable('results', {
   }),
   remarkReason: text('remark_reason'),
   remarkOutcome: text('remark_outcome'),
+});
+
+// An entrant's appeal against a mark. One per submission; resolving it
+// writes the new total into results.score, so standings, qualification and
+// certificates all pick up the outcome.
+export const remarkRequests = pgTable('remark_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  submissionId: uuid('submission_id')
+    .references(() => submissions.id, { onDelete: 'cascade' })
+    .unique()
+    .notNull(),
+  requestedByUserId: uuid('requested_by_user_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  reason: text('reason').notNull(),
+  status: text('status', { enum: ['pending', 'resolved'] })
+    .default('pending')
+    .notNull(),
+  // Score at the time of the appeal and after the remark
+  previousScore: numeric('previous_score'),
+  newScore: numeric('new_score'),
+  // Online rounds: the remarked mark per question { [questionId]: marks }
+  questionMarks: jsonb('question_marks'),
+  // Marker's explanation shown to the entrant
+  responseNote: text('response_note'),
+  resolvedByUserId: uuid('resolved_by_user_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
 });
 
 export const examSittings = pgTable('exam_sittings', {
@@ -280,6 +316,11 @@ export const notificationLog = pgTable(
       .references(() => memberships.id, { onDelete: 'cascade' })
       .notNull(),
     recipientEmail: text('recipient_email').notNull(),
+    // Automation rule that produced the email (null for legacy rows). Part
+    // of the dedupe key so several rules on one trigger each send once.
+    ruleId: uuid('rule_id').references((): AnyPgColumn => automationRules.id, {
+      onDelete: 'cascade',
+    }),
     // Kept for context so reminders can be traced back to a school
     schoolId: uuid('school_id').references(() => schools.id, {
       onDelete: 'cascade',
@@ -290,11 +331,9 @@ export const notificationLog = pgTable(
     sentAt: timestamp('sent_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
-    unq: unique('notification_log_kind_round_recipient_unique').on(
-      t.kind,
-      t.roundId,
-      t.recipientMembershipId
-    ),
+    unq: unique('notification_log_kind_round_recipient_rule_unique')
+      .on(t.kind, t.roundId, t.recipientMembershipId, t.ruleId)
+      .nullsNotDistinct(),
   })
 );
 
