@@ -199,6 +199,13 @@ Application performance is audited with **Google PageSpeed Insights** (Lighthous
 | `tests/domain/certificate-availability.test.ts` | Unit | Certificate download guard: rounds-with-templates set, empty-input short-circuit & ID de-duplication |
 | `tests/domain/attempt-deadline.test.ts` | Unit | Attempt deadline rule: relative limit vs. round-close cap, exact-equality boundary & late-starter window |
 | `tests/domain/email-templates.test.ts` | Unit | Email template content: round open/close reminders, overdue follow-up & results-published notices |
+| `tests/domain/variant-generator.test.ts` | Unit | Seeded variant draw: `mulberry32` determinism, difficulty-balanced selection & exact `targetTotalMarks` subset-sum reachability |
+| `tests/domain/publish-readiness.test.ts` | Unit | Publish guard: fully-specified online pool, missing marks/difficulty, empty pool & seed-independent target reachability |
+| `tests/domain/score-percentage.test.ts` | Unit | `getRoundTotalMarks` precedence: `targetTotalMarks` → selected questions → whole-pool sum |
+| `tests/domain/load-variant.test.ts` | Unit | Strict id-ordered variant hydration: referenced rows only, no undrawn pool leak & dangling-id drop |
+| `tests/domain/advance-entrants.test.ts` | Unit | Qualification across per-entrant variants: equal-percentage parity & below-threshold exclusion |
+| `tests/domain/auto-mark.test.ts` | Unit | `calculateEarnedMarks`: single-choice full credit, true/false, multiple-choice partial & matching aggregation |
+| `tests/domain/remarks.test.ts` | Unit | Remark eligibility: post-publication window, `REMARK_WINDOW_DAYS` cutoff & published/mark/no-prior-appeal guards |
 | `tests/lib/high-schools.test.ts` | Unit | Token-based fuzzy search over the SA high-school snapshot |
 | `tests/lib/universities.test.ts` | Unit | Hipolabs universities proxy mapping & failure handling |
 | `tests/lib/auth-redirect.test.ts` | Unit | Role-based post-authentication redirect resolution |
@@ -211,10 +218,13 @@ Application performance is audited with **Google PageSpeed Insights** (Lighthous
 | `tests/components/schools/SchoolPicker.test.tsx` | Component | Combobox type toggle, debounced fetching & keyboard navigation |
 | `tests/components/organiser/AddEducatorButton.test.tsx` | Component | Add-educator button: dialog launch & pending/disabled behaviour |
 | `tests/components/organiser/QuestionBuilder.test.tsx` | Component | Question builder: question entry, marks & answer-option editing |
+| `tests/components/organiser/PhysicalPaperSelector.test.tsx` | Component | Physical paper picker: running total that greens at target, up/down reordering & ordered hidden payload sync |
+| `tests/components/organiser/PublishReadinessPanel.test.tsx` | Component | Publish-readiness panel: ready state, inline per-question difficulty issues & unreachable-target summary |
 | `tests/app/signup.page.test.tsx` | Page | Signup page render & form validation |
 | `tests/app/forgot-password.page.test.tsx` | Page | Forgot-password page render & reset-request form |
 | `tests/app/welcome.page.test.tsx` | Page | Welcome page render & onboarding state |
 | `tests/app/review-page.test.tsx` | Page | Review page score display rendering |
+| `tests/app/scores-page.test.tsx` | Page | Scores denominator: round target total over dealt-variant sum, pool-sum fallback & raw-mark fallback |
 | `tests/api/health.test.ts` | API Integration | System uptime & endpoint availability |
 | `tests/api/schools.suggest.test.ts` | API Integration | School picker suggestions, auth, validation & proxy 502 mapping |
 | `tests/api/certificates.test.ts` | API Integration | Certificate PDF generation: no-template 404, tier 403, highest-eligible-tier selection & image/PDF branches |
@@ -230,6 +240,8 @@ Application performance is audited with **Google PageSpeed Insights** (Lighthous
 | `tests/api/student/sitting.start.test.ts` | API Integration | Online-attempt initiation: auth/enrolment/open-close-window guards, default 60-minute paper auto-creation & resume-vs-new sitting |
 | `tests/api/student/sitting.submit.test.ts` | API Integration | Final submission & auto-marking: idempotency, free-text-excluded scoring (single_choice full / multiple_choice partial credit) & submission/result upsert |
 | `tests/api/student/sitting.sync.test.ts` | API Integration | Offline/online answer synchronization |
+| `tests/api/student/sitting.matching.test.ts` | API Integration | Matching answers: save → submit → auto-mark, all pairs stored in ONE row under the base uuid (aggregate `answerValue`) & composite-key rejection guard |
+| `tests/api/rounds/paper-preview.test.ts` | API Integration | Organiser paper preview (`?variant=preview`): renders exactly the drawn variant, distinct sample-PDF labelling & 404 when the round has no questions |
 | `tests/app/send-invitations.test.ts` | Server Action | Picked-school parsing, find-or-create of school rows & invite emails |
 | `tests/app/add-educators.test.ts` | Server Action | Add educators: find-or-create school, membership upsert & invite dispatch |
 | `tests/app/auth.actions.test.ts` | Server Action | Login & logout server actions: session handling & redirects |

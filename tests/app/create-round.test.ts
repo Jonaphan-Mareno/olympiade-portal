@@ -26,9 +26,21 @@ const h = vi.hoisted(() => {
     failInsertTable: null as any,
     revalidated: [] as string[],
     roundId: 'round-1',
+    // Portal authorization row returned by db.select().from(portals). Default:
+    // the portal is owned by the signed-in organiser, so createRound proceeds.
+    portalRows: [{ ownerUserId: 'organiser-1' }] as Array<{ ownerUserId: string | null }>,
   };
 
   const db = {
+    // createRound resolves + authorizes the target portal from the DB BEFORE
+    // any upload or write (db.select().from(portals).where(...)).
+    select: () => {
+      const chain: any = {
+        from: () => chain,
+        where: () => Promise.resolve(state.portalRows),
+      };
+      return chain;
+    },
     transaction: async (fn: (tx: any) => Promise<any>) => {
       const pending: Array<{ table: any; values: any }> = [];
       const tx = {
@@ -91,8 +103,13 @@ function pdfFile(name = 'paper.pdf') {
   return new File(['%PDF-1.4 fake content'], name, { type: 'application/pdf' });
 }
 
-// A single-choice question that satisfies createRound's validation. `marks`
-// defaults to '' to mirror exactly what QuestionBuilder submits.
+// Valid UUIDs so questionDbId() reuses them as row ids (keeps the physical
+// selection's ids lined up 1:1 with the inserted rows in the assertions below).
+const UUID1 = '11111111-1111-4111-8111-111111111111';
+const UUID2 = '22222222-2222-4222-8222-222222222222';
+
+// A single-choice question that satisfies createRound's answer validation.
+// `marks` defaults to '' to mirror exactly what QuestionBuilder submits.
 const mcq = (over: Record<string, any> = {}) => ({
   id: 'q1',
   type: 'single_choice',
@@ -102,6 +119,11 @@ const mcq = (over: Record<string, any> = {}) => ({
   correctAnswer: '4',
   ...over,
 });
+
+// An online-ready question: integer marks + difficulty 1-5, which is what the
+// publish guard requires before an online/hybrid round may be written.
+const readyMcq = (over: Record<string, any> = {}) =>
+  mcq({ id: UUID1, marks: '10', difficulty: '1', ...over });
 
 function buildForm(
   fields: Record<string, string>,
@@ -147,21 +169,26 @@ beforeEach(() => {
   h.state.failInsertTable = null;
   h.state.revalidated = [];
   h.state.roundId = 'round-1';
+  h.state.portalRows = [{ ownerUserId: 'organiser-1' }];
 });
 
 describe('createRound', () => {
   it('writes the round, its paper and its questions for an online round', async () => {
     await createRound(
-      onlineForm([
-        mcq({ marks: '' }),
-        mcq({
-          id: 'q2',
-          prompt: 'Capital of France?',
-          marks: '5',
-          options: ['Paris', 'Lyon'],
-          correctAnswer: 'Paris',
-        }),
-      ])
+      onlineForm(
+        [
+          readyMcq({ id: UUID1, marks: '5', difficulty: '1' }),
+          readyMcq({
+            id: UUID2,
+            prompt: 'Capital of France?',
+            marks: '5',
+            difficulty: '2',
+            options: ['Paris', 'Lyon'],
+            correctAnswer: 'Paris',
+          }),
+        ],
+        { targetTotalMarks: '10' }
+      )
     );
 
     expect(h.state.txInserts).toHaveLength(3);
@@ -170,6 +197,7 @@ describe('createRound', () => {
       name: 'Round One',
       orderIndex: 1,
       deliveryMethod: 'online',
+      targetTotalMarks: 10,
     });
     // Online rounds still get a question paper row carrying the time limit,
     // now derived from the open->close window (buildForm defaults to a 2-day
@@ -184,26 +212,84 @@ describe('createRound', () => {
     expect(h.state.uploads).toHaveLength(0);
   });
 
-  it('coerces blank and string marks to integers (regression: "" used to abort the insert)', async () => {
+  it('persists blank marks/difficulty as null for a physical pool question (regression: "" used to coerce to 1)', async () => {
+    // A paper round guards only the SELECTED questions, so an unselected draft
+    // question may omit marks/difficulty and still be saved (as null, not 1).
     await createRound(
-      onlineForm([
-        mcq({ marks: '' }),
-        mcq({ id: 'q2', marks: '5', prompt: 'p', options: ['4', '5'], correctAnswer: '4' }),
-      ])
+      paperForm({
+        questionsData: JSON.stringify([
+          mcq({ id: UUID1, marks: '5', prompt: 'Q1' }),
+          mcq({
+            id: UUID2,
+            marks: '',
+            difficulty: '',
+            prompt: 'Q2',
+            options: ['6', '7'],
+            correctAnswer: '6',
+          }),
+        ]),
+        selectedQuestionIds: JSON.stringify([UUID1]),
+      })
     );
 
     const saved = insertFor(questions)!.values;
     expect(saved).toHaveLength(2);
-    expect(saved[0].marks).toBe(1); // ''  -> fallback 1
-    expect(saved[1].marks).toBe(5); // '5' -> 5
-    expect(typeof saved[0].marks).toBe('number');
-    expect(typeof saved[1].marks).toBe('number');
+    expect(saved[0].marks).toBe(5); // '5' -> 5
+    expect(saved[0].id).toBe(UUID1); // the builder UUID is reused as the row id
+    expect(saved[1].marks).toBeNull(); // '' -> null (was 1)
+    expect(saved[1].difficulty).toBeNull(); // '' -> null
     expect(saved.every((q: any) => q.roundId === 'round-1')).toBe(true);
+  });
+
+  it('persists the organiser-assigned difficulty on each question', async () => {
+    await createRound(
+      onlineForm([readyMcq({ difficulty: '3' })], { targetTotalMarks: '10' })
+    );
+
+    expect(insertFor(questions)!.values[0].difficulty).toBe(3);
+  });
+
+  it('persists the unified target total marks on the round', async () => {
+    await createRound(onlineForm([readyMcq()], { targetTotalMarks: '10' }));
+
+    expect(insertFor(rounds)!.values.targetTotalMarks).toBe(10);
+  });
+
+  it('persists the ordered physical selection for a hybrid round', async () => {
+    await createRound(
+      hybridForm(
+        [
+          readyMcq({ id: UUID1, marks: '5', difficulty: '1' }),
+          readyMcq({
+            id: UUID2,
+            prompt: 'Q2',
+            marks: '5',
+            difficulty: '2',
+            options: ['a', 'b'],
+            correctAnswer: 'a',
+          }),
+        ],
+        {
+          targetTotalMarks: '10',
+          selectedQuestionIds: JSON.stringify([UUID2, UUID1]),
+        }
+      )
+    );
+
+    // Order is preserved exactly as the organiser arranged it.
+    expect(insertFor(questionPapers)!.values.selectedQuestionIds).toEqual([
+      UUID2,
+      UUID1,
+    ]);
   });
 
   it('stores the advancement thresholds when provided', async () => {
     await createRound(
-      onlineForm([mcq()], { qualifyingThreshold: '60', thresholdTopN: '50' })
+      onlineForm([readyMcq()], {
+        qualifyingThreshold: '60',
+        thresholdTopN: '50',
+        targetTotalMarks: '10',
+      })
     );
 
     expect(insertFor(rounds)?.values).toMatchObject({
@@ -214,7 +300,7 @@ describe('createRound', () => {
 
   it('leaves the advancement thresholds unset when the fields are omitted', async () => {
     // Regression: absent (null) threshold fields used to crash on `.trim()`.
-    await createRound(onlineForm([mcq()]));
+    await createRound(onlineForm([readyMcq()], { targetTotalMarks: '10' }));
 
     const saved = insertFor(rounds)!.values;
     expect(saved.qualifyingThreshold).toBeUndefined();
@@ -238,7 +324,12 @@ describe('createRound', () => {
   });
 
   it('saves both the paper and the questions for a hybrid round', async () => {
-    await createRound(hybridForm([mcq()]));
+    await createRound(
+      hybridForm([readyMcq()], {
+        targetTotalMarks: '10',
+        selectedQuestionIds: JSON.stringify([UUID1]),
+      })
+    );
 
     expect(h.state.uploads).toHaveLength(1);
     expect(insertFor(questionPapers)?.values).toMatchObject({ durationMinutes: 2880 });
@@ -246,7 +337,7 @@ describe('createRound', () => {
   });
 
   it('uploads per-question images to the question-images bucket', async () => {
-    const fd = onlineForm([mcq({ id: 'qimg' })]);
+    const fd = onlineForm([readyMcq({ id: 'qimg' })], { targetTotalMarks: '10' });
     fd.set('image_qimg', new File(['pngbytes'], 'diagram.png', { type: 'image/png' }));
 
     await createRound(fd);
@@ -260,7 +351,9 @@ describe('createRound', () => {
   it('commits nothing when a question insert fails mid-transaction (regression: round used to be orphaned)', async () => {
     h.state.failInsertTable = questions;
 
-    await expect(createRound(onlineForm([mcq()]))).rejects.toThrow();
+    await expect(
+      createRound(onlineForm([readyMcq()], { targetTotalMarks: '10' }))
+    ).rejects.toThrow();
 
     expect(h.state.txInserts).toHaveLength(0);
     expect(insertFor(rounds)).toBeUndefined();
@@ -286,13 +379,74 @@ describe('createRound', () => {
     expect(h.state.uploads).toHaveLength(0);
   });
 
+  // --- publish-readiness guard (server-authoritative) ----------------------
+  // The guard runs BEFORE any upload or write, so a not-ready round neither
+  // leaks a file nor persists half a round. These mirror the advisory client
+  // PublishReadinessPanel, which runs the same pure checkers.
+
+  it('blocks publishing an online round when a question is missing its marks', async () => {
+    await expect(
+      createRound(onlineForm([readyMcq({ marks: '' })], { targetTotalMarks: '10' }))
+    ).rejects.toThrow(/not ready to publish/);
+
+    expect(h.state.txInserts).toHaveLength(0);
+    expect(h.state.uploads).toHaveLength(0);
+  });
+
+  it('blocks publishing an online round when a question is missing its difficulty', async () => {
+    await expect(
+      createRound(
+        onlineForm([readyMcq({ difficulty: '' })], { targetTotalMarks: '10' })
+      )
+    ).rejects.toThrow(/not ready to publish/);
+
+    expect(h.state.txInserts).toHaveLength(0);
+    expect(h.state.uploads).toHaveLength(0);
+  });
+
+  it('blocks publishing an online round when the target total is unreachable', async () => {
+    // Two 5-mark questions can only total 0, 5 or 10 — never 7.
+    await expect(
+      createRound(
+        onlineForm(
+          [
+            readyMcq({ id: UUID1, marks: '5', difficulty: '1' }),
+            readyMcq({
+              id: UUID2,
+              prompt: 'Q2',
+              marks: '5',
+              difficulty: '2',
+              options: ['a', 'b'],
+              correctAnswer: 'a',
+            }),
+          ],
+          { targetTotalMarks: '7' }
+        )
+      )
+    ).rejects.toThrow(/not ready to publish/);
+
+    expect(h.state.txInserts).toHaveLength(0);
+    expect(h.state.uploads).toHaveLength(0);
+  });
+
+  it('blocks publishing a hybrid round whose physical selection is empty', async () => {
+    await expect(
+      createRound(hybridForm([readyMcq()], { targetTotalMarks: '10' }))
+    ).rejects.toThrow(/not ready to publish/);
+
+    expect(h.state.txInserts).toHaveLength(0);
+    // The guard fires before the paper PDF is uploaded.
+    expect(h.state.uploads).toHaveLength(0);
+  });
+
   it('derives the time limit from the open->close window (create no longer submits durationMinutes)', async () => {
     // 09:00 -> 11:30 on the same day is exactly 150 minutes. The manual field is
     // gone from the create form, so this value can only come from the window.
     await createRound(
-      onlineForm([mcq()], {
+      onlineForm([readyMcq()], {
         opensAt: '2026-10-01T09:00',
         closesAt: '2026-10-01T11:30',
+        targetTotalMarks: '10',
       })
     );
 
@@ -318,5 +472,46 @@ describe('createRound', () => {
     await expect(createRound(onlineForm([mcq()]))).rejects.toThrow('Unauthorized');
 
     expect(h.state.txInserts).toHaveLength(0);
+  });
+
+  // --- portal authorization (Ryan #4) --------------------------------------
+  // A Server Action is a plain POST endpoint: the [olympiadId] URL segment and
+  // the submitted portalId are NOT trusted. createRound must resolve the target
+  // portal from the DB and confirm the caller owns it BEFORE any upload/write,
+  // so a student (or any non-owner) can never author a round into it.
+
+  it('rejects a caller who does not own the target portal (non-owner/student)', async () => {
+    // Signed in, but as someone who is not the portal owner.
+    h.state.authUser = { id: 'student-1' };
+
+    await expect(
+      createRound(onlineForm([readyMcq()], { targetTotalMarks: '10' }))
+    ).rejects.toThrow('Not authorized');
+
+    // Nothing uploaded, nothing written.
+    expect(h.state.uploads).toHaveLength(0);
+    expect(h.state.txInserts).toHaveLength(0);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('rejects when the target portal does not exist / cannot be resolved', async () => {
+    h.state.portalRows = [];
+
+    await expect(
+      createRound(onlineForm([readyMcq()], { targetTotalMarks: '10' }))
+    ).rejects.toThrow('Not authorized');
+
+    expect(h.state.uploads).toHaveLength(0);
+    expect(h.state.txInserts).toHaveLength(0);
+  });
+
+  it('authorizes the owner and writes the round', async () => {
+    h.state.authUser = { id: 'organiser-1' };
+    h.state.portalRows = [{ ownerUserId: 'organiser-1' }];
+
+    await createRound(onlineForm([readyMcq()], { targetTotalMarks: '10' }));
+
+    expect(insertFor(rounds)).toBeDefined();
+    expect(redirect).toHaveBeenCalledWith('/organiser/olympiads/portal-1');
   });
 });

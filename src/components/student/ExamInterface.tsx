@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { computeAttemptDeadline } from '@/domain/rounds/attempt-deadline';
+import { mulberry32 } from '@/domain/question-bank/variant-generator';
+import { getMatchingSelections } from '@/domain/marking/auto-mark';
 
 export interface QuestionData {
   id: string;
@@ -26,6 +28,63 @@ interface ExamInterfaceProps {
   initialAnswers: Record<string, string>;
   questions: QuestionData[];
   testTitle: string;
+  /**
+   * The sitting's frozen variant seed. Combined with each question id it drives
+   * a deterministic option shuffle, so the option order is identical on every
+   * render and across a resume (the old Math.random shuffle reshuffled on each
+   * refresh, which could confuse a returning student). Optional for legacy
+   * sittings/practice, which fall back to a per-question stable order.
+   */
+  variantSeed?: string;
+}
+
+/** FNV-1a hash of a string into an unsigned 32-bit seed for mulberry32. */
+function hashSeed(str: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Expand restored matching answers back into per-pair keys.
+ *
+ * The pair selects below are keyed `${questionId}_${pairIndex}`, but the server
+ * can only store a matching question as ONE row under the base question uuid
+ * (question_id is a uuid column), whose value is the aggregated JSON object of
+ * pair selections. Without this expansion a resumed attempt would render every
+ * saved match as "Choose match..." even though the answer is on the server.
+ */
+function expandMatchingAnswers(
+  incoming: Record<string, string>,
+  questions: QuestionData[]
+): Record<string, string> {
+  const expanded: Record<string, string> = { ...incoming };
+
+  for (const q of questions) {
+    if (q.questionType !== 'matching') continue;
+    const aggregate = expanded[q.id];
+    if (!aggregate) continue;
+
+    const selections = getMatchingSelections(aggregate);
+    const pairCount = Array.isArray(q.options) ? q.options.length : 0;
+    // Not an aggregated payload at all (a stray plain string): leave it alone.
+    if (Object.keys(selections).length === 0 && !aggregate.trim().startsWith('{')) continue;
+
+    for (const [index, value] of Object.entries(selections)) {
+      const pairIndex = Number(index);
+      if (!Number.isInteger(pairIndex) || pairIndex < 0) continue;
+      if (pairCount > 0 && pairIndex >= pairCount) continue;
+      expanded[`${q.id}_${pairIndex}`] = value;
+    }
+    // The aggregate blob is not itself a pair answer: drop it so it is never
+    // re-posted under the base id and never counted by checkIsAnswered.
+    delete expanded[q.id];
+  }
+
+  return expanded;
 }
 
 export default function ExamInterface({
@@ -36,8 +95,14 @@ export default function ExamInterface({
   initialAnswers,
   questions,
   testTitle,
+  variantSeed,
 }: ExamInterfaceProps) {
-  const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
+  // Server-restored answers arrive keyed by base question id with matching
+  // questions aggregated into one JSON payload; expand those into the per-pair
+  // keys the selects are bound to.
+  const [answers, setAnswers] = useState<Record<string, string>>(() =>
+    expandMatchingAnswers(initialAnswers, questions)
+  );
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState('');
@@ -78,16 +143,19 @@ export default function ExamInterface({
 
   const localKey = `exam_answers_${sittingId}`;
 
-  // Keep the original question layout and option presentation, while making
-  // the option order stable for the lifetime of this browser attempt.
+  // Keep the original question layout, but make the option order deterministic
+  // and stable for the lifetime of the attempt: seeded by variantSeed + the
+  // question id (never Math.random), so a refresh or resume re-renders the same
+  // option order instead of reshuffling it.
   useEffect(() => {
     const shuffled: Record<string, any> = {};
     questions.forEach((q) => {
       if (!q.options) return;
+      const rand = mulberry32(hashSeed(`${variantSeed ?? ''}:${q.id}`));
       if (q.questionType === 'single_choice' || q.questionType === 'multiple_choice') {
         const opts = [...q.options];
         for (let i = opts.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
+          const j = Math.floor(rand() * (i + 1));
           [opts[i], opts[j]] = [opts[j], opts[i]];
         }
         shuffled[q.id] = opts;
@@ -95,14 +163,14 @@ export default function ExamInterface({
         const pairs = [...q.options];
         const responses = pairs.map((p: any) => p.response);
         for (let i = responses.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
+          const j = Math.floor(rand() * (i + 1));
           [responses[i], responses[j]] = [responses[j], responses[i]];
         }
         shuffled[q.id] = responses;
       }
     });
     setShuffledOptions(shuffled);
-  }, [questions]);
+  }, [questions, variantSeed]);
 
   // Restore the local copy after a refresh/reconnect.
   useEffect(() => {
@@ -110,14 +178,16 @@ export default function ExamInterface({
       const localStr = localStorage.getItem(localKey);
       if (localStr) {
         const localAnswers = JSON.parse(localStr);
-        setAnswers((prev) => ({ ...prev, ...localAnswers }));
+        // The offline queue can hold an aggregated matching payload (older
+        // builds stored whatever the server sent back), so expand it too.
+        setAnswers((prev) => expandMatchingAnswers({ ...prev, ...localAnswers }, questions));
       }
     } catch (e) {
       console.error('Failed to parse local answers', e);
     } finally {
       setIsHydrated(true);
     }
-  }, [localKey]);
+  }, [localKey, questions]);
 
   const syncLocalAnswers = useCallback(async () => {
     if (!navigator.onLine) return;
@@ -398,7 +468,7 @@ export default function ExamInterface({
                         {isAnswered ? 'Answer saved' : 'Not yet answered'}
                       </div>
                       <div className="text-sm text-slate-600 dark:text-blue-200 transition-colors">
-                        Marked out of {q.marks.toFixed(2)}
+                        Marked out of {q.marks}
                       </div>
                       <div 
                         className="text-sm text-slate-600 dark:text-blue-200 mt-2 cursor-pointer hover:underline flex items-center gap-1 transition-colors"

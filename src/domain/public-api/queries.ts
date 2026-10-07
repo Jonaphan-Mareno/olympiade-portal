@@ -199,11 +199,16 @@ export type PublicQuestion = {
   options: unknown;
   correct_answer: unknown;
   marks: number;
+  // Additive: the organiser-assigned difficulty (1-5) for online/hybrid pools;
+  // null for physical/legacy questions. Per-entrant variants stay private — the
+  // public contract is pool-level only.
+  difficulty: number | null;
   image_url: string | null;
 };
 
-// All questions of a round, correct answers included: by the time this is
-// exposed the round has closed and is no longer being sat.
+// All questions of a round (the pool), correct answers included: by the time
+// this is exposed the round has closed and is no longer being sat. The contract
+// is pool-level — the specific variant dealt to any entrant is never exposed.
 export async function listRoundQuestions(
   roundId: string
 ): Promise<PublicQuestion[]> {
@@ -215,6 +220,7 @@ export async function listRoundQuestions(
       options: questions.options,
       correctAnswer: questions.correctAnswer,
       marks: questions.marks,
+      difficulty: questions.difficulty,
       imageUrl: questions.imageUrl,
     })
     .from(questions)
@@ -226,7 +232,10 @@ export async function listRoundQuestions(
     prompt: row.prompt,
     options: row.options,
     correct_answer: row.correctAnswer,
-    marks: row.marks,
+    // marks is nullable now (a draft pool question may omit it); the public
+    // contract keeps a number, so an unset mark is exposed as 0.
+    marks: row.marks ?? 0,
+    difficulty: row.difficulty,
     image_url: row.imageUrl,
   }));
 }

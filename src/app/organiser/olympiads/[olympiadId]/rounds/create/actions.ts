@@ -3,9 +3,55 @@
 import { createClient } from '@/lib/supabase/server';
 import { parseSASTInput } from '@/lib/sast';
 import { db } from '@/lib/db';
-import { rounds, questionPapers, questions } from '@/lib/db/schema';
+import { rounds, questionPapers, questions, portals } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import {
+  checkOnlinePublishReadiness,
+  checkPhysicalPublishReadiness,
+  type ReadinessResult,
+} from '@/domain/question-bank/publish-readiness';
+import type { PoolQuestion } from '@/domain/question-bank/variant-generator';
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Reuse the builder's UUID as the row id when valid, else mint a fresh one. */
+function questionDbId(rawId: unknown): string {
+  return typeof rawId === 'string' && UUID_RE.test(rawId)
+    ? rawId
+    : crypto.randomUUID();
+}
+
+/** '' / null / undefined / non-finite -> null; otherwise a truncated integer. */
+function toNullableInt(raw: unknown): number | null {
+  if (raw === '' || raw === null || raw === undefined) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+/** Parse the hidden selectedQuestionIds JSON array into a string[]. */
+function parseSelectedIds(raw: unknown): string[] {
+  if (typeof raw !== 'string' || raw.trim() === '') return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map((v) => String(v)) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Throw when any readiness checker reported an issue, so a not-ready round is
+ * never written. The message aggregates the structured issue messages.
+ */
+function assertReady(results: ReadinessResult[]): void {
+  const issues = results.flatMap((r) => r.issues);
+  if (issues.length === 0) return;
+  const detail = issues.map((i) => i.message).join(' ');
+  throw new Error(`This round is not ready to publish. ${detail}`);
+}
 
 export async function createRound(formData: FormData) {
   const supabase = await createClient();
@@ -23,6 +69,21 @@ export async function createRound(formData: FormData) {
   const opensAt = parseSASTInput(formData.get('opensAt') as string | null);
   const closesAt = parseSASTInput(formData.get('closesAt') as string | null);
   const deliveryMethod = formData.get('deliveryMethod') as 'paper' | 'online' | 'hybrid';
+
+  // ---------------------------------------------------------------------------
+  // Portal authorization — resolved from the DB BEFORE any upload or write. A
+  // Server Action is a plain POST endpoint, so the [olympiadId] URL segment is
+  // not trusted: the round may only be authored into a portal the caller owns.
+  // Mirrors the publishRoundResults authz pattern (portals.ownerUserId check).
+  // ---------------------------------------------------------------------------
+  const [portal] = await db
+    .select({ ownerUserId: portals.ownerUserId })
+    .from(portals)
+    .where(eq(portals.id, portalId));
+
+  if (!portal || portal.ownerUserId !== user.id) {
+    throw new Error('Not authorized');
+  }
 
   if (!opensAt || !closesAt) {
     throw new Error('Enter a valid opening and closing time.');
@@ -50,10 +111,9 @@ export async function createRound(formData: FormData) {
       ? parseInt(thresholdTopNRaw.trim(), 10)
       : null;
 
-  // Physical marking settings (paper/hybrid rounds only)
+  // Physical marking deadline (paper/hybrid rounds only)
   const isPaperRound = deliveryMethod === 'paper' || deliveryMethod === 'hybrid';
   const markingClosesAtRaw = (formData.get('markingClosesAt') as string | null)?.trim() ?? '';
-  const paperTotalMarksRaw = (formData.get('paperTotalMarks') as string | null)?.trim() ?? '';
   const markingClosesAt = isPaperRound && markingClosesAtRaw ? parseSASTInput(markingClosesAtRaw) : null;
   if (isPaperRound && markingClosesAtRaw && !markingClosesAt) {
     throw new Error('Enter a valid marking deadline.');
@@ -61,10 +121,106 @@ export async function createRound(formData: FormData) {
   if (markingClosesAt && markingClosesAt <= closesAt) {
     throw new Error('The marking deadline must be after the round closes.');
   }
-  const paperTotalMarks = isPaperRound && paperTotalMarksRaw ? parseInt(paperTotalMarksRaw, 10) : null;
-  if (paperTotalMarks !== null && (!Number.isFinite(paperTotalMarks) || paperTotalMarks < 1)) {
-    throw new Error('Total marks must be a whole number of at least 1.');
+
+  // Unified target total marks (ALL delivery methods). Nullable: online rounds
+  // must set a positive, reachable target (the publish guard enforces it);
+  // paper/hybrid may leave it null and fall back to the selected paper total.
+  const targetTotalMarksRaw = (formData.get('targetTotalMarks') as string | null)?.trim() ?? '';
+  const targetTotalMarks = targetTotalMarksRaw === '' ? null : parseInt(targetTotalMarksRaw, 10);
+  if (targetTotalMarks !== null && (!Number.isFinite(targetTotalMarks) || targetTotalMarks < 1)) {
+    throw new Error('Target total marks must be a whole number of at least 1.');
   }
+
+  // ---------------------------------------------------------------------------
+  // Parse the question pool for EVERY delivery method. Paper rounds keep a pool
+  // too, so the hand-picked physical selection (and the PDF built from it) has a
+  // real source. Blank builder placeholders (no prompt) are never persisted.
+  // ---------------------------------------------------------------------------
+  const questionsDataStr = (formData.get('questionsData') as string | null) ?? '';
+  const rawQuestions: any[] = JSON.parse(questionsDataStr || '[]');
+  const questionsArray = rawQuestions.filter(
+    (q) => q && typeof q.prompt === 'string' && q.prompt.trim() !== ''
+  );
+
+  // Online / hybrid questions are auto-marked, so each must carry a valid
+  // answer. Paper-only pools are printed, not auto-marked, so skip this.
+  if (deliveryMethod === 'online' || deliveryMethod === 'hybrid') {
+    for (let i = 0; i < questionsArray.length; i++) {
+      const q = questionsArray[i];
+      if (q.type === 'free_text') {
+        if (!q.correctAnswer || (typeof q.correctAnswer === 'string' && q.correctAnswer.trim() === '')) {
+          throw new Error(`Question ${i + 1} requires marking guidelines/answers for the educator.`);
+        }
+      } else if (q.type === 'single_choice' || q.type === 'multiple_choice' || q.type === 'true_false') {
+        let hasAnswer = false;
+        if (Array.isArray(q.correctAnswer)) {
+          hasAnswer = q.correctAnswer.length > 0;
+          if (hasAnswer && q.options) {
+            const allValid = q.correctAnswer.every((ans: string) => q.options.includes(ans));
+            if (!allValid) hasAnswer = false;
+          }
+        } else if (typeof q.correctAnswer === 'string' && q.correctAnswer.trim() !== '') {
+          if (q.options) {
+            hasAnswer = q.options.includes(q.correctAnswer);
+          } else {
+            hasAnswer = true;
+          }
+        }
+
+        if (!hasAnswer) {
+          throw new Error(`Question ${i + 1} requires an answer to be selected from the options for auto-marking.`);
+        }
+      } else if (q.type === 'matching') {
+        if (!q.options || q.options.length === 0) {
+          throw new Error(`Question ${i + 1} requires matching pairs.`);
+        }
+      }
+    }
+  }
+
+  // Assign each question a stable DB id. The builder mints UUIDs, so reuse them
+  // (this keeps the physical selection's ids lined up 1:1 with the rows); mint a
+  // fresh UUID only when the incoming id is missing or not a UUID.
+  const idMap = new Map<string, string>();
+  const questionsWithIds = questionsArray.map((q) => {
+    const dbId = questionDbId(q.id);
+    if (typeof q.id === 'string' && q.id !== '') idMap.set(q.id, dbId);
+    return { q, dbId };
+  });
+
+  // In-memory pool for the readiness guard (marks / difficulty nullable).
+  const pool: PoolQuestion[] = questionsWithIds.map(({ q, dbId }) => ({
+    id: dbId,
+    marks: toNullableInt(q.marks),
+    difficulty: toNullableInt(q.difficulty),
+  }));
+
+  // The organiser's ordered physical selection, mapped onto DB ids.
+  const selectedClientIds = parseSelectedIds(formData.get('selectedQuestionIds'));
+  const selectedQuestionIds = selectedClientIds
+    .map((cid) => idMap.get(cid))
+    .filter((x): x is string => typeof x === 'string');
+
+  // ---------------------------------------------------------------------------
+  // Publish-readiness guard — runs BEFORE any storage upload or DB write, so a
+  // not-ready round neither leaks an uploaded file nor persists half a round.
+  // The SAME pure checkers power the advisory client-side PublishReadinessPanel.
+  // ---------------------------------------------------------------------------
+  const readiness: ReadinessResult[] = [];
+  const isOnlineish = deliveryMethod === 'online' || deliveryMethod === 'hybrid';
+  const isPhysicalish = deliveryMethod === 'paper' || deliveryMethod === 'hybrid';
+  if (isOnlineish) {
+    readiness.push(checkOnlinePublishReadiness(pool, targetTotalMarks ?? 0));
+  }
+  // A pure paper round that only uploads a PDF (empty pool, no selection) has
+  // nothing to guard; require a selection only once a pool/selection exists.
+  // Hybrid always guards both dimensions.
+  const physicalApplies =
+    deliveryMethod === 'hybrid' || selectedQuestionIds.length > 0 || pool.length > 0;
+  if (isPhysicalish && physicalApplies) {
+    readiness.push(checkPhysicalPublishReadiness(pool, selectedQuestionIds));
+  }
+  assertReady(readiness);
 
   // ---------------------------------------------------------------------------
   // All Supabase Storage uploads happen BEFORE any database write. Storage
@@ -97,94 +253,59 @@ export async function createRound(formData: FormData) {
     paperUrl = publicUrlData.publicUrl;
   }
 
-  // 2. Online questions (online / hybrid rounds): validate, upload any images,
-  //    and build the rows we will insert inside the transaction below.
+  // 2. Question rows (ALL methods): upload any images and build the inserts.
+  //    marks / difficulty are nullable now (a draft pool question may omit them;
+  //    the guard above already proved any *used* question carries what it needs).
   const questionInserts: Array<{
+    id: string;
     questionType: any;
     prompt: any;
     imageUrl: string | null;
-    marks: number;
+    marks: number | null;
+    difficulty: number | null;
     options: any;
     correctAnswer: any;
   }> = [];
 
-  if (deliveryMethod === 'online' || deliveryMethod === 'hybrid') {
-    const questionsDataStr = formData.get('questionsData') as string;
-    const questionsArray = JSON.parse(questionsDataStr || '[]');
+  const prepared = await Promise.all(
+    questionsWithIds.map(async ({ q, dbId }) => {
+      let imageUrl: string | null = q.imageUrl || null;
+      const imageFile = formData.get(`image_${q.id}`) as File | null;
 
-    // Validate that questions have correct answers/marking guidelines
-    for (let i = 0; i < questionsArray.length; i++) {
-      const q = questionsArray[i];
-      if (q.type === 'free_text') {
-        if (!q.correctAnswer || (typeof q.correctAnswer === 'string' && q.correctAnswer.trim() === '')) {
-          throw new Error(`Question ${i + 1} requires marking guidelines/answers for the educator.`);
-        }
-      } else if (q.type === 'single_choice' || q.type === 'multiple_choice' || q.type === 'true_false') {
-        let hasAnswer = false;
-        if (Array.isArray(q.correctAnswer)) {
-          hasAnswer = q.correctAnswer.length > 0;
-          if (hasAnswer && q.options) {
-            const allValid = q.correctAnswer.every((ans: string) => q.options.includes(ans));
-            if (!allValid) hasAnswer = false;
-          }
-        } else if (typeof q.correctAnswer === 'string' && q.correctAnswer.trim() !== '') {
-          if (q.options) {
-            hasAnswer = q.options.includes(q.correctAnswer);
-          } else {
-            hasAnswer = true;
-          }
-        }
+      if (imageFile && imageFile.size > 0) {
+        const fileExtension = imageFile.name.split('.').pop() || 'png';
+        const uniqueFileName = `${crypto.randomUUID()}.${fileExtension}`;
 
-        if (!hasAnswer) {
-          throw new Error(`Question ${i + 1} requires an answer to be selected from the options for auto-marking.`);
-        }
-      } else if (q.type === 'matching') {
-        if (!q.options || q.options.length === 0) {
-          throw new Error(`Question ${i + 1} requires matching pairs.`);
+        const { error: uploadError } = await supabase.storage
+          .from('question-images')
+          .upload(uniqueFileName, imageFile, {
+            contentType: imageFile.type,
+          });
+
+        if (!uploadError) {
+          const { data } = supabase.storage
+            .from('question-images')
+            .getPublicUrl(uniqueFileName);
+          imageUrl = data.publicUrl;
+        } else {
+          console.error('Failed to upload image:', uploadError);
         }
       }
-    }
 
-    const prepared = await Promise.all(
-      questionsArray.map(async (q: any) => {
-        let imageUrl: string | null = q.imageUrl || null;
-        const imageFile = formData.get(`image_${q.id}`) as File | null;
+      return {
+        id: dbId,
+        questionType: q.type,
+        prompt: q.prompt,
+        imageUrl,
+        marks: toNullableInt(q.marks),
+        difficulty: toNullableInt(q.difficulty),
+        options: q.options || null,
+        correctAnswer: q.correctAnswer || null,
+      };
+    })
+  );
 
-        if (imageFile && imageFile.size > 0) {
-          const fileExtension = imageFile.name.split('.').pop() || 'png';
-          const uniqueFileName = `${crypto.randomUUID()}.${fileExtension}`;
-
-          const { error: uploadError } = await supabase.storage
-            .from('question-images')
-            .upload(uniqueFileName, imageFile, {
-              contentType: imageFile.type,
-            });
-
-          if (!uploadError) {
-            const { data } = supabase.storage
-              .from('question-images')
-              .getPublicUrl(uniqueFileName);
-            imageUrl = data.publicUrl;
-          } else {
-            console.error('Failed to upload image:', uploadError);
-          }
-        }
-
-        return {
-          questionType: q.type,
-          prompt: q.prompt,
-          imageUrl,
-          // `questions.marks` is an integer NOT NULL column, but the builder
-          // hands us a string (default ''), so coerce with a sane fallback.
-          marks: Number(q.marks) || 1,
-          options: q.options || null,
-          correctAnswer: q.correctAnswer || null,
-        };
-      })
-    );
-
-    questionInserts.push(...prepared);
-  }
+  questionInserts.push(...prepared);
 
   // ---------------------------------------------------------------------------
   // Single atomic transaction: the round, its question paper and its questions
@@ -204,7 +325,7 @@ export async function createRound(formData: FormData) {
         qualifyingThreshold: qualifyingThreshold ?? undefined,
         thresholdTopN: thresholdTopN ?? undefined,
         markingClosesAt,
-        paperTotalMarks,
+        targetTotalMarks,
       })
       .returning({ id: rounds.id });
 
@@ -212,13 +333,14 @@ export async function createRound(formData: FormData) {
 
     // A question paper row is required for every delivery method: online
     // sittings reference it (and its durationMinutes), paper/hybrid store the
-    // uploaded PDF URL here.
+    // uploaded PDF URL and the organiser's ordered physical selection here.
     await tx.insert(questionPapers).values({
       roundId: created.id,
       fileUrl: paperUrl,
       durationMinutes,
       answerKeyJson: null,
       isMultipleChoice: false,
+      selectedQuestionIds: selectedQuestionIds.length > 0 ? selectedQuestionIds : null,
     });
 
     if (questionInserts.length > 0) {

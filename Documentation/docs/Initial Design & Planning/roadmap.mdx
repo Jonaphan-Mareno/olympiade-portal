@@ -23,5 +23,5 @@ The Olympiad Portal follows a structured, three-phase Agile delivery model. The 
 
 - **Event-Driven Automations:** Building configurable trigger/action rules for automated school notifications (round reminders, result releases) with pre-live testing capabilities.
 - **Concurrency & Time Integrity (Advanced):** Enforcing strict server-side clock evaluation for all deadlines, mitigating race conditions for last-second submissions, and ensuring idempotent submission recording.
-- **Dynamic Assessments (Stretch Goal):** Implementing reusable question banks, variant paper generation, and dynamic difficulty calculations based on entrant performance.
+- **Dynamic Assessments (Delivered):** Shipped reusable question banks, per-entrant variant paper generation, and difficulty-balanced draws against a round's fixed total-marks target. Difficulty is **organiser-assigned on a 1–5 scale** at authoring time (surfaced through the publish-readiness guard and the physical hand-picked paper selector) — it is authored, **not** dynamically derived from entrant performance as originally envisioned.
 - **Multi-Tenancy & Auditing (Stretch Goal):** Expanding the architecture to support concurrent, multi-timezone Olympiads under a single organizer, backed by comprehensive system-action event logging.

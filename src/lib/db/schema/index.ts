@@ -8,6 +8,8 @@ import {
   numeric,
   jsonb,
   unique,
+  index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -115,7 +117,11 @@ export const rounds = pgTable('rounds', {
   markingClosesAt: timestamp('marking_closes_at', { withTimezone: true }),
   // Paper rounds have no question bank, so the organiser states the marks
   // obtainable; used for percentages, mark validation and advancement.
+  // LEGACY: kept as a read fallback only — prefer targetTotalMarks below.
   paperTotalMarks: integer('paper_total_marks'),
+  // Unified grading base for all delivery methods and the online draw target.
+  // Nullable: null -> legacy fallback (selected paper / paperTotalMarks / pool sum).
+  targetTotalMarks: integer('target_total_marks'),
   // drives the "results are out" emails to educators and entrants
   resultsPublishedAt: timestamp('results_published_at', { withTimezone: true }),
   certificateTemplateUrl: text('certificate_template_url'),
@@ -138,36 +144,58 @@ export const certificateTemplates = pgTable('certificate_templates', {
   nameTextColor: text('name_text_color').default('#000000').notNull(),
 });
 
-export const questionPapers = pgTable('question_papers', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  roundId: uuid('round_id')
-    .references(() => rounds.id, { onDelete: 'cascade' })
-    .notNull(),
-  fileUrl: text('file_url'),
-  isMultipleChoice: boolean('is_multiple_choice').default(false),
-  answerKeyJson: jsonb('answer_key_json'),
-  durationMinutes: integer('duration_minutes').default(60),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-});
+export const questionPapers = pgTable(
+  'question_papers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    roundId: uuid('round_id')
+      .references(() => rounds.id, { onDelete: 'cascade' })
+      .notNull(),
+    fileUrl: text('file_url'),
+    isMultipleChoice: boolean('is_multiple_choice').default(false),
+    answerKeyJson: jsonb('answer_key_json'),
+    durationMinutes: integer('duration_minutes').default(60),
+    // Ordered UUID array = the fixed, hand-picked physical paper (nullable;
+    // null -> legacy whole-pool behaviour).
+    selectedQuestionIds: jsonb('selected_question_ids'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    // One question paper per round.
+    roundUniq: uniqueIndex('question_papers_round_uniq').on(t.roundId),
+  })
+);
 
-export const submissions = pgTable('submissions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  roundId: uuid('round_id')
-    .references(() => rounds.id, { onDelete: 'cascade' })
-    .notNull(),
-  studentMembershipId: uuid('student_membership_id').references(
-    () => memberships.id
-  ),
-  submittedByMembershipId: uuid('submitted_by_membership_id').references(
-    () => memberships.id
-  ),
-  submissionType: text('submission_type', { enum: ['online', 'offline'] }),
-  fileUrl: text('file_url'),
-  answersJson: jsonb('answers_json'),
-  startedAt: timestamp('started_at', { withTimezone: true }),
-  submittedAt: timestamp('submitted_at', { withTimezone: true }),
-  status: text('status', { enum: ['draft', 'submitted'] }),
-});
+export const submissions = pgTable(
+  'submissions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    roundId: uuid('round_id')
+      .references(() => rounds.id, { onDelete: 'cascade' })
+      .notNull(),
+    studentMembershipId: uuid('student_membership_id').references(
+      () => memberships.id
+    ),
+    submittedByMembershipId: uuid('submitted_by_membership_id').references(
+      () => memberships.id
+    ),
+    submissionType: text('submission_type', { enum: ['online', 'offline'] }),
+    fileUrl: text('file_url'),
+    answersJson: jsonb('answers_json'),
+    // Ordered UUID array = the dealt variant, denormalized at submit time so
+    // results/review/remarks pages are join-free (nullable; null -> whole pool).
+    variantQuestionIds: jsonb('variant_question_ids'),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    status: text('status', { enum: ['draft', 'submitted'] }),
+  },
+  (t) => ({
+    studentRoundIdx: index('submissions_student_round_idx').on(
+      t.studentMembershipId,
+      t.roundId
+    ),
+  })
+);
 
 export const results = pgTable('results', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -223,43 +251,69 @@ export const remarkRequests = pgTable('remark_requests', {
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
 });
 
-export const examSittings = pgTable('exam_sittings', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  studentMembershipId: uuid('student_membership_id')
-    .references(() => memberships.id, { onDelete: 'cascade' })
-    .notNull(),
-  questionPaperId: uuid('question_paper_id')
-    .references(() => questionPapers.id, { onDelete: 'cascade' })
-    .notNull(),
-  startedAt: timestamp('started_at', { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  endedAt: timestamp('ended_at', { withTimezone: true }),
-  status: text('status', { enum: ['active', 'submitted', 'abandoned'] })
-    .default('active')
-    .notNull(),
-});
+export const examSittings = pgTable(
+  'exam_sittings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    studentMembershipId: uuid('student_membership_id')
+      .references(() => memberships.id, { onDelete: 'cascade' })
+      .notNull(),
+    questionPaperId: uuid('question_paper_id')
+      .references(() => questionPapers.id, { onDelete: 'cascade' })
+      .notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    status: text('status', { enum: ['active', 'submitted', 'abandoned'] })
+      .default('active')
+      .notNull(),
+    // Ordered UUID array = the dealt variant, authoritative during the attempt
+    // (nullable; null -> legacy whole-pool behaviour).
+    variantQuestionIds: jsonb('variant_question_ids'),
+    // Stable option-shuffle seed for resume correctness (nullable; legacy rows).
+    variantSeed: text('variant_seed'),
+  },
+  (t) => ({
+    // At most one active sitting per student per paper.
+    activeUniq: uniqueIndex('exam_sittings_active_uniq')
+      .on(t.studentMembershipId, t.questionPaperId)
+      .where(sql`status = 'active'`),
+  })
+);
 
-export const questions = pgTable('questions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  roundId: uuid('round_id')
-    .references(() => rounds.id, { onDelete: 'cascade' })
-    .notNull(),
-  questionType: text('question_type', {
-    enum: [
-      'single_choice',
-      'multiple_choice',
-      'true_false',
-      'matching',
-      'free_text',
-    ],
-  }).notNull(),
-  prompt: text('prompt').notNull(),
-  imageUrl: text('image_url'),
-  options: jsonb('options'),
-  correctAnswer: jsonb('correct_answer'),
-  marks: integer('marks').notNull(),
-});
+export const questions = pgTable(
+  'questions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    roundId: uuid('round_id')
+      .references(() => rounds.id, { onDelete: 'cascade' })
+      .notNull(),
+    questionType: text('question_type', {
+      enum: [
+        'single_choice',
+        'multiple_choice',
+        'true_false',
+        'matching',
+        'free_text',
+      ],
+    }).notNull(),
+    prompt: text('prompt').notNull(),
+    imageUrl: text('image_url'),
+    options: jsonb('options'),
+    correctAnswer: jsonb('correct_answer'),
+    // Nullable so drafts may omit a mark; existing rows keep their values.
+    marks: integer('marks'),
+    // Organiser-assigned difficulty 1-5 (online/hybrid pool); null for
+    // physical/legacy questions.
+    difficulty: integer('difficulty'),
+  },
+  (t) => ({
+    // Pool reads are the hot path; the covering INCLUDE columns are added in
+    // the migration SQL (Drizzle's index builder cannot express INCLUDE).
+    roundIdx: index('questions_round_idx').on(t.roundId),
+  })
+);
 
 export const studentAnswers = pgTable(
   'student_answers',

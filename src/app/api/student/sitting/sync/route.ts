@@ -22,7 +22,15 @@ export async function GET(request: Request) {
     if (!row) return NextResponse.json({ error: 'Sitting not found' }, { status: 404 });
 
     const answers = await db.select().from(studentAnswers).where(eq(studentAnswers.sittingId, sittingId));
-    return NextResponse.json({ sitting: row.sitting, durationMinutes: row.paper.durationMinutes ?? 60, answers });
+    return NextResponse.json({
+      sitting: row.sitting,
+      durationMinutes: row.paper.durationMinutes ?? 60,
+      // The frozen variant so a resume re-renders exactly the dealt subset
+      // (null for legacy sittings, which fall back to the whole pool).
+      variantQuestionIds: row.sitting.variantQuestionIds ?? null,
+      variantSeed: row.sitting.variantSeed ?? null,
+      answers,
+    });
   } catch (error) {
     console.error('Error syncing answers:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

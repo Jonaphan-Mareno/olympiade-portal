@@ -44,9 +44,14 @@ export default async function PracticeTestPage({
 
   const title = `${portal?.name} - ${round.name} (Practice)`;
 
+  // Practice reuses the whole pool as-is; marks are nullable in the schema, so
+  // coerce to 0 for the (number-typed) practice interface without changing
+  // behavior — PracticeExamInterface already treats a falsy mark as 1.
+  const practiceQuestions = qs.map((q) => ({ ...q, marks: q.marks ?? 0 }));
+
   return (
     <PracticeExamInterface
-      questions={qs}
+      questions={practiceQuestions}
       testTitle={title}
     />
   );

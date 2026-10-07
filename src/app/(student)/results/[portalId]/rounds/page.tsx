@@ -9,12 +9,12 @@ import {
   results as resultsTable,
   questionPapers,
   examSittings,
-  questions,
   roundQualifications, 
 } from '@/lib/db/schema';
-import { eq, and, inArray, sum } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import RoundTabs from '../RoundTabs';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
+import { getRoundTotalMarks } from '@/domain/rounds/score-percentage';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,18 +105,9 @@ export default async function PortalRoundsPage({
     ])
   );
 
-  const marksByRound =
-    roundIds.length > 0
-      ? await db
-          .select({ roundId: questions.roundId, total: sum(questions.marks) })
-          .from(questions)
-          .where(inArray(questions.roundId, roundIds))
-          .groupBy(questions.roundId)
-      : [];
-
-  const totalMarksByRound = new Map(
-    marksByRound.map((row) => [row.roundId, row.total ? Number(row.total) : 0])
-  );
+  // Single denominator source of truth (target total → selection → paper total →
+  // pool sum), so the displayed max matches advancement instead of a raw pool sum.
+  const totalMarksByRound = await getRoundTotalMarks(roundIds);
 
   const onlineRounds = portalRounds.filter(
     (r) => r.deliveryMethod === 'online' || r.deliveryMethod === 'hybrid'

@@ -226,7 +226,7 @@ describe('listRoundQuestionPapers', () => {
 });
 
 describe('listRoundQuestions', () => {
-  it('maps question rows to the public contract', async () => {
+  it('maps question rows to the public contract, exposing difficulty', async () => {
     state.results = [
       [
         {
@@ -236,6 +236,7 @@ describe('listRoundQuestions', () => {
           options: ['3', '4'],
           correctAnswer: '4',
           marks: 2,
+          difficulty: 3,
           imageUrl: null,
         },
       ],
@@ -249,6 +250,37 @@ describe('listRoundQuestions', () => {
         options: ['3', '4'],
         correct_answer: '4',
         marks: 2,
+        difficulty: 3,
+        image_url: null,
+      },
+    ]);
+  });
+
+  it('coerces null marks to 0 and passes a null difficulty through (legacy/physical)', async () => {
+    state.results = [
+      [
+        {
+          id: 'q2',
+          questionType: 'free_text',
+          prompt: 'Explain your reasoning.',
+          options: null,
+          correctAnswer: null,
+          marks: null,
+          difficulty: null,
+          imageUrl: null,
+        },
+      ],
+    ];
+
+    await expect(listRoundQuestions('r1')).resolves.toEqual([
+      {
+        id: 'q2',
+        question_type: 'free_text',
+        prompt: 'Explain your reasoning.',
+        options: null,
+        correct_answer: null,
+        marks: 0,
+        difficulty: null,
         image_url: null,
       },
     ]);

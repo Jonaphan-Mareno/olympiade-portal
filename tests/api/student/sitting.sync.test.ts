@@ -84,10 +84,15 @@ describe('GET /api/student/sitting/sync', () => {
     });
 
     // Mock DB response for sitting query (limit(1)) and answers query (where(...))
-    const mockSitting = { id: '1', examId: 'exam1' };
+    const mockSitting = {
+      id: '1',
+      examId: 'exam1',
+      variantQuestionIds: ['q1', 'q2'],
+      variantSeed: 'seed-abc',
+    };
     const mockPaper = { durationMinutes: 60 };
     const mockAnswers = [{ id: 'a1', questionId: 'q1', answer: 'A' }];
-    
+
     mockLimit.mockResolvedValueOnce([{ sitting: mockSitting, paper: mockPaper }]);
     mockWhereResult.current = [[], mockAnswers];
 
@@ -99,6 +104,29 @@ describe('GET /api/student/sitting/sync', () => {
     expect(res.status).toBe(200);
     expect(json.sitting).toEqual(mockSitting);
     expect(json.answers).toEqual(mockAnswers);
+    // The frozen variant is surfaced so a resume re-renders the same subset.
+    expect(json.variantQuestionIds).toEqual(['q1', 'q2']);
+    expect(json.variantSeed).toBe('seed-abc');
+  });
+
+  it('returns null variant fields for a legacy sitting', async () => {
+    (createClient as any).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: '123' } } }) },
+    });
+
+    const mockSitting = { id: '1', examId: 'exam1' }; // no variant columns
+    const mockPaper = { durationMinutes: 60 };
+
+    mockLimit.mockResolvedValueOnce([{ sitting: mockSitting, paper: mockPaper }]);
+    mockWhereResult.current = [[], []];
+
+    const req = new Request('http://localhost:3000/api/student/sitting/sync?sittingId=1');
+    const res = await GET(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.variantQuestionIds).toBeNull();
+    expect(json.variantSeed).toBeNull();
   });
 });
 
