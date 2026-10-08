@@ -7,14 +7,37 @@ export interface QuestionType {
   type: string;
   prompt: string;
   marks: number | string;
+  // Organiser-assigned difficulty 1-5 for online/hybrid pools. '' means "not
+  // set yet" in the builder; serialized to null for the server action.
+  difficulty?: number | '' | null;
   options: any; // array of strings for choices, or array of pairs for matching
   correctAnswer: any; // string, array of strings, or text
   imageUrl?: string | null;
 }
 
+/**
+ * Window event QuestionBuilder broadcasts on every change so sibling client
+ * islands (PhysicalPaperSelector, PublishReadinessPanel) stay in sync even when
+ * their common parent is a server component that cannot hold React state.
+ * The detail is the same normalized array written to the hidden input.
+ */
+export const QUESTIONS_CHANGED_EVENT = 'olympiad:questions-changed';
+
+/** Normalize the builder's questions for the server payload / event bus. */
+function serializeQuestions(qs: QuestionType[]) {
+  return qs.map((q) => ({
+    ...q,
+    difficulty:
+      q.difficulty === '' || q.difficulty === null || q.difficulty === undefined
+        ? null
+        : Number(q.difficulty),
+  }));
+}
+
 export default function QuestionBuilder({
   initialQuestions,
   onChange,
+  requireDifficulty = false,
 }: {
   initialQuestions?: QuestionType[];
   /** Called whenever questions or locally-selected image previews change. */
@@ -22,6 +45,12 @@ export default function QuestionBuilder({
     questions: QuestionType[],
     imagePreviews: Record<string, string>
   ) => void;
+  /**
+   * When true (online / hybrid rounds) each question shows a Difficulty 1-5
+   * select, because the balanced online draw needs a difficulty per question.
+   * Physical-only pools leave it off (difficulty is unused there).
+   */
+  requireDifficulty?: boolean;
 }) {
   const [questions, setQuestions] = useState<QuestionType[]>(
     initialQuestions && initialQuestions.length > 0
@@ -32,6 +61,7 @@ export default function QuestionBuilder({
             type: 'single_choice',
             prompt: '',
             marks: '',
+            difficulty: '',
             options: ['Option 1'],
             correctAnswer: 'Option 1',
           },
@@ -54,6 +84,15 @@ export default function QuestionBuilder({
 
   useEffect(() => {
     onChange?.(questions, imagePreviews);
+    // Keep sibling client islands (selector / readiness panel) in sync even
+    // when the parent is a server component with no shared React state.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent(QUESTIONS_CHANGED_EVENT, {
+          detail: { questions: serializeQuestions(questions) },
+        })
+      );
+    }
   }, [questions, imagePreviews, onChange]);
 
   const updateQuestion = (id: string, updates: Partial<QuestionType>) => {
@@ -86,6 +125,7 @@ export default function QuestionBuilder({
         type: 'single_choice',
         prompt: '',
         marks: '',
+        difficulty: '',
         options: ['Option 1'],
         correctAnswer: 'Option 1',
       },
@@ -231,13 +271,37 @@ export default function QuestionBuilder({
               </label>
               <input
                 type="number"
-                min="0"
-                step="0.25"
+                min="1"
+                step="1"
                 value={q.marks}
                 onChange={(e) => updateQuestion(q.id, { marks: e.target.value })}
                 className="w-full p-2 border border-slate-300 rounded-md text-slate-900"
               />
             </div>
+            {requireDifficulty && (
+              <div className="w-full md:w-40">
+                <label className="block text-sm font-semibold text-slate-900 mb-1">
+                  Difficulty
+                </label>
+                <select
+                  aria-label="Difficulty"
+                  value={q.difficulty ?? ''}
+                  onChange={(e) =>
+                    updateQuestion(q.id, {
+                      difficulty: e.target.value === '' ? '' : Number(e.target.value),
+                    })
+                  }
+                  className="w-full p-2 border border-slate-300 rounded-md text-slate-900 bg-white"
+                >
+                  <option value="">Not set</option>
+                  <option value="1">1 — Easiest</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5 — Hardest</option>
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="mb-4">
@@ -491,7 +555,7 @@ export default function QuestionBuilder({
       <input
         type="hidden"
         name="questionsData"
-        value={JSON.stringify(questions)}
+        value={JSON.stringify(serializeQuestions(questions))}
       />
     </div>
   );

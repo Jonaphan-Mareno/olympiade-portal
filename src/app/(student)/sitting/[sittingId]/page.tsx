@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
-import { examSittings, questionPapers, rounds, studentAnswers, questions, memberships } from '@/lib/db/schema';
+import { examSittings, questionPapers, rounds, studentAnswers, memberships } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
 import ExamInterface from '@/components/student/ExamInterface';
 import { computeAttemptDeadline } from '@/domain/rounds/attempt-deadline';
+import { loadSittingQuestions } from '@/domain/question-bank/load-variant';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +42,12 @@ export default async function SittingPage({ params }: { params: Promise<{ sittin
   const initialAnswers: Record<string, string> = {};
   answers.forEach((ans) => { if (ans.questionId) initialAnswers[ans.questionId] = ans.answerValue; });
 
-  const questionsData = await db.select().from(questions).where(eq(questions.roundId, row.paper.roundId));
+  // Render ONLY the dealt variant (loadSittingQuestions scopes to the sitting's
+  // frozen variantQuestionIds, falling back to the whole pool for legacy rows).
+  const questionsData = await loadSittingQuestions(
+    { variantQuestionIds: row.sitting.variantQuestionIds as string[] | null },
+    row.paper.roundId
+  );
 
   return (
     <ExamInterface
@@ -51,6 +57,7 @@ export default async function SittingPage({ params }: { params: Promise<{ sittin
       closesAt={row.round.closesAt.toISOString()}
       initialAnswers={initialAnswers}
       questions={questionsData as any}
+      variantSeed={row.sitting.variantSeed ?? undefined}
       testTitle={row.round.name || 'Online Olympiad Exam'}
     />
   );

@@ -1,9 +1,16 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { questions, questionPapers, rounds } from '@/lib/db/schema';
+import { questions, questionPapers, examSittings } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+
+/** '' / null / undefined / non-finite -> null; otherwise a truncated integer. */
+function toNullableInt(raw: unknown): number | null {
+  if (raw === '' || raw === null || raw === undefined) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
 
 export async function generateTestFromPDF(roundId: string, portalId: string) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -177,14 +184,38 @@ export async function generateTestFromPDF(roundId: string, portalId: string) {
     roundId,
     questionType: q.type === 'mcq' || q.type === 'text' ? q.type : 'text',
     prompt: q.questionText || 'Unknown question',
-    marks: q.marks || 1,
+    // Nullable marks: '' / null / non-finite -> null (never coerce to 1). The
+    // AI must not invent marks — the organiser sets them, and updateRound's
+    // publish guard stays authoritative over every *used* question. This keeps
+    // the AI output a DRAFT pool, aligned with create/ai-actions.ts.
+    marks: toNullableInt(q.marks),
+    // Difficulty is organiser-assigned (1-5) and drives the balanced online
+    // draw, so the AI must NOT guess it. Leave null; the PublishReadinessPanel
+    // surfaces it as "needs a difficulty" and updateRound blocks the publish.
+    difficulty: null,
     options: Array.isArray(q.options) ? q.options : null,
     correctAnswer: q.correctAnswer || null,
   }));
 
-  // Clear existing questions if any (though there shouldn't be for this flow)
+  // Never blanket-delete a pool that students are actively sitting: deleting
+  // these questions would cascade-delete their student_answers and orphan any
+  // dealt variant / persisted selectedQuestionIds. Regeneration is only safe
+  // while the round has no sittings (a draft pool nothing references yet).
+  const sittings = await db
+    .select({ id: examSittings.id })
+    .from(examSittings)
+    .where(eq(examSittings.questionPaperId, paperRecords[0].id))
+    .limit(1);
+
+  if (sittings.length > 0) {
+    throw new Error(
+      'This round cannot be regenerated because students have already begun their attempts. The question pool is frozen.'
+    );
+  }
+
+  // Safe to replace the draft pool: no sitting references these rows yet.
   await db.delete(questions).where(eq(questions.roundId, roundId));
-  
+
   // Insert new questions
   await db.insert(questions).values(inserts);
 

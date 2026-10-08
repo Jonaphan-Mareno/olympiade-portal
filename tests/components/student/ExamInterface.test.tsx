@@ -174,3 +174,127 @@ describe('ExamInterface', () => {
     );
   });
 });
+
+// Matching answers are stored server-side as ONE aggregated JSON payload under
+// the base question uuid (question_id is a uuid column), while the pair selects
+// in this component are keyed `${questionId}_${pairIndex}`. Resuming an attempt
+// must expand one shape into the other in both directions, or every saved match
+// renders as "Choose match..." and is silently lost.
+describe('ExamInterface matching questions', () => {
+  const Q_MATCH = '3f2b8c1e-6d4a-4f9b-9c2e-8a1d5e7f0b34';
+  const PAIRS = [
+    { premise: 'France', response: 'Paris' },
+    { premise: 'Italy', response: 'Rome' },
+    { premise: 'Spain', response: 'Madrid' },
+  ];
+  const matchingQuestions: any[] = [
+    {
+      id: Q_MATCH,
+      questionType: 'matching',
+      prompt: 'Match each country to its capital',
+      marks: 6,
+      options: PAIRS,
+    },
+  ];
+
+  const renderInterface = (initialAnswers: Record<string, string>) =>
+    render(
+      <ExamInterface
+        sittingId="sitting1"
+        durationMinutes={60}
+        startedAt={new Date().toISOString()}
+        closesAt={mockClosesAt}
+        initialAnswers={initialAnswers}
+        questions={matchingQuestions}
+        testTitle="Math Exam"
+      />
+    );
+
+  /** The three pair selects, in premise order. */
+  const pairSelects = () =>
+    screen.getAllByRole('combobox') as unknown as HTMLSelectElement[];
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.clearAllMocks();
+    (fetch as Mock).mockImplementation(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    );
+  });
+
+  it('expands the server aggregate back into the per-pair selects', async () => {
+    renderInterface({
+      [Q_MATCH]: JSON.stringify({
+        [`${Q_MATCH}_0`]: 'Paris',
+        [`${Q_MATCH}_1`]: 'Rome',
+      }),
+    });
+
+    await waitFor(() => expect(pairSelects()).toHaveLength(3));
+
+    const [france, italy, spain] = pairSelects();
+    expect(france.value).toBe('Paris');
+    expect(italy.value).toBe('Rome');
+    // The unanswered pair stays empty rather than showing the raw JSON blob.
+    expect(spain.value).toBe('');
+  });
+
+  it('restores the aggregate saved in the offline localStorage copy', async () => {
+    window.localStorage.setItem(
+      'exam_answers_sitting1',
+      JSON.stringify({ [Q_MATCH]: JSON.stringify({ [`${Q_MATCH}_2`]: 'Madrid' }) })
+    );
+
+    renderInterface({});
+
+    await waitFor(() => expect(pairSelects()[2].value).toBe('Madrid'));
+    expect(pairSelects()[0].value).toBe('');
+  });
+
+  it('leaves a non-aggregate answer alone instead of expanding it', async () => {
+    renderInterface({ [Q_MATCH]: 'not json' });
+
+    await waitFor(() => expect(pairSelects()).toHaveLength(3));
+    expect(pairSelects().every((s) => s.value === '')).toBe(true);
+  });
+
+  it('posts each pair under its composite key so the server can aggregate it', async () => {
+    renderInterface({});
+
+    await waitFor(() => expect(pairSelects()).toHaveLength(3));
+
+    fireEvent.change(pairSelects()[1], { target: { value: 'Rome' } });
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/student/sitting/save',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          sittingId: 'sitting1',
+          questionId: `${Q_MATCH}_1`,
+          answerValue: 'Rome',
+        }),
+      })
+    );
+    // Once the save succeeds the pair leaves the offline queue — it is on the
+    // server now — while the select keeps showing the student's choice.
+    await waitFor(() => {
+      const local = JSON.parse(window.localStorage.getItem('exam_answers_sitting1') ?? '{}');
+      expect(local[`${Q_MATCH}_1`]).toBeUndefined();
+    });
+    expect(pairSelects()[1].value).toBe('Rome');
+  });
+
+  it('keeps the other pairs when one is changed', async () => {
+    renderInterface({
+      [Q_MATCH]: JSON.stringify({ [`${Q_MATCH}_0`]: 'Paris', [`${Q_MATCH}_1`]: 'Rome' }),
+    });
+
+    await waitFor(() => expect(pairSelects()).toHaveLength(3));
+
+    fireEvent.change(pairSelects()[1], { target: { value: 'Madrid' } });
+
+    await waitFor(() => expect(pairSelects()[1].value).toBe('Madrid'));
+    expect(pairSelects()[0].value).toBe('Paris');
+  });
+});

@@ -52,6 +52,37 @@ cd Documentation
 npm install
 npm run start
 ```
+
+**5. Running Tests**
+The unit test suite runs on Vitest:
+
+```bash
+npm run test:run
+```
+
+To run the suite with code coverage and print only the overall coverage summary (the header and the `All files` row):
+
+```bash
+npm run test:coverage 2>&1 | sed -n '/% Stmts/,$p' | head -3
+```
+
+How it works:
+
+- `npm run test:coverage` — runs all unit tests with code coverage enabled
+- `2>&1` — merges stderr into stdout (Vitest prints the coverage table to stderr, so a plain pipe would miss it)
+- `sed -n '/% Stmts/,$p'` — starts printing at the coverage table header and continues to the end, discarding all test-run output above it
+- `head -3` — keeps only the table header, separator, and the `All files` summary row
+
+Example output:
+
+```
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+-------------------|---------|----------|---------|---------|-------------------
+All files          |   78.64 |    70.48 |   74.26 |   80.28 |
+```
+
+> **Note:** Vitest skips the coverage report when any test fails. If the command prints nothing, run `npm run test:run` to find the failing test.
+
 ---
 ## AI Declaration
 

@@ -2,10 +2,11 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
-import { memberships, rounds, submissions, results, users, portals, schools, questions } from '@/lib/db/schema';
+import { memberships, rounds, submissions, results, users, portals, schools } from '@/lib/db/schema';
 import { eq, and, inArray, desc, isNotNull } from 'drizzle-orm';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 import { getRoundIdsWithCertificates } from '@/domain/certificates/availability';
+import { getRoundTotalMarks, calculatePercentage } from '@/domain/rounds/score-percentage';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -99,17 +100,16 @@ export default async function EducatorResultsPage({
       .leftJoin(schools, eq(memberships.schoolId, schools.id))
       .where(inArray(submissions.roundId, roundIds));
       
-    const roundQuestions = await db
-      .select({ roundId: questions.roundId, marks: questions.marks })
-      .from(questions)
-      .where(inArray(questions.roundId, roundIds));
+    // Single denominator source of truth (target → selection → pool sum →
+    // paper total), resolved in ONE batched call so these percentages agree
+    // with the students' results, standings and advancement. No `|| 100`.
+    const totalMarksByRound = await getRoundTotalMarks(roundIds);
 
     for (const round of completedRounds) {
       const subsForRound = portalSubmissions.filter(s => s.roundId === round.id);
-      
-      const qForRound = roundQuestions.filter(q => q.roundId === round.id);
-      const totalMarks = qForRound.reduce((sum, q) => sum + (q.marks || 0), 0) || 100;
-      
+
+      const totalMarks = totalMarksByRound.get(round.id) ?? 0;
+
       subsForRound.sort((a, b) => {
         const scoreA = parseFloat(a.score as string) || 0;
         const scoreB = parseFloat(b.score as string) || 0;
@@ -134,7 +134,7 @@ export default async function EducatorResultsPage({
           rank: currentRank,
           internalRank: currentRank,
           numericScore,
-          percentage: ((numericScore / totalMarks) * 100).toFixed(1),
+          percentage: calculatePercentage(sub.score, totalMarks),
         };
       });
 
@@ -267,7 +267,7 @@ export default async function EducatorResultsPage({
                                         <span className="font-bold text-slate-700">{student.numericScore}</span>
                                       </td>
                                       <td className="px-6 py-4 text-right">
-                                        <span className="font-bold text-slate-900">{student.percentage}%</span>
+                                        <span className="font-bold text-slate-900">{student.percentage !== null ? `${student.percentage}%` : '—'}</span>
                                       </td>
                                       <td className="px-6 py-4 text-center">
                                         {roundIdsWithCertificates.has(activeRoundForPortal.id) ? (
@@ -336,7 +336,7 @@ export default async function EducatorResultsPage({
                                         <span className="font-medium text-slate-600 uppercase tracking-wide text-xs">{student.schoolName}</span>
                                       </td>
                                       <td className="px-6 py-4 text-right">
-                                        <span className="font-bold text-slate-900 text-lg">{student.percentage}%</span>
+                                        <span className="font-bold text-slate-900 text-lg">{student.percentage !== null ? `${student.percentage}%` : '—'}</span>
                                       </td>
                                     </tr>
                                   ))}

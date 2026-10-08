@@ -137,6 +137,10 @@ export async function generateTestFromBase64PDF(base64Pdf: string, base64Memo?: 
           type: isMcq ? 'single_choice' : 'free_text',
           prompt: q.questionText || 'Unknown question',
           marks: q.marks || 1,
+          // Difficulty is organiser-assigned (1-5) and drives the balanced
+          // online draw, so the AI must NOT guess it. Leave it null; the
+          // PublishReadinessPanel surfaces it as "needs a difficulty".
+          difficulty: null,
           options: isMcq ? options : null,
           correctAnswer: isMcq ? correctAnswer : (correctAnswer ?? ''),
         };

@@ -6,12 +6,12 @@ import {
   users,
   memberships,
   schools,
-  questions,
 } from '@/lib/db/schema';
 import { eq, and, isNotNull, desc } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
+import { getRoundTotalMarks, calculatePercentage } from '@/domain/rounds/score-percentage';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -55,13 +55,10 @@ export default async function EducatorStandingsPage({
   
   const schoolId = activeSchoolMemberships[0].schoolId;
 
-  // Calculate total possible marks
-  const roundQuestions = await db
-    .select({ marks: questions.marks })
-    .from(questions)
-    .where(eq(questions.roundId, roundId));
-    
-  const totalMarks = roundQuestions.reduce((sum, q) => sum + (q.marks || 0), 0) || 100; // fallback to 100
+  // Single denominator source of truth (target total → selection → paper total →
+  // pool sum), so standings percentages match the students' results and
+  // advancement. No arbitrary `|| 100` fallback: an unknown total is 0.
+  const totalMarks = (await getRoundTotalMarks([roundId])).get(roundId) ?? 0;
 
   // 1. School Roster Query
   let schoolRoster: any[] = [];
@@ -103,7 +100,7 @@ export default async function EducatorStandingsPage({
       return {
         ...row,
         numericScore,
-        percentage: ((numericScore / totalMarks) * 100).toFixed(1),
+        percentage: calculatePercentage(row.score, totalMarks),
         rank: currentRank,
       };
     });
@@ -150,7 +147,7 @@ export default async function EducatorStandingsPage({
       return {
         ...row,
         numericScore,
-        percentage: ((numericScore / totalMarks) * 100).toFixed(1),
+        percentage: calculatePercentage(row.score, totalMarks),
         rank: currentRank,
         isOwnSchool: false, // Could flag students from their own school
       };
@@ -232,10 +229,14 @@ export default async function EducatorStandingsPage({
                         </td>
                         <td className="px-6 py-4 border-r-2 border-slate-200 text-right">
                           <span className="font-bold text-slate-700 text-lg">{student.numericScore}</span>
-                          <span className="text-sm text-slate-400 font-medium ml-1">/ {totalMarks}</span>
+                          {totalMarks > 0 && (
+                            <span className="text-sm text-slate-400 font-medium ml-1">/ {totalMarks}</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 border-r-2 border-slate-200 text-right">
-                          <span className="font-bold text-slate-900 text-lg">{student.percentage}%</span>
+                          <span className="font-bold text-slate-900 text-lg">
+                            {student.percentage !== null ? `${student.percentage}%` : '—'}
+                          </span>
                         </td>
                         <td className="px-6 py-4 text-center">
                           <Link
@@ -298,7 +299,9 @@ export default async function EducatorStandingsPage({
                           <span className="font-medium text-slate-600 uppercase tracking-wide text-sm">{student.schoolName}</span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <span className="font-black text-blue-700 text-xl">{student.percentage}%</span>
+                          <span className="font-black text-blue-700 text-xl">
+                            {student.percentage !== null ? `${student.percentage}%` : '—'}
+                          </span>
                         </td>
                       </tr>
                     ))}

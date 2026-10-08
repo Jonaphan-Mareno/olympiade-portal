@@ -1,11 +1,12 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { results, studentAnswers, examSittings, questionPapers, submissions, memberships, questions } from '@/lib/db/schema';
+import { results, studentAnswers, examSittings, questionPapers, submissions, memberships } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { calculateEarnedMarks } from '@/domain/marking/auto-mark';
+import { loadSittingQuestions } from '@/domain/question-bank/load-variant';
 
 export async function submitMarksForModeration(
   roundId: string,
@@ -81,14 +82,27 @@ export async function submitMarksForModeration(
       sitting = newSitting;
     }
 
-    // 6. Upsert student_answers for each grade
+    // 6. Resolve the questions this entrant was actually dealt (their sitting
+    //    variant, or the whole pool for legacy sittings). Grading or auto-marking
+    //    anything outside this set would let the score exceed the round's fixed
+    //    target (>100%), so out-of-variant questionIds are rejected below.
+    const sittingQuestions = await loadSittingQuestions(
+      { variantQuestionIds: (submission.variantQuestionIds as string[] | null) ?? null },
+      roundId
+    );
+    const dealtQuestionIds = new Set(sittingQuestions.map((q) => q.id));
+
+    // 7. Upsert student_answers for each grade, skipping any question the
+    //    entrant was never dealt.
     let manualScoreTotal = 0;
-    const manualScoresMap = new Map<string, number>();
-    
+
     for (const grade of grades) {
+      if (!dealtQuestionIds.has(grade.questionId)) {
+        // Reject an out-of-variant grade rather than silently banking it.
+        continue;
+      }
       manualScoreTotal += grade.score;
-      manualScoresMap.set(grade.questionId, grade.score);
-      
+
       const existingAnswer = await db.query.studentAnswers.findFirst({
         where: and(
           eq(studentAnswers.sittingId, sitting.id),
@@ -112,16 +126,13 @@ export async function submitMarksForModeration(
       }
     }
 
-    // 7. Calculate total score including auto-marked MCQs
+    // 8. Calculate total score including auto-marked MCQs, scoped to the dealt
+    //    variant only (never the whole round pool).
     let totalScore = manualScoreTotal;
     if (submission.submissionType === 'online' && submission.answersJson) {
-      // Re-evaluate MCQs based on answersJson
-      const roundQuestions = await db.query.questions.findMany({
-        where: eq(questions.roundId, roundId)
-      });
       const answersObj = submission.answersJson as Record<string, string>;
-      
-      for (const q of roundQuestions) {
+
+      for (const q of sittingQuestions) {
         if (q.questionType !== 'free_text') {
           totalScore += calculateEarnedMarks(q, answersObj[q.id]);
         }

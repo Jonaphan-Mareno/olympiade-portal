@@ -33,4 +33,34 @@ describe('QuestionBuilder', () => {
     const inputs = screen.getAllByPlaceholderText(/Option/);
     expect(inputs).toHaveLength(2);
   });
+
+  it('hides the difficulty select unless requireDifficulty is set (physical-only pools)', () => {
+    const { rerender } = render(<QuestionBuilder />);
+    expect(screen.queryByLabelText('Difficulty')).not.toBeInTheDocument();
+
+    rerender(<QuestionBuilder requireDifficulty />);
+    expect(screen.getByLabelText('Difficulty')).toBeInTheDocument();
+  });
+
+  it('constrains the marks input to whole numbers of 1 or more', () => {
+    const { container } = render(<QuestionBuilder />);
+    const marks = container.querySelector('input[type="number"]')!;
+    expect(marks.getAttribute('min')).toBe('1');
+    expect(marks.getAttribute('step')).toBe('1');
+  });
+
+  it('serializes difficulty into the hidden payload (blank -> null, set -> number)', () => {
+    const { container } = render(<QuestionBuilder requireDifficulty />);
+    const hidden = container.querySelector(
+      'input[name="questionsData"]'
+    ) as HTMLInputElement;
+
+    // A freshly added question has no difficulty yet -> serialized as null.
+    expect(JSON.parse(hidden.value)[0].difficulty).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Difficulty'), {
+      target: { value: '3' },
+    });
+    expect(JSON.parse(hidden.value)[0].difficulty).toBe(3);
+  });
 });

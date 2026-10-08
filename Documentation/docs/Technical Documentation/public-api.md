@@ -334,6 +334,7 @@ curl "https://olympiad-portal-eta.vercel.app/api/public/questions?round_id=550e8
       "options": ["3", "4", "5"],
       "correct_answer": "4",
       "marks": 1,
+      "difficulty": 3,
       "image_url": null
     }
   ]
@@ -345,6 +346,9 @@ curl "https://olympiad-portal-eta.vercel.app/api/public/questions?round_id=550e8
 - `question_type` is one of `single_choice`, `multiple_choice`, `true_false`, `matching` or `free_text`.
 - `options` and `correct_answer` mirror the stored JSON: string arrays and a string answer for choice questions, `{ "premise", "response" }` object arrays for matching questions, `null` when not applicable.
 - `marks` is the question's available marks; `image_url` is `null` when the question has no image.
+- `difficulty` is the organiser-assigned integer `1`–`5` used to balance online/hybrid variant draws, or `null` for physical/legacy questions that predate difficulty authoring.
+- `marks` is **nullable** in the database (a draft pool question may omit it); the public contract keeps it a JSON number, so an unset mark is coerced to `0`.
+- The public contract is **pool-level**: it exposes the round's whole question bank, never the specific per-entrant **variant** dealt to any student. Per-entrant variants are frozen on each sitting and are never exposed publicly.
 
 **Error Responses**
 

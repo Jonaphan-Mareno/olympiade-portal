@@ -5,7 +5,12 @@ import { generateTestFromBase64PDF } from './ai-actions';
 import QuestionBuilder, { QuestionType } from '@/components/organiser/QuestionBuilder';
 import { SubmitButton } from '@/components/SubmitButton';
 import Link from 'next/link';
-import PaperMarkingFields from '@/components/organiser/PaperMarkingFields';
+import {
+  MarkingDeadlineField,
+  TargetTotalMarksField,
+} from '@/components/organiser/PaperMarkingFields';
+import PhysicalPaperSelector from '@/components/organiser/PhysicalPaperSelector';
+import PublishReadinessPanel from '@/components/organiser/PublishReadinessPanel';
 import RoundFormInputs from '@/components/organiser/RoundFormInputs';
 import {
   generateQuestionPaperPdf,
@@ -87,6 +92,13 @@ export default function CreateRoundPage({
   const [pdfBusy, setPdfBusy] = useState<'paper' | 'memo' | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedQuestions, setGeneratedQuestions] = useState<any[] | null>(null);
+  // Live copy of the builder's questions so the readiness panel and the
+  // physical-paper selector (both client islands) can be seeded on this client
+  // page without relying on event timing.
+  const [builderQuestions, setBuilderQuestions] = useState<QuestionType[]>([]);
+  // Advisory gate fed by PublishReadinessPanel; the server action stays
+  // authoritative and re-runs the same guard before writing.
+  const [readyToPublish, setReadyToPublish] = useState(false);
 
   const handleGenerateTest = async () => {
     if (!selectedPaper) return;
@@ -134,6 +146,7 @@ export default function CreateRoundPage({
   const handleBuilderChange = useCallback(
     (questions: QuestionType[], images: Record<string, string>) => {
       builderState.current = { questions, images };
+      setBuilderQuestions(questions);
     },
     []
   );
@@ -382,14 +395,17 @@ export default function CreateRoundPage({
         {/* Section 3: Content (Uploads or Question Builder) */}
         <div className="w-full">
           <div className="max-w-5xl mx-auto px-4 md:px-8 mb-12 pb-12 border-b border-slate-200">
-            {(deliveryMethod === 'paper' || deliveryMethod === 'hybrid') && (
-              <div className="mb-10">
-                <h2 className="font-serif text-3xl font-bold text-blue-950 mb-6">
-                  Physical Marking
-                </h2>
-                <PaperMarkingFields />
+            <div className="mb-10">
+              <h2 className="font-serif text-3xl font-bold text-blue-950 mb-6">
+                {deliveryMethod === 'online' ? 'Total Marks' : 'Marking & Total Marks'}
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <TargetTotalMarksField />
+                {(deliveryMethod === 'paper' || deliveryMethod === 'hybrid') && (
+                  <MarkingDeadlineField />
+                )}
               </div>
-            )}
+            </div>
             {deliveryMethod === 'paper' ? (
               <>
                 <h2 className="font-serif text-3xl font-bold text-blue-950 mb-6">
@@ -475,57 +491,78 @@ export default function CreateRoundPage({
               </>
             ) : null}
 
-            {deliveryMethod === 'online' || deliveryMethod === 'hybrid' ? (
-              <>
-                <h2 className="font-serif text-3xl font-bold text-blue-950 mb-6 mt-12 border-t border-slate-200 pt-12">
-                  Question Builder
-                </h2>
-                {deliveryMethod === 'hybrid' && generatedQuestions && generatedQuestions.length > 0 && (
-                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-md mb-6 text-sm">
-                    <strong>AI-Generated Test.</strong> Please review all questions and answers for accuracy and manually upload any required diagrams or images.
-                  </div>
-                )}
-                <QuestionBuilder
-                  key={generatedQuestions ? 'generated' : 'default'}
-                  initialQuestions={generatedQuestions || undefined}
-                  onChange={handleBuilderChange}
-                />
+            {/* The question pool exists for EVERY delivery method now: online
+                rounds deal variants from it, paper/hybrid rounds hand-pick a
+                physical subset from it. */}
+            <h2 className="font-serif text-3xl font-bold text-blue-950 mb-6 mt-12 border-t border-slate-200 pt-12">
+              Question Builder
+            </h2>
+            {deliveryMethod === 'paper' && (
+              <p className="text-sm text-slate-600 mb-6">
+                Build the question pool for this paper, then pick and order the
+                questions to print below. Difficulty is only used for online
+                sittings, so it is hidden here.
+              </p>
+            )}
+            {deliveryMethod === 'hybrid' && generatedQuestions && generatedQuestions.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-md mb-6 text-sm">
+                <strong>AI-Generated Test.</strong> Please review all questions and answers for accuracy and manually upload any required diagrams or images.
+              </div>
+            )}
+            <QuestionBuilder
+              key={generatedQuestions ? 'generated' : 'default'}
+              initialQuestions={generatedQuestions || undefined}
+              onChange={handleBuilderChange}
+              requireDifficulty={deliveryMethod === 'online' || deliveryMethod === 'hybrid'}
+            />
 
-                {deliveryMethod === 'hybrid' && (
-                  <div className="mt-10 rounded-lg border border-blue-200 bg-blue-50 p-6">
-                    <h3 className="font-serif text-2xl font-bold text-blue-950 mb-1">
-                      Printable Paper &amp; Memo
-                    </h3>
-                    <p className="text-sm text-slate-600 mb-4">
-                      Generate a PDF of this online test to print for the physical sitting. The
-                      question paper contains <strong>no answers</strong>; the correct answers
-                      you selected above go into a separate memo PDF. The question paper is
-                      also attached to the round automatically when you publish.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <button
-                        type="button"
-                        id="download-question-paper"
-                        onClick={() => handleDownload('paper')}
-                        disabled={pdfBusy !== null}
-                        className="flex-1 px-4 py-3 bg-blue-900 hover:bg-blue-800 text-white font-bold rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed"
-                      >
-                        {pdfBusy === 'paper' ? 'Generating…' : 'Download Question Paper (PDF)'}
-                      </button>
-                      <button
-                        type="button"
-                        id="download-memo"
-                        onClick={() => handleDownload('memo')}
-                        disabled={pdfBusy !== null}
-                        className="flex-1 px-4 py-3 bg-white border border-blue-900 text-blue-900 hover:bg-blue-100 font-bold rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed"
-                      >
-                        {pdfBusy === 'memo' ? 'Generating…' : 'Download Memo (PDF)'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : null}
+            {deliveryMethod === 'hybrid' && (
+              <div className="mt-10 rounded-lg border border-blue-200 bg-blue-50 p-6">
+                <h3 className="font-serif text-2xl font-bold text-blue-950 mb-1">
+                  Printable Paper &amp; Memo
+                </h3>
+                <p className="text-sm text-slate-600 mb-4">
+                  Generate a PDF of this online test to print for the physical sitting. The
+                  question paper contains <strong>no answers</strong>; the correct answers
+                  you selected above go into a separate memo PDF. The question paper is
+                  also attached to the round automatically when you publish.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    type="button"
+                    id="download-question-paper"
+                    onClick={() => handleDownload('paper')}
+                    disabled={pdfBusy !== null}
+                    className="flex-1 px-4 py-3 bg-blue-900 hover:bg-blue-800 text-white font-bold rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    {pdfBusy === 'paper' ? 'Generating…' : 'Download Question Paper (PDF)'}
+                  </button>
+                  <button
+                    type="button"
+                    id="download-memo"
+                    onClick={() => handleDownload('memo')}
+                    disabled={pdfBusy !== null}
+                    className="flex-1 px-4 py-3 bg-white border border-blue-900 text-blue-900 hover:bg-blue-100 font-bold rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    {pdfBusy === 'memo' ? 'Generating…' : 'Download Memo (PDF)'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {(deliveryMethod === 'paper' || deliveryMethod === 'hybrid') && (
+              <div className="mt-10">
+                <PhysicalPaperSelector pool={builderQuestions} />
+              </div>
+            )}
+
+            <div className="mt-10">
+              <PublishReadinessPanel
+                pool={builderQuestions}
+                deliveryMethod={deliveryMethod}
+                onReadinessChange={setReadyToPublish}
+              />
+            </div>
           </div>
         </div>
 
@@ -535,6 +572,7 @@ export default function CreateRoundPage({
             <SubmitButton
               pendingText="Publishing…"
               fullWidth={false}
+              disabled={!readyToPublish}
               className="w-full md:w-auto bg-blue-900 hover:bg-blue-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white rounded-md py-4 px-10 text-lg font-bold transition-all"
             >
               Save & Publish Round

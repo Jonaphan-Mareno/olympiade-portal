@@ -6,7 +6,6 @@ import {
   submissions,
   results,
   users,
-  questions,
   examSittings,
   questionPapers,
   studentAnswers,
@@ -18,8 +17,14 @@ import { eq, and } from 'drizzle-orm';
 import Link from 'next/link';
 import RemarkSection from './RemarkSection';
 import { getRemarkEligibility } from '@/domain/remarks/remarks';
-import { formatScoreDisplay } from '@/domain/rounds/score-percentage';
-import { calculateEarnedMarks } from '@/domain/marking/auto-mark';
+import { formatScoreDisplay, getRoundTotalMarks } from '@/domain/rounds/score-percentage';
+import {
+  calculateEarnedMarks,
+  getMatchingSelections,
+  matchingPairsOf,
+  reassembleAnswers,
+} from '@/domain/marking/auto-mark';
+import { loadSittingQuestions } from '@/domain/question-bank/load-variant';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,11 +120,13 @@ export default async function ViewPaperStudentPage({
     );
   }
 
-  // Fetch all questions for this round
-  const roundQuestions = await db
-    .select()
-    .from(questions)
-    .where(eq(questions.roundId, subData.roundId));
+  // Scope the displayed questions to the submission's dealt variant
+  // (denormalized onto the submission at submit time). Legacy submissions with
+  // a null variant fall back to the whole round pool.
+  const roundQuestions = await loadSittingQuestions(
+    { variantQuestionIds: subData.submission.variantQuestionIds as string[] | null },
+    subData.roundId
+  );
 
   // Fetch student answers and marks from the sitting
   let savedAnswers: Record<string, any> = {};
@@ -148,7 +155,21 @@ export default async function ViewPaperStudentPage({
     });
   }
 
-  const answersJson = subData.submission.answersJson as Record<string, string> | null;
+  // Reassemble the stored answers before reading any of them by `q.id`: a
+  // matching question is one aggregated JSON payload under its base question id
+  // (that is the only shape the uuid `question_id` column can hold), and legacy
+  // per-pair `${q.id}_${index}` entries are folded back into it. Without this a
+  // matching answer looks absent and renders as 0 marks.
+  const answersJson = reassembleAnswers(
+    subData.submission.answersJson as Record<string, unknown> | null
+  );
+
+  // Single denominator source of truth: the round's fixed total (the same one
+  // the review page, standings and advancement use), NOT the sum of the dealt
+  // variant — summing the variant would re-introduce per-entrant denominators
+  // and make two students' percentages incomparable.
+  const roundTotals = await getRoundTotalMarks([subData.roundId]);
+  const totalMarks = roundTotals.get(subData.roundId) ?? 0;
 
   const getStudentAnswerRaw = (questionId: string) => {
     return answersJson?.[questionId] || 'No answer provided';
@@ -208,10 +229,7 @@ export default async function ViewPaperStudentPage({
               Final Score
             </span>
             <span className="text-3xl font-bold text-white">
-              {formatScoreDisplay(
-                subData.result?.score,
-                roundQuestions.reduce((total, q) => total + (q.marks ?? 0), 0)
-              )}
+              {formatScoreDisplay(subData.result?.score, totalMarks)}
             </span>
           </div>
         </div>
@@ -226,7 +244,9 @@ export default async function ViewPaperStudentPage({
           <div className="space-y-6">
             {roundQuestions.map((q, idx) => {
               // Free-text answers carry the educator's mark; everything else
-              // is marked by the same function that produced the stored score
+              // (including matching, whose pairs arrive as one aggregated
+              // payload) is marked by the same function that produced the
+              // stored score, so the per-question marks add up to the total.
               const isManual = q.questionType === 'free_text';
               const studentAnsRaw = getStudentAnswerRaw(q.id);
               const studentAnsFormatted = getStudentAnswerFormatted(q.id);
@@ -379,20 +399,22 @@ export default async function ViewPaperStudentPage({
                     ) : q.questionType === 'matching' ? (
                       <div className="flex flex-col gap-3 mt-2">
                         {(() => {
-                          let pairs: any[] = [];
-                          try {
-                            pairs = typeof q.options === 'string' ? JSON.parse(q.options) : (q.options || []);
-                          } catch {}
-                          
-                          const jsonAnswers = (subData.submission.answersJson || {}) as Record<string, string>;
+                          const pairs = matchingPairsOf(q);
+                          // The pairs are stored as ONE aggregated payload under
+                          // the base question id, so read them back through the
+                          // same parser the auto-marker uses — the ticks below
+                          // and the marks above can then never disagree.
+                          const selections = getMatchingSelections(answersJson[q.id]);
 
                           let allCorrect = true;
 
                           const renderedPairs = pairs.map((p: any, i: number) => {
-                            const leftItem = String(p.premise || '');
-                            const rightItem = String(p.response || '');
-                            const studentMatch = jsonAnswers[`${q.id}_${i}`] ? String(jsonAnswers[`${q.id}_${i}`]) : '';
-                            const isCorrectMatch = studentMatch.trim().toLowerCase() === rightItem.trim().toLowerCase();
+                            const leftItem = String(p?.premise || '');
+                            const rightItem = String(p?.response || '');
+                            const studentMatch = selections[i] || '';
+                            const isCorrectMatch =
+                              rightItem !== '' &&
+                              studentMatch.trim().toLowerCase() === rightItem.trim().toLowerCase();
 
                             if (!isCorrectMatch) {
                               allCorrect = false;

@@ -7,13 +7,13 @@ import {
   submissions,
   results,
   users,
-  questions,
   examSittings,
   studentAnswers,
   rounds,
   remarkRequests,
 } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { loadSittingQuestions } from '@/domain/question-bank/load-variant';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -45,6 +45,7 @@ export default async function ViewFullPaperPage({
   const [subData] = await db
     .select({
       submission: submissions,
+      variantQuestionIds: submissions.variantQuestionIds,
       result: results,
       studentName: users.name,
       invitedEmail: memberships.invitedEmail,
@@ -78,11 +79,14 @@ export default async function ViewFullPaperPage({
     .from(remarkRequests)
     .where(eq(remarkRequests.submissionId, submissionId));
 
-  // Fetch all questions for this round
-  const roundQuestions = await db
-    .select()
-    .from(questions)
-    .where(eq(questions.roundId, subData.roundId));
+  // Fetch ONLY the questions this entrant was actually dealt (their sitting
+  // variant, or the whole pool for legacy sittings). Rendering the full pool
+  // showed "No answer provided" + a marks badge for questions the student was
+  // never asked.
+  const variantQuestions = await loadSittingQuestions(
+    { variantQuestionIds: (subData.variantQuestionIds as string[] | null) ?? null },
+    subData.roundId
+  );
 
   // Fetch student answers if there's a sitting
   let savedAnswers: Record<string, any> = {};
@@ -181,12 +185,12 @@ export default async function ViewFullPaperPage({
           </div>
         </div>
 
-        {roundQuestions.length === 0 ? (
+        {variantQuestions.length === 0 ? (
           <div className="bg-white p-8 text-center border border-slate-200 shadow-sm text-slate-500 italic">
             This round has no questions configured.
           </div>
         ) : (
-          roundQuestions.map((q, idx) => {
+          variantQuestions.map((q, idx) => {
             const isManual = q.questionType === 'free_text';
             const studentAns = getStudentAnswer(q.id);
             const savedAns = savedAnswers[q.id];

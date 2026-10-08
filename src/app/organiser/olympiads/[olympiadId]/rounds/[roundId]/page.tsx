@@ -15,8 +15,16 @@ import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 import PublishResultsButton from './PublishResultsButton';
 import { SubmitButton } from '@/components/SubmitButton';
 import { formatSAST, toSASTInputValue } from '@/lib/sast';
-import PaperMarkingFields from '@/components/organiser/PaperMarkingFields';
+import {
+  MarkingDeadlineField,
+  TargetTotalMarksField,
+} from '@/components/organiser/PaperMarkingFields';
+import PhysicalPaperSelector from '@/components/organiser/PhysicalPaperSelector';
+import PublishReadinessPanel from '@/components/organiser/PublishReadinessPanel';
 import RoundFormInputs from '@/components/organiser/RoundFormInputs';
+import RoundStatsPanel from '@/components/organiser/RoundStatsPanel';
+import { getRoundStats } from '@/domain/rounds/round-stats';
+import { getRoundTotalMarks } from '@/domain/rounds/score-percentage';
 import DeleteRoundButton from './DeleteRoundButton';
 import GenerateTestButton from './GenerateTestButton';
 import BroadcastNotificationButton from './BroadcastNotificationButton';
@@ -50,6 +58,14 @@ export default async function ManageRoundPage({
 
   const roundState = deriveRoundState(round);
 
+  // Participation + marking statistics for the read-only panel below
+  const [roundStatsMap, totalMarksByRound] = await Promise.all([
+    getRoundStats([round]),
+    getRoundTotalMarks([roundId]),
+  ]);
+  const roundStats = roundStatsMap.get(roundId)!;
+  const totalMarks = totalMarksByRound.get(roundId) ?? 0;
+
   const dbQuestions = await db
     .select()
     .from(questions)
@@ -59,9 +75,12 @@ export default async function ManageRoundPage({
     id: q.id,
     type: q.questionType,
     prompt: q.prompt,
-    marks: q.marks,
+    // marks/difficulty are nullable now; the builder represents "unset" as ''.
+    marks: q.marks ?? '',
+    difficulty: (q.difficulty ?? '') as number | '',
     options: q.options,
     correctAnswer: q.correctAnswer,
+    imageUrl: q.imageUrl,
   }));
 
   // Shown and parsed in SAST regardless of the server's time zone
@@ -99,6 +118,11 @@ export default async function ManageRoundPage({
       hasLiveSittings = sittings.length > 0;
     }
   }
+
+  // Ordered physical selection + target total (nullable, additive schema).
+  const selectedQuestionIds =
+    (paper?.[0]?.selectedQuestionIds as string[] | null) ?? null;
+  const targetTotalMarks = round.targetTotalMarks ?? round.paperTotalMarks ?? null;
 
   return (
     <div className="min-h-screen bg-slate-50 py-10 px-4 md:px-8">
@@ -153,6 +177,11 @@ export default async function ManageRoundPage({
               Remarks
             </Link>
           </div>
+        </div>
+
+        {/* Participation and marking statistics (read-only) */}
+        <div className="mb-8">
+          <RoundStatsPanel stats={roundStats} totalMarks={totalMarks} />
         </div>
 
         <form action={updateRound} className="space-y-8">
@@ -255,18 +284,29 @@ export default async function ManageRoundPage({
             </div>
           </div>
 
-          {/* Section 2: Question Builder or Uploads */}
-          <div className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-200">
-            {round.deliveryMethod === 'paper' || round.deliveryMethod === 'hybrid' ? (
-              <div>
+          {/* Section 2: Marks & deadlines, uploads, question pool, physical selection, readiness */}
+          <div className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-200 space-y-10">
+            {/* Target total marks (ALL methods) + marking deadline (paper/hybrid) */}
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 mb-2 border-b border-slate-100 pb-3">
+                Marks &amp; Deadlines
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                <TargetTotalMarksField defaultValue={targetTotalMarks} />
+                {(round.deliveryMethod === 'paper' ||
+                  round.deliveryMethod === 'hybrid') && (
+                  <MarkingDeadlineField defaultMarkingClosesAt={markingClosesAtSAST} />
+                )}
+              </div>
+            </div>
+
+            {/* Uploads (paper/hybrid) */}
+            {(round.deliveryMethod === 'paper' || round.deliveryMethod === 'hybrid') && (
+              <div className="pt-8 border-t border-slate-100">
                 <h2 className="text-xl font-bold text-slate-900 mb-2 border-b border-slate-100 pb-3">
                   Upload Documents
                 </h2>
                 <div className="space-y-6 mt-4">
-                  <PaperMarkingFields
-                    defaultMarkingClosesAt={markingClosesAtSAST}
-                    defaultPaperTotalMarks={round.paperTotalMarks}
-                  />
                   <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">Question Paper PDF</label>
                     {questionPaperUrl ? (
@@ -289,48 +329,85 @@ export default async function ManageRoundPage({
                   </div>
                 </div>
               </div>
-            ) : null}
+            )}
 
-            {(round.deliveryMethod === 'online' || round.deliveryMethod === 'hybrid') && (
-              <div className={round.deliveryMethod === 'hybrid' ? 'mt-12 pt-8 border-t border-slate-200' : ''}>
-                {hasLiveSittings ? (
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900 mb-2 border-b border-slate-100 pb-3">
-                      Questions (Read Only)
-                    </h2>
-                    <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-md mb-6 font-medium">
-                      This round cannot be edited because students have already
-                      begun their attempts.
-                    </div>
-                    <div className="opacity-70 pointer-events-none">
-                      <QuestionBuilder initialQuestions={initialQuestions} />
-                    </div>
+            {/* Question pool (ALL delivery methods, so a pool always exists) */}
+            <div className="pt-8 border-t border-slate-100">
+              {hasLiveSittings ? (
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900 mb-2 border-b border-slate-100 pb-3">
+                    Questions (Read Only)
+                  </h2>
+                  <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-md mb-6 font-medium">
+                    This round cannot be edited because students have already
+                    begun their attempts. Any variants already dealt to students
+                    are frozen and will not change.
                   </div>
-                ) : (
-                  <>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 mb-6 gap-4">
-                      <h2 className="text-xl font-bold text-slate-900 m-0">
-                        Question Builder
-                      </h2>
-                      {round.deliveryMethod === 'hybrid' && questionPaperUrl && initialQuestions.length === 0 && (
-                        <div className="sm:w-auto w-full">
-                          <GenerateTestButton roundId={roundId} olympiadId={olympiadId} />
-                        </div>
-                      )}
-                    </div>
-                    {round.deliveryMethod === 'hybrid' && initialQuestions.length > 0 && (
-                      <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-md mb-6 text-sm flex gap-2 items-start">
-                        <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <div>
-                          <strong>AI-Generated Test.</strong> Please review all questions for formatting accuracy and manually upload any required diagrams or images.
-                        </div>
+                  <div className="opacity-70 pointer-events-none">
+                    <QuestionBuilder
+                      initialQuestions={initialQuestions}
+                      requireDifficulty={
+                        round.deliveryMethod === 'online' ||
+                        round.deliveryMethod === 'hybrid'
+                      }
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 mb-6 gap-4">
+                    <h2 className="text-xl font-bold text-slate-900 m-0">
+                      Question Bank
+                    </h2>
+                    {round.deliveryMethod === 'hybrid' && questionPaperUrl && initialQuestions.length === 0 && (
+                      <div className="sm:w-auto w-full">
+                        <GenerateTestButton roundId={roundId} olympiadId={olympiadId} />
                       </div>
                     )}
-                    <QuestionBuilder initialQuestions={initialQuestions} />
-                  </>
-                )}
+                  </div>
+                  {round.deliveryMethod === 'hybrid' && initialQuestions.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-md mb-6 text-sm flex gap-2 items-start">
+                      <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <strong>AI-Generated Test.</strong> Please review all questions for formatting accuracy and manually upload any required diagrams or images.
+                      </div>
+                    </div>
+                  )}
+                  <QuestionBuilder
+                    initialQuestions={initialQuestions}
+                    requireDifficulty={
+                      round.deliveryMethod === 'online' ||
+                      round.deliveryMethod === 'hybrid'
+                    }
+                  />
+                </>
+              )}
+            </div>
+
+            {/* Physical paper selection (paper/hybrid) */}
+            {(round.deliveryMethod === 'paper' || round.deliveryMethod === 'hybrid') &&
+              !hasLiveSittings && (
+                <div className="pt-8 border-t border-slate-100">
+                  <PhysicalPaperSelector
+                    pool={initialQuestions}
+                    targetTotalMarks={targetTotalMarks}
+                    initialSelected={selectedQuestionIds}
+                  />
+                </div>
+              )}
+
+            {/* Publish readiness (advisory; server action stays authoritative) */}
+            {!hasLiveSittings && (
+              <div className="pt-8 border-t border-slate-100">
+                <PublishReadinessPanel
+                  pool={initialQuestions}
+                  targetTotal={targetTotalMarks}
+                  selectedIds={selectedQuestionIds}
+                  deliveryMethod={round.deliveryMethod}
+                  submitButtonId="save-round-submit"
+                />
               </div>
             )}
           </div>
@@ -373,6 +450,7 @@ export default async function ManageRoundPage({
               )}
             </div>
             <SubmitButton
+              id="save-round-submit"
               pendingText="Saving…"
               fullWidth={false}
               disabled={hasLiveSittings}

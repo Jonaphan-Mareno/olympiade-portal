@@ -7,11 +7,12 @@ import {
   questionPapers,
   submissions,
   studentAnswers,
-  questions,
   results,
 } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
-import { calculateEarnedMarks } from '@/domain/marking/auto-mark';
+import { calculateEarnedMarks, reassembleAnswers } from '@/domain/marking/auto-mark';
+import { loadSittingQuestions } from '@/domain/question-bank/load-variant';
+import { getRoundTotalMarks } from '@/domain/rounds/score-percentage';
 
 export async function POST(request: Request) {
   try {
@@ -53,12 +54,21 @@ export async function POST(request: Request) {
       .where(eq(studentAnswers.sittingId, sittingId));
 
     // Build lookup map: questionId -> student's answerValue
-    const answersObj: Record<string, string> = {};
+    const rawAnswers: Record<string, string> = {};
     for (const ans of savedAnswers) {
       if (ans.questionId) {
-        answersObj[ans.questionId] = ans.answerValue;
+        rawAnswers[ans.questionId] = ans.answerValue;
       }
     }
+
+    // Reassemble before anything reads an answer by `q.id`: a matching question
+    // is stored as ONE row under its base uuid whose value is the aggregated
+    // JSON object of pair selections, but legacy/practice payloads can hold one
+    // entry per pair under the composite key `${q.id}_${index}`. Folding those
+    // back into the base id is what lets the marker reach the matching branch at
+    // all — looking up `answersObj[q.id]` on composite keys returns undefined
+    // and silently scores every matching question 0.
+    const answersObj = reassembleAnswers(rawAnswers);
 
     // 4. Create or update the submission row
     const [existingSubmission] = await db
@@ -74,6 +84,10 @@ export async function POST(request: Request) {
 
     let submissionId = existingSubmission?.id;
 
+    // Denormalize the dealt variant onto the submission so results, review and
+    // remarks pages can scope to it without joining back to the sitting.
+    const variantQuestionIds = sittingData.sitting.variantQuestionIds ?? null;
+
     if (!existingSubmission) {
       const [newSub] = await db
         .insert(submissions)
@@ -85,6 +99,7 @@ export async function POST(request: Request) {
           startedAt: sittingData.sitting.startedAt,
           submittedAt: new Date(),
           answersJson: answersObj,
+          variantQuestionIds,
         })
         .returning({ id: submissions.id });
 
@@ -96,29 +111,46 @@ export async function POST(request: Request) {
           status: 'submitted',
           submittedAt: new Date(),
           answersJson: answersObj,
+          variantQuestionIds,
         })
         .where(eq(submissions.id, existingSubmission.id));
     }
 
-    // 5. Automarking: Fetch the round's questions and compare against student answers
+    // 5. Automarking over the dealt variant only: loadSittingQuestions scopes to
+    // sitting.variantQuestionIds (falling back to the whole pool for legacy
+    // sittings), so answers to out-of-variant questions can never be scored.
+    // Free-text stays educator-marked and out of the auto-markable subtotal.
     if (submissionId) {
-      const roundQuestions = await db
-        .select()
-        .from(questions)
-        .where(eq(questions.roundId, sittingData.paper.roundId));
+      const variantQuestions = await loadSittingQuestions(
+        { variantQuestionIds: sittingData.sitting.variantQuestionIds as string[] | null },
+        sittingData.paper.roundId
+      );
 
       let totalScore = 0;
-      let maxMarks = 0;
+      let autoMarkable = 0;
 
-      for (const q of roundQuestions) {
-        if (q.questionType === 'free_text') continue; // Do not include educator-marked questions in auto-marked maxMarks
+      for (const q of variantQuestions) {
+        if (q.questionType === 'free_text') continue; // Do not include educator-marked questions in the auto-marked subtotal
 
-        const questionMarks = q.marks ?? 1;
-        maxMarks += questionMarks;
+        autoMarkable += q.marks ?? 1;
 
+        // Matching questions resolve to their aggregated pair payload here (see
+        // reassembleAnswers above), so calculateEarnedMarks reaches its matching
+        // branch and awards proportional credit instead of 0.
         const studentAns = answersObj[q.id];
         totalScore += calculateEarnedMarks(q, studentAns);
       }
+
+      // Matching awards fractional marks (correctPairs / totalPairs * marks);
+      // keep two decimals so results.score stays readable and matches the
+      // rounding the remark workflow applies.
+      totalScore = Math.round(totalScore * 100) / 100;
+
+      // The single grading denominator is the round's fixed target total, so
+      // different variants remain directly comparable. Fall back to the
+      // auto-markable subtotal only when no target/pool total is known.
+      const totals = await getRoundTotalMarks([sittingData.paper.roundId]);
+      const denominator = totals.get(sittingData.paper.roundId) ?? autoMarkable;
 
       // 6. Record or update the grade in the results table
       const [existingResult] = await db
@@ -130,7 +162,12 @@ export async function POST(request: Request) {
       const resultPayload = {
         submissionId,
         score: totalScore.toString(),
-        feedback: `Auto-marked: ${totalScore} / ${maxMarks}`,
+        // The numerator is the provisional auto-marked total (free-text is still
+        // educator-marked); the denominator is the round's whole target total,
+        // the same one the review page, standings and advancement use — so the
+        // feedback fraction reads "marks so far out of the paper's total" and
+        // rises once an educator grades the written questions.
+        feedback: `Auto-marked: ${totalScore} / ${denominator}`,
         status: 'auto_marked' as const,
       };
 

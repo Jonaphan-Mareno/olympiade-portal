@@ -20,7 +20,6 @@ import {
   memberships,
   portals,
   questionPapers,
-  questions,
   remarkRequests,
   results,
   rounds,
@@ -28,7 +27,13 @@ import {
   submissions,
 } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
-import { calculateEarnedMarks } from '../marking/auto-mark';
+import {
+  calculateEarnedMarks,
+  getMatchingSelections,
+  matchingPairsOf,
+  reassembleAnswers,
+} from '../marking/auto-mark';
+import { loadSittingQuestions } from '../question-bank/load-variant';
 import { advanceQualifyingEntrants } from '../rounds/advance-entrants';
 import { notifyEducatorsInPortal } from '../notifications/in-app-notifications';
 
@@ -73,6 +78,12 @@ export type QuestionMark = {
   marks: number;
   studentAnswer: string;
   correctAnswer: string;
+  /**
+   * True when `marks` came from a human — a resolved remark, or the educator's
+   * manual score for a written answer. A free-text question that is still
+   * `false` has NOT been marked yet, so its 0 must not be shown as "wrong".
+   */
+  manuallyMarked: boolean;
 };
 
 function displayAnswer(value: unknown): string {
@@ -99,6 +110,37 @@ function round2(n: number): number {
 }
 
 /**
+ * A matching answer is stored as one aggregated JSON object of pair selections
+ * (see domain/marking/auto-mark.ts). Render it as "premise → chosen response"
+ * so a marker re-reading an appeal sees the pairs, not a blob of JSON.
+ */
+function displayMatchingAnswer(q: any, raw: string | undefined): string {
+  const selections = getMatchingSelections(raw);
+  const pairs = matchingPairsOf(q);
+  const entries =
+    pairs.length > 0
+      ? pairs.map((p: any, i: number) => [
+          String(p?.premise ?? `Pair ${i + 1}`),
+          selections[i] || '—',
+        ])
+      : Object.entries(selections).map(([i, value]) => [
+          `Pair ${Number(i) + 1}`,
+          value || '—',
+        ]);
+  if (entries.length === 0) return '—';
+  return entries.map(([premise, response]) => `${premise} → ${response}`).join('; ');
+}
+
+/** The correct pairs of a matching question, for the marker's reference. */
+function displayMatchingKey(q: any): string {
+  const pairs = matchingPairsOf(q);
+  if (pairs.length === 0) return '—';
+  return pairs
+    .map((p: any) => `${String(p?.premise ?? '')} → ${String(p?.response ?? '')}`)
+    .join('; ');
+}
+
+/**
  * The current mark for each question of an online submission: a resolved
  * remark's marks win, then educator marks for free-text, then the
  * auto-marker.
@@ -111,13 +153,20 @@ export async function getQuestionMarks(
       roundId: submissions.roundId,
       studentMembershipId: submissions.studentMembershipId,
       answersJson: submissions.answersJson,
+      variantQuestionIds: submissions.variantQuestionIds,
     })
     .from(submissions)
     .where(eq(submissions.id, submissionId));
   if (!sub) return [];
 
   const [roundQuestions, [remark], manualRows] = await Promise.all([
-    db.select().from(questions).where(eq(questions.roundId, sub.roundId)),
+    // Resolve over the submission's dealt variant (denormalized at submit), not
+    // the whole pool, so a remark only ever sees the questions actually sat.
+    // Legacy submissions (null variant) fall back to the whole round pool.
+    loadSittingQuestions(
+      { variantQuestionIds: sub.variantQuestionIds as string[] | null },
+      sub.roundId
+    ),
     db
       .select({ status: remarkRequests.status, questionMarks: remarkRequests.questionMarks })
       .from(remarkRequests)
@@ -137,10 +186,19 @@ export async function getQuestionMarks(
       : Promise.resolve([]),
   ]);
 
-  const answers = (sub.answersJson ?? {}) as Record<string, string>;
-  const manualBy = new Map(
-    manualRows.map((r) => [r.questionId, Number(r.manualScore ?? 0)])
-  );
+  // Reassemble first: matching answers are aggregated into one payload under
+  // the base question id, and any legacy per-pair `${q.id}_${index}` entries are
+  // folded back into it, so `answers[q.id]` is always what the marker expects.
+  const answers = reassembleAnswers(sub.answersJson as Record<string, unknown> | null);
+  // Only rows an educator actually scored count: `manualBy.has(id)` is what
+  // tells a display "this written answer has been marked", and a row saved with
+  // a NULL manual_score must not claim that.
+  const manualBy = new Map<string, number>();
+  for (const r of manualRows) {
+    if (!r.questionId) continue;
+    if (r.manualScore === null || r.manualScore === undefined) continue;
+    manualBy.set(r.questionId, Number(r.manualScore));
+  }
   const remarked =
     remark?.status === 'resolved' && remark.questionMarks
       ? (remark.questionMarks as Record<string, number>)
@@ -150,10 +208,15 @@ export async function getQuestionMarks(
   return roundQuestions.map((q, i) => {
     const maxMarks = q.marks ?? 1;
     let marks: number;
+    let manuallyMarked = false;
     if (remarked && remarked[q.id] !== undefined) {
       marks = Number(remarked[q.id]);
+      manuallyMarked = true;
     } else if (q.questionType === 'free_text') {
+      // Unmarkable here: a written answer only carries the educator's mark, and
+      // stays 0 until one is entered.
       marks = manualBy.get(q.id) ?? 0;
+      manuallyMarked = manualBy.has(q.id);
     } else {
       marks = calculateEarnedMarks(q, answers[q.id]);
     }
@@ -164,9 +227,17 @@ export async function getQuestionMarks(
       questionType: q.questionType,
       maxMarks,
       marks: round2(marks),
-      studentAnswer: displayAnswer(answers[q.id]),
+      manuallyMarked,
+      studentAnswer:
+        q.questionType === 'matching'
+          ? displayMatchingAnswer(q, answers[q.id])
+          : displayAnswer(answers[q.id]),
       correctAnswer:
-        q.questionType === 'free_text' ? 'Educator-marked' : displayAnswer(q.correctAnswer),
+        q.questionType === 'free_text'
+          ? 'Educator-marked'
+          : q.questionType === 'matching'
+            ? displayMatchingKey(q)
+            : displayAnswer(q.correctAnswer),
     };
   });
 }

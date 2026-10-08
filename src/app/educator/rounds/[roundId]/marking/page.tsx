@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import EducatorGradingForm from './EducatorGradingForm';
 import Link from 'next/link';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
+import { loadSittingQuestions } from '@/domain/question-bank/load-variant';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,6 +113,7 @@ export default async function EducatorMarkingPage({
       submissionType: submissions.submissionType,
       fileUrl: submissions.fileUrl,
       answersJson: submissions.answersJson,
+      variantQuestionIds: submissions.variantQuestionIds,
       status: submissions.status,
       studentMembershipId: submissions.studentMembershipId,
       studentName: users.name,
@@ -153,10 +155,22 @@ export default async function EducatorMarkingPage({
 
   let selectedSubmission = null;
   let initialGrades = undefined;
+  // The questions the SELECTED entrant was actually dealt (their sitting
+  // variant, or the whole pool for legacy sittings). Only these may be graded —
+  // handing the form the whole round pool lets an educator mark questions the
+  // entrant was never asked and push the score above the round's fixed target.
+  let selectedQuestions: typeof roundQuestions = [];
 
   if (submissionId) {
     selectedSubmission = allSubmissions.find((s) => s.id === submissionId);
-    
+
+    if (selectedSubmission) {
+      selectedQuestions = await loadSittingQuestions(
+        { variantQuestionIds: (selectedSubmission.variantQuestionIds as string[] | null) ?? null },
+        roundId
+      );
+    }
+
     if (selectedSubmission && selectedSubmission.studentMembershipId && paper) {
       // Find the sitting to load initial grades
       const sitting = await db.query.examSittings.findFirst({
@@ -309,7 +323,7 @@ export default async function EducatorMarkingPage({
             <EducatorGradingForm 
               roundId={roundId}
               submission={selectedSubmission}
-              questions={roundQuestions.map((q, i) => ({ ...q, originalIndex: i + 1 })).filter((q) => q.questionType === 'free_text')}
+              questions={selectedQuestions.map((q, i) => ({ ...q, originalIndex: i + 1 })).filter((q) => q.questionType === 'free_text')}
               initialGrades={initialGrades}
               memoText={memoText}
               memoUrl={memoUrl}
