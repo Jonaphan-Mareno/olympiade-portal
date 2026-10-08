@@ -22,6 +22,9 @@ import {
 import PhysicalPaperSelector from '@/components/organiser/PhysicalPaperSelector';
 import PublishReadinessPanel from '@/components/organiser/PublishReadinessPanel';
 import RoundFormInputs from '@/components/organiser/RoundFormInputs';
+import RoundStatsPanel from '@/components/organiser/RoundStatsPanel';
+import { getRoundStats } from '@/domain/rounds/round-stats';
+import { getRoundTotalMarks } from '@/domain/rounds/score-percentage';
 import DeleteRoundButton from './DeleteRoundButton';
 import GenerateTestButton from './GenerateTestButton';
 import BroadcastNotificationButton from './BroadcastNotificationButton';
@@ -54,6 +57,14 @@ export default async function ManageRoundPage({
   }
 
   const roundState = deriveRoundState(round);
+
+  // Participation + marking statistics for the read-only panel below
+  const [roundStatsMap, totalMarksByRound] = await Promise.all([
+    getRoundStats([round]),
+    getRoundTotalMarks([roundId]),
+  ]);
+  const roundStats = roundStatsMap.get(roundId)!;
+  const totalMarks = totalMarksByRound.get(roundId) ?? 0;
 
   const dbQuestions = await db
     .select()
@@ -166,6 +177,11 @@ export default async function ManageRoundPage({
               Remarks
             </Link>
           </div>
+        </div>
+
+        {/* Participation and marking statistics (read-only) */}
+        <div className="mb-8">
+          <RoundStatsPanel stats={roundStats} totalMarks={totalMarks} />
         </div>
 
         <form action={updateRound} className="space-y-8">

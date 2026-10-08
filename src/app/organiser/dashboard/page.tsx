@@ -1,13 +1,23 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
-import { organiserApplications, portals, schools } from '@/lib/db/schema';
-import { eq, inArray } from 'drizzle-orm';
+import {
+  memberships,
+  organiserApplications,
+  portals,
+  remarkRequests,
+  rounds,
+  schools,
+  submissions,
+} from '@/lib/db/schema';
+import { and, count, eq, inArray } from 'drizzle-orm';
 import { submitOrganiserApplication } from '../actions';
 import CreatePortalSection from '@/components/organiser/CreatePortalSection';
 import ApplicationForm from './ApplicationForm';
 import Link from 'next/link';
 import HeroBanner from '@/components/ui/HeroBanner';
+import StatCard from '@/components/ui/StatCard';
+import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 
 // Reads session + live DB data — must never be statically prerendered at
 // build time (CI builds have no database).
@@ -79,10 +89,72 @@ export default async function OrganiserDashboardPage() {
       schoolsByPortal.set(school.portalId, list);
     }
 
-    // We need metrics
+    // Metrics for the stat cards and the olympiad cards below
+    const now = new Date();
+
+    const portalRounds =
+      portalIds.length > 0
+        ? await db
+            .select()
+            .from(rounds)
+            .where(inArray(rounds.portalId, portalIds))
+        : [];
+
+    const studentCountRows =
+      portalIds.length > 0
+        ? await db
+            .select({ portalId: memberships.portalId, total: count() })
+            .from(memberships)
+            .where(
+              and(
+                inArray(memberships.portalId, portalIds),
+                eq(memberships.role, 'student')
+              )
+            )
+            .groupBy(memberships.portalId)
+        : [];
+
+    // Entrant appeals awaiting resolution across all of the user's olympiads
+    const [pendingRemarksRow] =
+      portalIds.length > 0
+        ? await db
+            .select({ value: count() })
+            .from(remarkRequests)
+            .innerJoin(
+              submissions,
+              eq(submissions.id, remarkRequests.submissionId)
+            )
+            .innerJoin(rounds, eq(rounds.id, submissions.roundId))
+            .where(
+              and(
+                eq(remarkRequests.status, 'pending'),
+                inArray(rounds.portalId, portalIds)
+              )
+            )
+        : [{ value: 0 }];
+
     const activeOlympiads = userPortals.length;
-    const totalParticipants = 0;
-    const pendingApprovals = 0;
+    const totalParticipants = studentCountRows.reduce(
+      (sum, row) => sum + row.total,
+      0
+    );
+    const roundsOpenNow = portalRounds.filter(
+      (round) => deriveRoundState(round, now) === 'open'
+    ).length;
+    const pendingRemarks = pendingRemarksRow?.value ?? 0;
+
+    // Per-portal counts for the olympiad cards
+    const roundsByPortal = new Map<string, number>();
+    for (const round of portalRounds) {
+      roundsByPortal.set(
+        round.portalId,
+        (roundsByPortal.get(round.portalId) ?? 0) + 1
+      );
+    }
+    const studentsByPortal = new Map<string, number>();
+    for (const row of studentCountRows) {
+      if (row.portalId) studentsByPortal.set(row.portalId, row.total);
+    }
 
     return (
       <div
@@ -103,6 +175,20 @@ export default async function OrganiserDashboardPage() {
         <div
           style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem 1rem' }}
         >
+          {/* Summary Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <StatCard label="Active Olympiads" value={`${activeOlympiads}`} />
+            <StatCard
+              label="Registered Students"
+              value={`${totalParticipants}`}
+            />
+            <StatCard
+              label="Rounds Currently Open"
+              value={`${roundsOpenNow}`}
+            />
+            <StatCard label="Pending Remarks" value={`${pendingRemarks}`} />
+          </div>
+
           {/* Action Area (Your Olympiads) */}
           <div className="mt-2">
             <div
@@ -160,6 +246,24 @@ export default async function OrganiserDashboardPage() {
                         </Link>
                         <span style={{ fontSize: '0.85rem', color: '#64748B' }}>
                           {portalSchoolList.length} Participating Schools
+                        </span>
+                        <span
+                          style={{
+                            display: 'block',
+                            marginTop: '0.25rem',
+                            fontSize: '0.8rem',
+                            color: '#94A3B8',
+                          }}
+                        >
+                          {roundsByPortal.get(p.id) ?? 0}{' '}
+                          {(roundsByPortal.get(p.id) ?? 0) === 1
+                            ? 'Round'
+                            : 'Rounds'}
+                          {' · '}
+                          {studentsByPortal.get(p.id) ?? 0} Registered{' '}
+                          {(studentsByPortal.get(p.id) ?? 0) === 1
+                            ? 'Student'
+                            : 'Students'}
                         </span>
                       </div>
                       <Link href={`/organiser/olympiads/${p.id}`}>

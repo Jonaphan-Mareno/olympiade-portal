@@ -7,6 +7,19 @@ import Link from 'next/link';
 import DeletePortalButton from './DeletePortalButton';
 import AddEducatorButton from './AddEducatorButton';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
+import { getRoundStats, type RoundStats } from '@/domain/rounds/round-stats';
+
+// Compact per-round display strings for the round list below. The average
+// falls back to raw marks when no total is known, matching formatScoreDisplay.
+function formatAverageDisplay(stats: RoundStats): string {
+  if (stats.averagePercentage !== null) return `${stats.averagePercentage}%`;
+  if (stats.averageScore !== null) return `${stats.averageScore} marks`;
+  return '–';
+}
+
+function formatPassRateDisplay(stats: RoundStats): string {
+  return stats.passRate !== null ? `${stats.passRate}%` : 'not set';
+}
 
 export default async function OlympiadDetailsPage({
   params,
@@ -36,6 +49,12 @@ export default async function OlympiadDetailsPage({
   const hasStartedRounds = existingRounds.some((round) => {
     return deriveRoundState(round, now) !== 'scheduled';
   });
+
+  // Participation + mark statistics per round, shown in the round list below
+  const statsByRound =
+    existingRounds.length > 0
+      ? await getRoundStats(existingRounds)
+      : new Map<string, RoundStats>();
 
   // 3. Fetch all participating schools
   const existingSchools = await db
@@ -100,6 +119,11 @@ export default async function OlympiadDetailsPage({
     if (row.schoolId) studentsBySchool.set(row.schoolId, row.total);
   }
 
+  const totalRegisteredStudents = existingSchools.reduce(
+    (sum, school) => sum + (studentsBySchool.get(school.id) ?? 0),
+    0
+  );
+
   return (
     <div className="min-h-screen bg-white font-sans">
       {/* Wave Wash Header Section */}
@@ -120,6 +144,12 @@ export default async function OlympiadDetailsPage({
           </h1>
           <p className="text-slate-500 mt-2 text-lg">
             Manage your rounds, question banks, and automations here.
+          </p>
+          <p className="text-sm text-slate-500 mt-1">
+            {existingRounds.length} round{existingRounds.length === 1 ? '' : 's'} ·{' '}
+            {existingSchools.length} school{existingSchools.length === 1 ? '' : 's'} ·{' '}
+            {totalRegisteredStudents} registered{' '}
+            student{totalRegisteredStudents === 1 ? '' : 's'}
           </p>
           <div className="mt-4">
             <Link
@@ -160,6 +190,7 @@ export default async function OlympiadDetailsPage({
               <div className="flex flex-col">
                 {existingRounds.map((round, idx) => {
                   const state = deriveRoundState(round);
+                  const stats = statsByRound.get(round.id);
                   return (
                     <div
                       key={round.id}
@@ -196,6 +227,13 @@ export default async function OlympiadDetailsPage({
                           Opens: {formatSAST(round.opensAt)} | Closes:{' '}
                           {formatSAST(round.closesAt)}
                         </p>
+                        {stats && (
+                          <p className="text-xs text-slate-500 mt-1 m-0">
+                            {stats.wrote} wrote · {stats.completed} completed ·
+                            Avg {formatAverageDisplay(stats)} · Pass{' '}
+                            {formatPassRateDisplay(stats)}
+                          </p>
+                        )}
                       </div>
                       <Link
                         href={`/organiser/olympiads/${portalId}/rounds/${round.id}`}
