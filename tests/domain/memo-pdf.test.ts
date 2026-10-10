@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import {
-  correctChoices,
-  generateMemoPdf,
-  optionText,
-  type PdfQuestion,
-} from '@/lib/pdf/online-test-pdf';
+import { generateMemoPdf, type PdfQuestion } from '@/lib/pdf/online-test-pdf';
+import { correctChoices, optionText } from '@/domain/memo/memo';
 
 const OPTIONS = ['Paris', 'Rome, Italy', 'Madrid'];
 

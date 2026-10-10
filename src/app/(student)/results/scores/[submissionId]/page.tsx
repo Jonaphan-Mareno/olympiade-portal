@@ -28,6 +28,8 @@ import { loadSittingQuestions } from '@/domain/question-bank/load-variant';
 import { getScriptPages } from '@/domain/scripts/script-pages';
 import { parseStoredPins } from '@/domain/scripts/script-rules';
 import ScriptViewer, { type ScriptPageSet } from '@/components/scripts/ScriptViewer';
+import MemoPanel from '@/components/scripts/MemoPanel';
+import { getRoundMemo } from '@/domain/memo/round-memo';
 
 export const dynamic = 'force-dynamic';
 
@@ -122,14 +124,18 @@ export default async function ViewPaperStudentPage({
       sets.push({ key: 'remarked', label: 'After remark', pageIds: remarkedIds });
     }
     const totalMarks = (await getRoundTotalMarks([subData.roundId])).get(subData.roundId) ?? 0;
+    // The memo sits beside the script, so the entrant can check each answer
+    // before deciding whether to appeal. Same moment the script appears.
+    const memo = published ? await getRoundMemo(subData.roundId) : null;
 
     return (
       <div className="min-h-screen bg-[#F8FAFC] pb-20">
-        <div className="max-w-4xl mx-auto px-4 py-12">
+        <div className={`${memo ? 'max-w-7xl' : 'max-w-4xl'} mx-auto px-4 py-12`}>
           <Link href="/results/scores" className="inline-flex items-center text-blue-600 hover:text-blue-800 font-bold text-sm uppercase tracking-wider mb-8">
             &larr; Back to Results
           </Link>
-          <div className="bg-white border-2 border-slate-200 p-6 md:p-8">
+          <div className={memo ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-6 items-start' : ''}>
+          <div className="bg-white border-2 border-slate-200 p-6 md:p-8 min-w-0">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
               <div>
                 <h2 className="text-2xl font-serif font-bold text-blue-950">Written Exam</h2>
@@ -154,6 +160,16 @@ export default async function ViewPaperStudentPage({
             ) : (
               <ScriptViewer sets={sets} />
             )}
+          </div>
+          {memo && (
+            <div className="lg:sticky lg:top-6">
+              <MemoPanel
+                roundId={subData.roundId}
+                entries={memo.entries}
+                hasUploadedMemo={memo.hasUploadedMemo}
+              />
+            </div>
+          )}
           </div>
           <div className="mt-8">
             <RemarkSection

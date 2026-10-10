@@ -1,4 +1,5 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from 'pdf-lib';
+import { buildMemoEntries, letter, optionText, seededOrder } from '@/domain/memo/memo';
 
 /**
  * Minimal shape of a question as produced by QuestionBuilder.
@@ -23,35 +24,7 @@ const PAGE_W = 595.28; // A4
 const PAGE_H = 841.89;
 const MARGIN = 56;
 const CONTENT_W = PAGE_W - MARGIN * 2;
-const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
-const letter = (i: number) => LETTERS[i] ?? String(i + 1);
 const marksOf = (q: PdfQuestion) => Number(q.marks) || 1;
-
-/**
- * Deterministic shuffle so the paper and memo agree on the order of the
- * matching responses without needing to persist anything.
- */
-function seededOrder(length: number, seed: string): number[] {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  const rand = () => {
-    h += 0x6d2b79f5;
-    let t = h;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-  const order = Array.from({ length }, (_, i) => i);
-  for (let i = length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
-  }
-  return order;
-}
 
 class Writer {
   page!: PDFPage;
@@ -209,54 +182,6 @@ async function loadImage(doc: PDFDocument, url: string): Promise<PDFImage | null
   }
 }
 
-/** An option's display text (options are plain strings, or { text } objects). */
-export function optionText(o: unknown): string {
-  if (typeof o === 'string') return o;
-  if (o && typeof o === 'object' && (o as { text?: unknown }).text !== undefined) {
-    return String((o as { text: unknown }).text);
-  }
-  return String(o);
-}
-
-/**
- * The correct option(s) of a choice question, as option texts. The answer is
- * stored in several shapes (a string, a JSON array string, a comma-separated
- * string, an array, or { text }); this reads them the way the auto-marker does,
- * but prefers an exact option match so an option that itself contains a comma
- * is not split.
- */
-export function correctChoices(correct: unknown, options: string[]): string[] {
-  const canon = (c: string) =>
-    options.find((o) => o.trim().toLowerCase() === c.trim().toLowerCase()) ?? c.trim();
-
-  let raw: string[] = [];
-  if (Array.isArray(correct)) {
-    raw = correct.map(optionText);
-  } else if (correct && typeof correct === 'object') {
-    const text = (correct as { text?: unknown }).text;
-    raw = Array.isArray(text) ? text.map(String) : text !== undefined ? [String(text)] : [];
-  } else if (correct !== null && correct !== undefined && String(correct).trim() !== '') {
-    const str = String(correct);
-    if (options.some((o) => o.trim().toLowerCase() === str.trim().toLowerCase())) {
-      raw = [str];
-    } else {
-      try {
-        const parsed = JSON.parse(str);
-        raw = Array.isArray(parsed) ? parsed.map(String) : [String(parsed)];
-      } catch {
-        raw = str.includes(',') ? str.split(',') : [str];
-      }
-    }
-  }
-  return raw.map((c) => c.trim()).filter(Boolean).map(canon);
-}
-
-function toArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(String);
-  if (typeof value === 'string' && value.trim() !== '') return [value];
-  return [];
-}
-
 async function createDoc(title: string) {
   const doc = await PDFDocument.create();
   doc.setTitle(title);
@@ -365,64 +290,42 @@ export async function generateMemoPdf(
     gap: 10,
   });
 
-  questions.forEach((q, i) => {
-    const opts: any[] = Array.isArray(q.options) ? q.options : [];
+  for (const entry of buildMemoEntries(questions)) {
     w.ensure(60);
-    w.text(`Question ${i + 1}`, { bold: true, size: 12 });
-    w.rightText(`[${marksOf(q)} mark${marksOf(q) === 1 ? '' : 's'}]`);
+    w.text(`Question ${entry.number}`, { bold: true, size: 12 });
+    w.rightText(`[${entry.marks} mark${entry.marks === 1 ? '' : 's'}]`);
     w.space(2);
     // The question itself, so the key can be read without the paper beside it
-    w.text(q.prompt || '', { size: 10, color: [0.3, 0.3, 0.3], gap: 4 });
+    w.text(entry.prompt, { size: 10, color: [0.3, 0.3, 0.3], gap: 4 });
 
-    switch (q.type) {
+    switch (entry.type) {
       case 'single_choice':
-      case 'multiple_choice': {
-        const optionTexts = opts.map(optionText);
-        const correct = correctChoices(q.correctAnswer, optionTexts);
+      case 'multiple_choice':
         // Every option, as on the paper, with the right one(s) marked
-        optionTexts.forEach((text, oi) => {
-          const isCorrect = correct.includes(text);
-          w.text(`${letter(oi)}.  ${text}${isCorrect ? '    <-- CORRECT' : ''}`, {
+        entry.options.forEach((o) =>
+          w.text(`${o.letter}.  ${o.text}${o.correct ? '    <-- CORRECT' : ''}`, {
             indent: 18,
-            bold: isCorrect,
-          });
-        });
-        const answerLetters = correct.map((c) => {
-          const idx = optionTexts.indexOf(c);
-          return idx >= 0 ? letter(idx) : c;
-        });
+            bold: o.correct,
+          })
+        );
         w.space(2);
-        w.text(
-          answerLetters.length ? `Answer: ${answerLetters.join(', ')}` : 'Answer: (no answer selected)',
-          { indent: 18, bold: true }
+        w.text(`Answer: ${entry.answer ?? '(no answer selected)'}`, { indent: 18, bold: true });
+        break;
+      case 'true_false':
+        w.text(`Answer: ${entry.answer ?? '(no answer selected)'}`, { indent: 18, bold: true });
+        break;
+      case 'matching':
+        entry.pairs.forEach((p, pi) =>
+          w.text(`${pi + 1}.  ${p.premise}  ->  ${p.letter}.  ${p.response}`, { indent: 18 })
         );
         break;
-      }
-      case 'true_false': {
-        const [answer] = correctChoices(q.correctAnswer, ['True', 'False']);
-        w.text(
-          answer
-            ? `Answer: ${answer.charAt(0).toUpperCase()}${answer.slice(1).toLowerCase()}`
-            : 'Answer: (no answer selected)',
-          { indent: 18, bold: true }
-        );
-        break;
-      }
-      case 'matching': {
-        const order = seededOrder(opts.length, q.id);
-        opts.forEach((p, pi) => {
-          const pos = order.indexOf(pi);
-          w.text(`${pi + 1}.  ${p?.premise ?? ''}  ->  ${letter(pos)}.  ${p?.response ?? ''}`, { indent: 18 });
-        });
-        break;
-      }
       case 'free_text':
       default:
-        w.text(toArray(q.correctAnswer)[0] ?? '(no marking guideline provided)', { indent: 18 });
+        w.text(entry.guideline ?? '(no marking guideline provided)', { indent: 18 });
         break;
     }
     w.space(12);
-  });
+  }
 
   w.finish();
   return doc.save();
