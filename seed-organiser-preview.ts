@@ -24,7 +24,7 @@ import {
   submissions,
   results,
   examSittings,
-} from './src/lib/db/schema/index.ts';
+} from './src/lib/db/schema';
 
 const ORGANISER_EMAIL = 'testorganiser2@gmail.com';
 const ORGANISER_PASSWORD = '111111';
