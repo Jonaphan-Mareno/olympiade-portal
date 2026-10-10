@@ -50,7 +50,7 @@ Migration `0013_question_bank_variants` adds four indexes alongside the new colu
 | `questions_round_idx` | `questions` | btree (`round_id`) **INCLUDE** (`marks`, `difficulty`) | Covering lookup for variant generation — fetches a round's pool with marks/difficulty without a heap visit. |
 | `question_papers_round_uniq` | `question_papers` | **unique** btree (`round_id`) | Enforces one paper per round. |
 | `exam_sittings_active_uniq` | `exam_sittings` | **unique, partial** btree (`student_membership_id`, `question_paper_id`) **WHERE** `status = 'active'` | Guarantees a student holds at most one active sitting per paper (resume-safe concurrency). |
-| `submissions_student_round_idx` | `submissions` | btree (`student_membership_id`, `round_id`) | Fast per-student, per-round submission lookups. |
+| `submissions_student_round_uniq` | `submissions` | **unique** btree (`student_membership_id`, `round_id`) | Enforces one submission per entrant per round so the online-sitting and offline-marks routes can never leave a hybrid-round entrant double-counted; also serves per-student, per-round lookups. `student_membership_id` is nullable and Postgres treats NULLs as distinct. |
 
 :::note Documented divergence from the Drizzle snapshot
 Drizzle's index builder **cannot express an `INCLUDE` clause**. The covering columns on `questions_round_idx` (`marks`, `difficulty`) are therefore written **by hand** in the migration SQL, while `meta/0013_snapshot.json` records only the plain `round_id` index. This is an intentional, documented divergence — if the covering set ever changes, keep the hand-written SQL and the snapshot in sync manually.

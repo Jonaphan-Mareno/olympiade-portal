@@ -29,6 +29,9 @@ const h = vi.hoisted(() => {
     roundQuestions: [] as any[], // questions table (getRoundTotalMarks pool)
     roundRows: [] as any[], // rounds table (getRoundTotalMarks target)
     existingResult: null as any,
+    // When true, the submissions INSERT loses the ON CONFLICT DO NOTHING race
+    // (a concurrent writer created the row first), so returning() resolves empty.
+    conflictOnInsert: false,
     updates: [] as Array<{ table: any; values: any }>,
     inserts: [] as Array<{ table: any; values: any }>,
     tables: {} as Record<string, any>,
@@ -73,9 +76,15 @@ const h = vi.hoisted(() => {
     insert: (table: any) => ({
       values: (values: any) => {
         state.inserts.push({ table, values });
-        const returned =
-          table === state.tables.submissions ? [{ id: 'sub-new' }] : [{ id: 'row-new' }];
+        const lostRace =
+          state.conflictOnInsert && table === state.tables.submissions;
+        const returned = lostRace
+          ? []
+          : table === state.tables.submissions
+            ? [{ id: 'sub-new' }]
+            : [{ id: 'row-new' }];
         const thenable: any = {
+          onConflictDoNothing: () => thenable,
           returning: () => Promise.resolve(returned),
           then: (res: any, rej: any) => Promise.resolve(returned).then(res, rej),
         };
@@ -143,6 +152,7 @@ beforeEach(() => {
   h.state.roundQuestions = [];
   h.state.roundRows = [];
   h.state.existingResult = null;
+  h.state.conflictOnInsert = false;
   h.state.updates = [];
   h.state.inserts = [];
 });
@@ -355,6 +365,59 @@ describe('POST /api/student/sitting/submit', () => {
     expect(
       h.state.updates.some((u) => u.table === results && u.values.score === '1')
     ).toBe(true);
+  });
+
+  it('leaves an offline submission and its mark untouched (first is final)', async () => {
+    // A hybrid round the educator already marked offline before the entrant
+    // submitted online: the offline record is authoritative and must survive.
+    h.state.sittingData = activeSitting();
+    h.state.savedAnswers = [{ questionId: 'q1', answerValue: 'A' }];
+    h.state.existingSubmission = {
+      id: 'sub-offline',
+      status: 'submitted',
+      submissionType: 'offline',
+    };
+    h.state.variantQuestions = [
+      { id: 'q1', questionType: 'single_choice', marks: 1, correctAnswer: 'A' },
+    ];
+    h.state.existingResult = { id: 'res-offline', score: '50' };
+
+    const res = await POST(submitReq({ sittingId: 'sitting-1' }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true });
+    // The sitting is still flagged submitted, but the offline submission and its
+    // result are neither inserted nor overwritten.
+    expect(
+      h.state.updates.some((u) => u.table === examSittings && u.values.status === 'submitted')
+    ).toBe(true);
+    expect(h.state.inserts.some((i) => i.table === submissions)).toBe(false);
+    expect(h.state.updates.some((u) => u.table === submissions)).toBe(false);
+    expect(h.state.inserts.some((i) => i.table === results)).toBe(false);
+    expect(h.state.updates.some((u) => u.table === results)).toBe(false);
+  });
+
+  it('bows out without marking when it loses the insert race (concurrent submit)', async () => {
+    // Two submits land at once: the SELECT sees nothing, but a concurrent writer
+    // creates the row first, so ON CONFLICT DO NOTHING returns no row and this
+    // request stops without marking anything over the winner (first is final).
+    h.state.sittingData = activeSitting();
+    h.state.savedAnswers = [{ questionId: 'q1', answerValue: 'B' }];
+    h.state.existingSubmission = null;
+    h.state.conflictOnInsert = true;
+    h.state.variantQuestions = [
+      { id: 'q1', questionType: 'single_choice', marks: 2, correctAnswer: 'B' },
+    ];
+    h.state.existingResult = null;
+
+    const res = await POST(submitReq({ sittingId: 'sitting-1' }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true });
+    // The insert was attempted, but no result was auto-marked over the winner.
+    expect(h.state.inserts.some((i) => i.table === submissions)).toBe(true);
+    expect(h.state.inserts.some((i) => i.table === results)).toBe(false);
+    expect(h.state.updates.some((u) => u.table === results)).toBe(false);
   });
 });
 

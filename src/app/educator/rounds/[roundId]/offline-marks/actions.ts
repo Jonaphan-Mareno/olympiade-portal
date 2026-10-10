@@ -103,7 +103,10 @@ export async function submitBulkOfflineMarks(
       if (existingSubmissions.length > 0) {
         submissionId = existingSubmissions[0].id;
       } else {
-        // Create an offline submission
+        // Create an offline submission. Race-safe against the unique
+        // (student_membership_id, round_id) index: a concurrent online submit
+        // may create the row between the read above and this insert, so use
+        // ON CONFLICT DO NOTHING and re-read rather than erroring the whole batch.
         const newSubmissions = await db.insert(submissions).values({
           roundId,
           studentMembershipId: mark.studentMembershipId,
@@ -111,8 +114,22 @@ export async function submitBulkOfflineMarks(
           submissionType: 'offline',
           status: 'submitted',
           submittedAt: new Date(),
-        }).returning({ id: submissions.id });
-        submissionId = newSubmissions[0].id;
+        }).onConflictDoNothing().returning({ id: submissions.id });
+
+        if (newSubmissions.length > 0) {
+          submissionId = newSubmissions[0].id;
+        } else {
+          // Lost the race: re-read the winner. First is final — never overwrite
+          // a script the entrant wrote online, so skip it if that is what won.
+          const [winner] = await db.select().from(submissions).where(
+            and(
+              eq(submissions.roundId, roundId),
+              eq(submissions.studentMembershipId, mark.studentMembershipId)
+            )
+          ).limit(1);
+          if (!winner || winner.submissionType === 'online') continue;
+          submissionId = winner.id;
+        }
       }
 
       // Upsert the result

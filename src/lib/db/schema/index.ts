@@ -190,7 +190,14 @@ export const submissions = pgTable(
     status: text('status', { enum: ['draft', 'submitted'] }),
   },
   (t) => ({
-    studentRoundIdx: index('submissions_student_round_idx').on(
+    // One submission per entrant per round. Both routes into this table — the
+    // online sitting submit and the educator's offline bulk marks — find-or-create
+    // on this pair, so the UNIQUE index is the DB-level backstop that keeps a
+    // hybrid-round entrant down both routes a single row (round-stats counts
+    // marks per result row, not per student, so a duplicate would skew averages).
+    // student_membership_id is nullable; Postgres treats NULLs as distinct, so
+    // anonymous rows never collide.
+    studentRoundUniq: uniqueIndex('submissions_student_round_uniq').on(
       t.studentMembershipId,
       t.roundId
     ),
