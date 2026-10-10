@@ -2,8 +2,20 @@
 
 import { useState } from 'react';
 import { requestStudentRemark } from './actions';
+import PaperRemarkForm from './PaperRemarkForm';
 
-export default function RequestRemarkButton({ submissionId }: { submissionId: string }) {
+/**
+ * `paperPageIds` is set for paper scripts (possibly empty when no script was
+ * uploaded) and switches to the paper appeal form; online appeals keep the
+ * reason-only form.
+ */
+export default function RequestRemarkButton({
+  submissionId,
+  paperPageIds,
+}: {
+  submissionId: string;
+  paperPageIds?: string[];
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,7 +49,15 @@ export default function RequestRemarkButton({ submissionId }: { submissionId: st
         Request Remark
       </button>
 
-      {isOpen && (
+      {isOpen && paperPageIds && (
+        <PaperRemarkForm
+          submissionId={submissionId}
+          pageIds={paperPageIds}
+          onClose={() => setIsOpen(false)}
+        />
+      )}
+
+      {isOpen && !paperPageIds && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-none border-2 border-slate-200 shadow-xl w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b-2 border-slate-200 bg-slate-50">

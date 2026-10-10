@@ -7,7 +7,9 @@
 //   3. The marker re-marks it:
 //        - online rounds: question by question, starting from the current
 //          marks (auto-marked or educator-marked)
-//        - paper rounds: re-mark the physical script and enter the new total
+//        - paper rounds: re-mark the physical script (its uploaded pages, with
+//          the entrant's question numbers and pins) and enter the new total,
+//          optionally uploading the re-marked pages
 //      and must explain the outcome.
 //   4. The new total is written to results.score — the single source the
 //      standings, rankings, certificates and next-round qualification read —
@@ -24,9 +26,10 @@ import {
   results,
   rounds,
   studentAnswers,
+  submissionScriptPages,
   submissions,
 } from '@/lib/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, count, eq } from 'drizzle-orm';
 import {
   calculateEarnedMarks,
   getMatchingSelections,
@@ -36,6 +39,7 @@ import {
 import { loadSittingQuestions } from '../question-bank/load-variant';
 import { advanceQualifyingEntrants } from '../rounds/advance-entrants';
 import { notifyEducatorsInPortal } from '../notifications/in-app-notifications';
+import { validatePaperQuery, type PaperQueryInput } from '../scripts/script-rules';
 
 export const REMARK_WINDOW_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -246,6 +250,8 @@ export type RemarkRow = {
   id: string;
   submissionId: string;
   reason: string;
+  questionRefs: string | null;
+  pins: unknown;
   status: 'pending' | 'resolved';
   previousScore: string | null;
   newScore: string | null;
@@ -269,6 +275,8 @@ export async function getRemarkRequest(requestId: string): Promise<RemarkRow | n
       id: remarkRequests.id,
       submissionId: remarkRequests.submissionId,
       reason: remarkRequests.reason,
+      questionRefs: remarkRequests.questionRefs,
+      pins: remarkRequests.pins,
       status: remarkRequests.status,
       previousScore: remarkRequests.previousScore,
       newScore: remarkRequests.newScore,
@@ -323,11 +331,16 @@ export async function canResolveRemark(
   return Boolean(educator);
 }
 
-/** Entrant appeals their own submission. */
+/**
+ * Entrant appeals their own submission. For a paper script the entrant may
+ * also name the questions concerned and pin spots on their original pages;
+ * online appeals take the reason only.
+ */
 export async function createRemarkRequest(
   userId: string,
   submissionId: string,
   reason: string,
+  query: PaperQueryInput = {},
   now: Date = new Date()
 ): Promise<{ error?: string }> {
   const trimmed = reason.trim();
@@ -341,6 +354,7 @@ export async function createRemarkRequest(
       portalId: rounds.portalId,
       roundName: rounds.name,
       schoolId: memberships.schoolId,
+      submissionType: submissions.submissionType,
       existingId: remarkRequests.id,
     })
     .from(submissions)
@@ -362,12 +376,43 @@ export async function createRemarkRequest(
   );
   if (!eligibility.eligible) return { error: eligibility.reason };
 
+  let paperQuery: { questionRefs: string | null; pins: unknown } = {
+    questionRefs: null,
+    pins: null,
+  };
+  const hasPins = Array.isArray(query.pins) ? query.pins.length > 0 : query.pins != null;
+  if (row.submissionType === 'online') {
+    if (query.questionRefs?.trim() || hasPins) {
+      return { error: 'Question numbers and pins are only for paper scripts.' };
+    }
+  } else if (query.questionRefs?.trim() || hasPins) {
+    // Pins point at the original pages; only look them up when needed
+    let pageCount = 0;
+    if (hasPins) {
+      const [pages] = await db
+        .select({ pages: count() })
+        .from(submissionScriptPages)
+        .where(
+          and(
+            eq(submissionScriptPages.submissionId, submissionId),
+            eq(submissionScriptPages.kind, 'original')
+          )
+        );
+      pageCount = Number(pages?.pages ?? 0);
+    }
+    const validated = validatePaperQuery(query, pageCount);
+    if ('error' in validated) return { error: validated.error };
+    paperQuery = validated;
+  }
+
   const inserted = await db
     .insert(remarkRequests)
     .values({
       submissionId,
       requestedByUserId: userId,
       reason: trimmed,
+      questionRefs: paperQuery.questionRefs,
+      pins: paperQuery.pins,
       previousScore: row.score,
     })
     .onConflictDoNothing()

@@ -6,6 +6,10 @@ import {
   getQuestionMarks,
   getRemarkRequest,
 } from '@/domain/remarks/remarks';
+import { getScriptPages } from '@/domain/scripts/script-pages';
+import { parseStoredPins } from '@/domain/scripts/script-rules';
+import ScriptViewer, { type ScriptPageSet } from '@/components/scripts/ScriptViewer';
+import { PinNotes } from '@/components/scripts/PinOverlay';
 import RemarkResolver from './RemarkResolver';
 
 function formatDate(date: Date): string {
@@ -61,6 +65,23 @@ export default async function RemarkReview({
   const questions = mode === 'online' ? await getQuestionMarks(request.submissionId) : [];
   const currentScore = request.currentScore !== null ? Number(request.currentScore) : null;
 
+  // Paper: the uploaded script with the entrant's pins, plus any re-marked pages
+  const pins = parseStoredPins(request.pins);
+  const scriptSets: ScriptPageSet[] = [];
+  if (mode === 'paper') {
+    const pages = await getScriptPages(request.submissionId);
+    const originalIds = pages.filter((p) => p.kind === 'original').map((p) => p.id);
+    const remarkedIds = pages
+      .filter((p) => p.kind === 'remarked' && p.remarkRequestId === request.id)
+      .map((p) => p.id);
+    if (originalIds.length > 0) {
+      scriptSets.push({ key: 'original', label: 'Original', pageIds: originalIds, pins });
+    }
+    if (remarkedIds.length > 0) {
+      scriptSets.push({ key: 'remarked', label: 'After remark', pageIds: remarkedIds });
+    }
+  }
+
   return (
     <div className="space-y-6 text-slate-900">
       <div className="bg-white border border-slate-200 rounded-lg p-6">
@@ -89,6 +110,11 @@ export default async function RemarkReview({
           <div className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-1">
             Entrant&apos;s reason · {formatDate(request.createdAt)}
           </div>
+          {request.questionRefs && (
+            <p className="text-slate-800 mb-1">
+              <span className="font-semibold">Questions:</span> {request.questionRefs}
+            </p>
+          )}
           <p className="whitespace-pre-wrap text-slate-800">{request.reason}</p>
         </div>
         {mode === 'paper' && request.fileUrl && (
@@ -102,6 +128,34 @@ export default async function RemarkReview({
           </a>
         )}
       </div>
+
+      {mode === 'paper' && (
+        <div className="bg-white border border-slate-200 rounded-lg p-6">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
+            Marked script
+          </h3>
+          {scriptSets.length === 0 && (
+            <p className="text-sm text-slate-600 mb-4">
+              The school hasn&apos;t uploaded this entrant&apos;s marked script.
+            </p>
+          )}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {scriptSets.length > 0 && (
+              <div className="lg:col-span-2">
+                <ScriptViewer sets={scriptSets} />
+              </div>
+            )}
+            {pins.length > 0 && (
+              <div className={scriptSets.length > 0 ? '' : 'lg:col-span-3'}>
+                <div className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-2">
+                  Entrant&apos;s pins
+                </div>
+                <PinNotes pins={pins} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {request.status === 'pending' ? (
         <RemarkResolver
