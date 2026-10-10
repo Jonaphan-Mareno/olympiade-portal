@@ -16,6 +16,7 @@ import { eq, and } from 'drizzle-orm';
 import { loadSittingQuestions } from '@/domain/question-bank/load-variant';
 import Link from 'next/link';
 import { resolveActiveSchool } from '@/domain/educator/active-school';
+import { currentRemark } from '@/domain/remarks/remarks';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,10 +83,13 @@ export default async function ViewFullPaperPage({
     );
   }
 
-  const [remark] = await db
-    .select()
-    .from(remarkRequests)
-    .where(eq(remarkRequests.submissionId, submissionId));
+  // The latest appeal that wasn't withdrawn (up to two per paper)
+  const remark = currentRemark(
+    await db
+      .select()
+      .from(remarkRequests)
+      .where(eq(remarkRequests.submissionId, submissionId))
+  );
 
   // Fetch ONLY the questions this entrant was actually dealt (their sitting
   // variant, or the whole pool for legacy sittings). Rendering the full pool

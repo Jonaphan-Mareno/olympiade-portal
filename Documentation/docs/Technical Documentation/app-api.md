@@ -467,6 +467,7 @@ Every action in this section follows the same broad shape:
 | 36 | [`prepareScriptUploadAction`](#preparescriptuploadaction) | Educator / remark resolver | `src/components/scripts/actions.ts` |
 | 37 | [`commitScriptUploadAction`](#commitscriptuploadaction) | Educator / remark resolver | `src/components/scripts/actions.ts` |
 | 38 | [`discardScriptUploadAction`](#discardscriptuploadaction) | Educator / remark resolver | `src/components/scripts/actions.ts` |
+| 39 | [`withdrawStudentRemark`](#withdrawstudentremark) | Student | `.../(student)/results/scores/[submissionId]/actions.ts` |
 
 ### Authentication & Account
 
@@ -861,7 +862,12 @@ Educators are school-scoped: their membership ties a `userId` to a specific `por
 Invites students to the educator's own school within a portal.
 
 ```ts
-inviteStudents(formData: FormData): Promise<{ success?: true; count?: number; error?: string }>
+inviteStudents(formData: FormData): Promise<{
+  success?: true;
+  count?: number;
+  skipped?: { email: string; reason: string }[];
+  error?: string;
+}>
 ```
 
 - **Role:** Educator with an **accepted** membership for the given `portalId` + `schoolId`.
@@ -870,14 +876,15 @@ inviteStudents(formData: FormData): Promise<{ success?: true; count?: number; er
   - The caller must hold an accepted `educator` membership for that exact portal **and** school.
   - Defense-in-depth: the target `school` row must belong to `portalId` (legacy rows predating the membership guard are rejected).
 - **Behaviour (per unique email):**
-  - Already an accepted member → skipped.
+  - Already registered for this olympiad through **another school** (accepted or pending) → skipped and reported; the membership is never moved between schools.
+  - Already an accepted member of this school → skipped and reported.
   - Existing user, no membership → membership inserted as **accepted**.
   - No account → membership inserted as **invited** and an invite email is queued.
   - Pending invite whose owner now has an account → linked and accepted.
-  - Pending invite, still no account → re-sent with the original token, re-pointed at this school.
+  - Pending invite at this school, still no account → re-sent with the original token (reported as re-sent).
   - Invite emails are sent after the DB loop; the whole operation is wrapped in try/catch.
 - **Side effects:** `revalidatePath('/educator')`, `/educator/entrants`, and `/organiser/olympiads/<portalId>`.
-- **Returns:** `{ error }` on guard/DB failure; otherwise `{ success: true, count }`.
+- **Returns:** `{ error }` on guard/DB failure; otherwise `{ success: true, count, skipped }`, where `count` is the number of students actually added and `skipped` lists every email that wasn't, with the reason (shown to the educator under the form).
 
 **Marking** — `src/app/educator/rounds/[roundId]/marking/actions.ts`
 
@@ -1031,6 +1038,17 @@ requestStudentRemark(
 - **Behaviour:** sets `results.status = 'remark_requested'` and stores `remarkReason`, then revalidates `/results/scores/<submissionId>`.
 - **Paper scripts only:** `paperQuery` stores `remark_requests.question_refs` (≤ 200 chars) and `pins` (≤ 10; `page` must be an original page of the uploaded script, `x`/`y` in [0, 1], `note` ≤ 300 chars). It is rejected for online submissions.
 - **Returns:** `{ success: true }`, or `{ success: false, error }` when unauthorized or on failure.
+
+- **Attempts:** up to 2 requests per submission (`REMARK_MAX_ATTEMPTS`), one pending at a time; withdrawn requests count.
+
+#### withdrawStudentRemark
+
+```ts
+withdrawStudentRemark(submissionId: string, requestId: string): Promise<{ success: boolean; error?: string }>
+```
+
+- **Role:** Student who owns the submission.
+- **Behaviour:** sets a **pending** request to `withdrawn` (it still counts as an attempt) and resets the result summary (`results.status` back to `remark_resolved` if an earlier remark was completed, else `auto_marked`). Fails if a marker has already resolved it; the conditional update means only one of withdraw/resolve can win.
 
 :::note
 This mirrors the educator's [`requestRemark`](#requestremark) but adds a strict ownership guard, since students may only act on their own submissions.

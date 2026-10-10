@@ -5,6 +5,7 @@ import {
   canResolveRemark,
   getQuestionMarks,
   getRemarkRequest,
+  REMARK_MAX_ATTEMPTS,
 } from '@/domain/remarks/remarks';
 import { getScriptPages } from '@/domain/scripts/script-pages';
 import { parseStoredPins } from '@/domain/scripts/script-rules';
@@ -96,15 +97,26 @@ export default async function RemarkReview({
               {mode === 'online' ? 'Online test' : 'Paper test'}
             </p>
           </div>
-          <span
-            className={`self-start px-3 py-1 text-xs font-bold rounded ${
-              request.status === 'pending'
-                ? 'bg-amber-100 text-amber-900'
-                : 'bg-green-100 text-green-800'
-            }`}
-          >
-            {request.status === 'pending' ? 'Awaiting remark' : 'Resolved'}
-          </span>
+          <div className="self-start flex flex-col items-end gap-1">
+            <span
+              className={`px-3 py-1 text-xs font-bold rounded ${
+                request.status === 'pending'
+                  ? 'bg-amber-100 text-amber-900'
+                  : request.status === 'withdrawn'
+                    ? 'bg-slate-100 text-slate-600'
+                    : 'bg-green-100 text-green-800'
+              }`}
+            >
+              {request.status === 'pending'
+                ? 'Awaiting remark'
+                : request.status === 'withdrawn'
+                  ? 'Withdrawn'
+                  : 'Resolved'}
+            </span>
+            <span className="text-xs text-slate-500">
+              Request {request.attempt} of {REMARK_MAX_ATTEMPTS}
+            </span>
+          </div>
         </div>
         <div className="bg-amber-50 border border-amber-200 rounded p-4">
           <div className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-1">
@@ -165,6 +177,10 @@ export default async function RemarkReview({
           currentScore={currentScore}
           doneHref={doneHref}
         />
+      ) : request.status === 'withdrawn' ? (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 text-sm text-slate-700">
+          The entrant withdrew this request before it was remarked. Nothing to do.
+        </div>
       ) : (
         <div className="bg-green-50 border border-green-200 rounded-lg p-6">
           <div className="text-sm mb-2">

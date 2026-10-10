@@ -16,7 +16,12 @@ import {
 import { eq, and } from 'drizzle-orm';
 import Link from 'next/link';
 import RemarkSection from './RemarkSection';
-import { getRemarkEligibility } from '@/domain/remarks/remarks';
+import {
+  currentRemark,
+  getRemarkEligibility,
+  latestResolvedRemark,
+  summariseAttempts,
+} from '@/domain/remarks/remarks';
 import { formatScoreDisplay, getRoundTotalMarks } from '@/domain/rounds/score-percentage';
 import {
   calculateEarnedMarks,
@@ -77,26 +82,32 @@ export default async function ViewPaperStudentPage({
     return notFound();
   }
 
-  const [remark] = await db
+  // Up to REMARK_MAX_ATTEMPTS appeals per paper (withdrawn ones count)
+  const remarkRows = await db
     .select()
     .from(remarkRequests)
     .where(eq(remarkRequests.submissionId, submissionId));
+  const attempts = summariseAttempts(remarkRows);
+  const remark = currentRemark(remarkRows);
+  const resolvedRemark = latestResolvedRemark(remarkRows);
   const remarkEligibility = getRemarkEligibility({
     resultsPublishedAt: subData.resultsPublishedAt,
     hasScore: subData.result?.score != null,
-    hasExistingRequest: Boolean(remark),
+    ...attempts,
   });
   const remarkSection = (
     <RemarkSection
       submissionId={submissionId}
-      remark={remark ?? null}
+      remark={remark}
       eligibility={remarkEligibility}
+      attemptsUsed={attempts.attemptsUsed}
+      lastWithdrawn={remarkRows.length > 0 && remark === null}
     />
   );
-  // A completed remark's per-question marks replace the original marks
+  // The latest completed remark's per-question marks replace the original marks
   const remarkedMarks =
-    remark?.status === 'resolved' && remark.questionMarks
-      ? (remark.questionMarks as Record<string, number>)
+    resolvedRemark?.questionMarks
+      ? (resolvedRemark.questionMarks as Record<string, number>)
       : null;
 
   // Paper scripts have no digital answers: show the marked script the school
@@ -105,12 +116,11 @@ export default async function ViewPaperStudentPage({
     const published = subData.resultsPublishedAt !== null;
     const pages = published ? await getScriptPages(submissionId) : [];
     const originalIds = pages.filter((p) => p.kind === 'original').map((p) => p.id);
-    const remarkedIds =
-      remark?.status === 'resolved'
-        ? pages
-            .filter((p) => p.kind === 'remarked' && p.remarkRequestId === remark.id)
-            .map((p) => p.id)
-        : [];
+    const remarkedIds = resolvedRemark
+      ? pages
+          .filter((p) => p.kind === 'remarked' && p.remarkRequestId === resolvedRemark.id)
+          .map((p) => p.id)
+      : [];
     const sets: ScriptPageSet[] = [];
     if (originalIds.length > 0) {
       sets.push({
@@ -174,8 +184,10 @@ export default async function ViewPaperStudentPage({
           <div className="mt-8">
             <RemarkSection
               submissionId={submissionId}
-              remark={remark ?? null}
+              remark={remark}
               eligibility={remarkEligibility}
+              attemptsUsed={attempts.attemptsUsed}
+              lastWithdrawn={remarkRows.length > 0 && remark === null}
               paperPageIds={originalIds}
             />
           </div>

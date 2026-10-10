@@ -222,20 +222,22 @@ export const results = pgTable('results', {
   remarkOutcome: text('remark_outcome'),
 });
 
-// An entrant's appeal against a mark. One per submission; resolving it
-// writes the new total into results.score, so standings, qualification and
-// certificates all pick up the outcome.
+// An entrant's appeal against a mark. Up to two attempts per submission, one
+// pending at a time; an entrant may withdraw a pending attempt (it still
+// counts). Resolving writes the new total into results.score, so standings,
+// qualification and certificates all pick up the outcome.
 export const remarkRequests = pgTable('remark_requests', {
   id: uuid('id').primaryKey().defaultRandom(),
   submissionId: uuid('submission_id')
     .references(() => submissions.id, { onDelete: 'cascade' })
-    .unique()
     .notNull(),
+  // 1 or 2 (REMARK_MAX_ATTEMPTS)
+  attempt: integer('attempt').default(1).notNull(),
   requestedByUserId: uuid('requested_by_user_id').references(() => users.id, {
     onDelete: 'set null',
   }),
   reason: text('reason').notNull(),
-  status: text('status', { enum: ['pending', 'resolved'] })
+  status: text('status', { enum: ['pending', 'resolved', 'withdrawn'] })
     .default('pending')
     .notNull(),
   // Score at the time of the appeal and after the remark
@@ -255,7 +257,17 @@ export const remarkRequests = pgTable('remark_requests', {
   }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
-});
+}, (t) => ({
+  attemptUniq: uniqueIndex('remark_requests_submission_attempt_uniq').on(
+    t.submissionId,
+    t.attempt
+  ),
+  // Never two open appeals on one paper, even under concurrent requests
+  onePendingUniq: uniqueIndex('remark_requests_one_pending_uniq')
+    .on(t.submissionId)
+    .where(sql`status = 'pending'`),
+  attemptCheck: check('remark_requests_attempt_check', sql`attempt BETWEEN 1 AND 2`),
+}));
 
 // Photographed pages of an entrant's marked paper script, uploaded by their
 // school's educator. 'original' pages are the script as marked (frozen once

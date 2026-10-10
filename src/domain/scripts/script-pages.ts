@@ -205,6 +205,7 @@ async function resolveUploadTarget(
     return { error: 'Re-marked pages can only be uploaded for paper scripts.' };
   }
   if (request.status === 'resolved') return { error: 'This remark has already been resolved.' };
+  if (request.status === 'withdrawn') return { error: 'The entrant withdrew this remark request.' };
   if (!(await canResolveRemark(userId, request))) {
     return { error: 'You are not allowed to remark this paper.' };
   }
