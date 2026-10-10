@@ -1,7 +1,9 @@
 // Remark (appeal) workflow.
 //
 //   1. An entrant appeals a published mark within REMARK_WINDOW_DAYS, giving
-//      a reason. One appeal per submission.
+//      a reason. Up to REMARK_MAX_ATTEMPTS appeals per submission, one open at
+//      a time; a pending appeal can be withdrawn (e.g. to fix a mistake), which
+//      still uses up that attempt.
 //   2. It appears in the remark queue of the educators at the entrant's
 //      school (and on the organiser's Remarks tab for the round).
 //   3. The marker re-marks it:
@@ -42,23 +44,34 @@ import { notifyEducatorsInPortal } from '../notifications/in-app-notifications';
 import { validatePaperQuery, type PaperQueryInput } from '../scripts/script-rules';
 
 export const REMARK_WINDOW_DAYS = 14;
+export const REMARK_MAX_ATTEMPTS = 2;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type RemarkEligibility =
-  | { eligible: true; closesAt: Date }
+  | { eligible: true; closesAt: Date; attemptsLeft: number }
   | { eligible: false; reason: string };
 
-/** Whether an entrant may appeal now. Pure, so the UI and server agree. */
+/**
+ * Whether an entrant may appeal now. Pure, so the UI and server agree.
+ * `attemptsUsed` counts every earlier appeal on the paper, withdrawn ones too.
+ */
 export function getRemarkEligibility(
   params: {
     resultsPublishedAt: Date | null;
     hasScore: boolean;
-    hasExistingRequest: boolean;
+    attemptsUsed: number;
+    hasPendingRequest: boolean;
   },
   now: Date = new Date()
 ): RemarkEligibility {
-  if (params.hasExistingRequest) {
-    return { eligible: false, reason: 'A remark has already been requested for this paper.' };
+  if (params.hasPendingRequest) {
+    return { eligible: false, reason: 'Your remark request is still being reviewed.' };
+  }
+  if (params.attemptsUsed >= REMARK_MAX_ATTEMPTS) {
+    return {
+      eligible: false,
+      reason: `You have used all ${REMARK_MAX_ATTEMPTS} remark requests for this paper.`,
+    };
   }
   if (!params.resultsPublishedAt) {
     return { eligible: false, reason: 'You can appeal once results are published.' };
@@ -70,7 +83,40 @@ export function getRemarkEligibility(
   if (now > closesAt) {
     return { eligible: false, reason: `Appeals closed ${REMARK_WINDOW_DAYS} days after results were published.` };
   }
-  return { eligible: true, closesAt };
+  return { eligible: true, closesAt, attemptsLeft: REMARK_MAX_ATTEMPTS - params.attemptsUsed };
+}
+
+/** Earlier appeals on a paper, as counted by getRemarkEligibility. */
+export function summariseAttempts(requests: { status: string }[]) {
+  return {
+    attemptsUsed: requests.length,
+    hasPendingRequest: requests.some((r) => r.status === 'pending'),
+  };
+}
+
+/**
+ * The appeal to show for a paper: the most recent one that wasn't withdrawn
+ * (pending or resolved), or null. `requests` may be in any order.
+ */
+export function currentRemark<T extends { status: string; attempt: number }>(
+  requests: T[]
+): T | null {
+  return (
+    [...requests]
+      .filter((r) => r.status !== 'withdrawn')
+      .sort((a, b) => b.attempt - a.attempt)[0] ?? null
+  );
+}
+
+/** The most recent resolved appeal: its marks are the paper's current marks. */
+export function latestResolvedRemark<T extends { status: string; attempt: number }>(
+  requests: T[]
+): T | null {
+  return (
+    [...requests]
+      .filter((r) => r.status === 'resolved')
+      .sort((a, b) => b.attempt - a.attempt)[0] ?? null
+  );
 }
 
 export type QuestionMark = {
@@ -163,7 +209,7 @@ export async function getQuestionMarks(
     .where(eq(submissions.id, submissionId));
   if (!sub) return [];
 
-  const [roundQuestions, [remark], manualRows] = await Promise.all([
+  const [roundQuestions, remarkRows, manualRows] = await Promise.all([
     // Resolve over the submission's dealt variant (denormalized at submit), not
     // the whole pool, so a remark only ever sees the questions actually sat.
     // Legacy submissions (null variant) fall back to the whole round pool.
@@ -172,7 +218,11 @@ export async function getQuestionMarks(
       sub.roundId
     ),
     db
-      .select({ status: remarkRequests.status, questionMarks: remarkRequests.questionMarks })
+      .select({
+        status: remarkRequests.status,
+        attempt: remarkRequests.attempt,
+        questionMarks: remarkRequests.questionMarks,
+      })
       .from(remarkRequests)
       .where(eq(remarkRequests.submissionId, submissionId)),
     sub.studentMembershipId
@@ -203,8 +253,10 @@ export async function getQuestionMarks(
     if (r.manualScore === null || r.manualScore === undefined) continue;
     manualBy.set(r.questionId, Number(r.manualScore));
   }
+  // The most recent resolved appeal holds the current per-question marks
+  const remark = latestResolvedRemark(remarkRows);
   const remarked =
-    remark?.status === 'resolved' && remark.questionMarks
+    remark?.questionMarks
       ? (remark.questionMarks as Record<string, number>)
       : null;
 
@@ -252,7 +304,8 @@ export type RemarkRow = {
   reason: string;
   questionRefs: string | null;
   pins: unknown;
-  status: 'pending' | 'resolved';
+  status: 'pending' | 'resolved' | 'withdrawn';
+  attempt: number;
   previousScore: string | null;
   newScore: string | null;
   responseNote: string | null;
@@ -275,6 +328,7 @@ export async function getRemarkRequest(requestId: string): Promise<RemarkRow | n
       id: remarkRequests.id,
       submissionId: remarkRequests.submissionId,
       reason: remarkRequests.reason,
+      attempt: remarkRequests.attempt,
       questionRefs: remarkRequests.questionRefs,
       pins: remarkRequests.pins,
       status: remarkRequests.status,
@@ -355,22 +409,26 @@ export async function createRemarkRequest(
       roundName: rounds.name,
       schoolId: memberships.schoolId,
       submissionType: submissions.submissionType,
-      existingId: remarkRequests.id,
     })
     .from(submissions)
     .innerJoin(memberships, eq(memberships.id, submissions.studentMembershipId))
     .innerJoin(rounds, eq(rounds.id, submissions.roundId))
     .leftJoin(results, eq(results.submissionId, submissions.id))
-    .leftJoin(remarkRequests, eq(remarkRequests.submissionId, submissions.id))
     .where(and(eq(submissions.id, submissionId), eq(memberships.userId, userId)));
 
   if (!row) return { error: 'You can only appeal your own papers.' };
+
+  const earlier = await db
+    .select({ status: remarkRequests.status })
+    .from(remarkRequests)
+    .where(eq(remarkRequests.submissionId, submissionId));
+  const attempts = summariseAttempts(earlier);
 
   const eligibility = getRemarkEligibility(
     {
       resultsPublishedAt: row.resultsPublishedAt,
       hasScore: row.score !== null,
-      hasExistingRequest: row.existingId !== null,
+      ...attempts,
     },
     now
   );
@@ -409,6 +467,7 @@ export async function createRemarkRequest(
     .insert(remarkRequests)
     .values({
       submissionId,
+      attempt: attempts.attemptsUsed + 1,
       requestedByUserId: userId,
       reason: trimmed,
       questionRefs: paperQuery.questionRefs,
@@ -417,6 +476,7 @@ export async function createRemarkRequest(
     })
     .onConflictDoNothing()
     .returning({ id: remarkRequests.id });
+  // A concurrent request took this attempt number or is already pending
   if (inserted.length === 0) {
     return { error: 'A remark has already been requested for this paper.' };
   }
@@ -489,6 +549,9 @@ export async function resolveRemarkRequest(
   const request = await getRemarkRequest(input.requestId);
   if (!request) return { error: 'Remark request not found.' };
   if (request.status === 'resolved') return { error: 'This remark has already been resolved.' };
+  if (request.status === 'withdrawn') {
+    return { error: 'The entrant withdrew this remark request.' };
+  }
   if (!(await canResolveRemark(userId, request))) {
     return { error: 'You are not allowed to remark this paper.' };
   }
@@ -538,7 +601,10 @@ export async function resolveRemarkRequest(
     })
     .where(and(eq(remarkRequests.id, request.id), eq(remarkRequests.status, 'pending')))
     .returning({ id: remarkRequests.id });
-  if (updated.length === 0) return { error: 'This remark has already been resolved.' };
+  // Someone else resolved it first, or the entrant withdrew it meanwhile
+  if (updated.length === 0) {
+    return { error: 'This remark was already resolved or withdrawn. Refresh to see it.' };
+  }
 
   await db
     .update(results)
@@ -561,4 +627,48 @@ export async function resolveRemarkRequest(
   // results.remarkOutcome (set above).
 
   return { newScore };
+}
+
+/**
+ * Entrant withdraws their own pending appeal, e.g. after picking the wrong
+ * question. It still counts as an attempt; they may appeal again if they have
+ * one left. A resolved appeal can't be withdrawn.
+ */
+export async function withdrawRemarkRequest(
+  userId: string,
+  requestId: string
+): Promise<{ error?: string }> {
+  const [row] = await db
+    .select({ id: remarkRequests.id, submissionId: remarkRequests.submissionId })
+    .from(remarkRequests)
+    .innerJoin(submissions, eq(submissions.id, remarkRequests.submissionId))
+    .innerJoin(memberships, eq(memberships.id, submissions.studentMembershipId))
+    .where(and(eq(remarkRequests.id, requestId), eq(memberships.userId, userId)));
+  if (!row) return { error: 'You can only withdraw your own remark requests.' };
+
+  // Conditional on still pending: if a marker resolves it at the same moment,
+  // exactly one of the two wins
+  const updated = await db
+    .update(remarkRequests)
+    .set({ status: 'withdrawn' })
+    .where(and(eq(remarkRequests.id, requestId), eq(remarkRequests.status, 'pending')))
+    .returning({ id: remarkRequests.id });
+  if (updated.length === 0) {
+    return { error: 'This request has already been reviewed, so it can no longer be withdrawn.' };
+  }
+
+  // The result row's summary: back to the last completed remark, if any
+  const others = await db
+    .select({ status: remarkRequests.status })
+    .from(remarkRequests)
+    .where(eq(remarkRequests.submissionId, row.submissionId));
+  await db
+    .update(results)
+    .set(
+      others.some((r) => r.status === 'resolved')
+        ? { status: 'remark_resolved' }
+        : { status: 'auto_marked', remarkReason: null }
+    )
+    .where(eq(results.submissionId, row.submissionId));
+  return {};
 }

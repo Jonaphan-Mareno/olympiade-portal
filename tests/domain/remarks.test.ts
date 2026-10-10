@@ -50,10 +50,14 @@ vi.mock('@/domain/notifications/in-app-notifications', () => ({
 }));
 
 import {
+  currentRemark,
   getQuestionMarks,
   getRemarkEligibility,
+  latestResolvedRemark,
   resolveRemarkRequest,
+  REMARK_MAX_ATTEMPTS,
   REMARK_WINDOW_DAYS,
+  summariseAttempts,
 } from '@/domain/remarks/remarks';
 import { loadSittingQuestions } from '@/domain/question-bank/load-variant';
 import { advanceQualifyingEntrants } from '@/domain/rounds/advance-entrants';
@@ -62,7 +66,12 @@ const DAY = 24 * 60 * 60 * 1000;
 const published = new Date('2026-09-01T10:00:00Z');
 
 describe('getRemarkEligibility', () => {
-  const base = { resultsPublishedAt: published, hasScore: true, hasExistingRequest: false };
+  const base = {
+    resultsPublishedAt: published,
+    hasScore: true,
+    attemptsUsed: 0,
+    hasPendingRequest: false,
+  };
 
   it('allows an appeal within the window after publication', () => {
     const e = getRemarkEligibility(base, new Date(published.getTime() + 3 * DAY));
@@ -77,11 +86,50 @@ describe('getRemarkEligibility', () => {
     expect(e.eligible).toBe(false);
   });
 
-  it('requires published results, a mark, and no earlier appeal', () => {
+  it('requires published results and a mark', () => {
     const now = new Date(published.getTime() + DAY);
     expect(getRemarkEligibility({ ...base, resultsPublishedAt: null }, now).eligible).toBe(false);
     expect(getRemarkEligibility({ ...base, hasScore: false }, now).eligible).toBe(false);
-    expect(getRemarkEligibility({ ...base, hasExistingRequest: true }, now).eligible).toBe(false);
+  });
+
+  it(`allows ${REMARK_MAX_ATTEMPTS} attempts, one open at a time`, () => {
+    const now = new Date(published.getTime() + DAY);
+    expect(getRemarkEligibility({ ...base, attemptsUsed: 1 }, now)).toMatchObject({
+      eligible: true,
+      attemptsLeft: 1,
+    });
+    expect(getRemarkEligibility({ ...base, attemptsUsed: 1, hasPendingRequest: true }, now)).toEqual({
+      eligible: false,
+      reason: 'Your remark request is still being reviewed.',
+    });
+    expect(getRemarkEligibility({ ...base, attemptsUsed: 2 }, now)).toEqual({
+      eligible: false,
+      reason: 'You have used all 2 remark requests for this paper.',
+    });
+  });
+});
+
+describe('remark attempts', () => {
+  const r = (attempt: number, status: string) => ({ attempt, status });
+
+  it('counts withdrawn requests as attempts', () => {
+    expect(summariseAttempts([r(1, 'withdrawn')])).toEqual({ attemptsUsed: 1, hasPendingRequest: false });
+    expect(summariseAttempts([r(1, 'withdrawn'), r(2, 'pending')])).toEqual({
+      attemptsUsed: 2,
+      hasPendingRequest: true,
+    });
+  });
+
+  it('shows the latest request that was not withdrawn', () => {
+    expect(currentRemark([r(1, 'withdrawn'), r(2, 'pending')])).toEqual(r(2, 'pending'));
+    expect(currentRemark([r(2, 'withdrawn'), r(1, 'resolved')])).toEqual(r(1, 'resolved'));
+    expect(currentRemark([r(1, 'withdrawn')])).toBeNull();
+  });
+
+  it('takes the current marks from the latest resolved request', () => {
+    expect(latestResolvedRemark([r(1, 'resolved'), r(2, 'resolved')])).toEqual(r(2, 'resolved'));
+    expect(latestResolvedRemark([r(1, 'resolved'), r(2, 'pending')])).toEqual(r(1, 'resolved'));
+    expect(latestResolvedRemark([r(1, 'withdrawn')])).toBeNull();
   });
 });
 
@@ -133,6 +181,29 @@ describe('resolveRemarkRequest', () => {
     state.updates = [];
     state.returning = [{ id: 'remark-1' }];
     state.variantQuestions = [];
+  });
+
+  it('refuses a request the entrant withdrew', async () => {
+    state.queue = [[{ ...request, status: 'withdrawn' }]];
+    const res = await resolveRemarkRequest('organiser', { requestId: 'remark-1', note: 'x' });
+    expect(res).toEqual({ error: 'The entrant withdrew this remark request.' });
+    expect(state.updates).toEqual([]);
+  });
+
+  it('lets only one of two simultaneous resolvers win', async () => {
+    // Both loaded it as pending; the other resolver's conditional update got
+    // there first, so this one matches no pending row.
+    queueOnline();
+    state.returning = [];
+    const res = await resolveRemarkRequest('organiser', {
+      requestId: 'remark-1',
+      note: 'Q1 accepted.',
+      questionMarks: { q1: 4 },
+    });
+    expect(res).toEqual({ error: 'This remark was already resolved or withdrawn. Refresh to see it.' });
+    // Only the attempted remark update ran: the score was not overwritten
+    expect(state.updates).toHaveLength(1);
+    expect(advanceQualifyingEntrants).not.toHaveBeenCalled();
   });
 
   it('writes the remarked total to the result and re-runs advancement', async () => {

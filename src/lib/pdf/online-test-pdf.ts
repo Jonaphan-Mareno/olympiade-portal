@@ -1,5 +1,4 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from 'pdf-lib';
-import { buildMemoEntries, letter, optionText, seededOrder } from '@/domain/memo/memo';
 
 /**
  * Minimal shape of a question as produced by QuestionBuilder.
@@ -24,7 +23,35 @@ const PAGE_W = 595.28; // A4
 const PAGE_H = 841.89;
 const MARGIN = 56;
 const CONTENT_W = PAGE_W - MARGIN * 2;
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+const letter = (i: number) => LETTERS[i] ?? String(i + 1);
 const marksOf = (q: PdfQuestion) => Number(q.marks) || 1;
+
+/**
+ * Deterministic shuffle so the paper and memo agree on the order of the
+ * matching responses without needing to persist anything.
+ */
+function seededOrder(length: number, seed: string): number[] {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const rand = () => {
+    h += 0x6d2b79f5;
+    let t = h;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const order = Array.from({ length }, (_, i) => i);
+  for (let i = length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
+}
 
 class Writer {
   page!: PDFPage;
@@ -182,6 +209,12 @@ async function loadImage(doc: PDFDocument, url: string): Promise<PDFImage | null
   }
 }
 
+function toArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === 'string' && value.trim() !== '') return [value];
+  return [];
+}
+
 async function createDoc(title: string) {
   const doc = await PDFDocument.create();
   doc.setTitle(title);
@@ -238,11 +271,11 @@ export async function generateQuestionPaperPdf(
     switch (q.type) {
       case 'single_choice':
         w.text('Choose ONE answer.', { size: 9, color: [0.4, 0.4, 0.4], indent: 18 });
-        opts.forEach((o, oi) => w.text(`${letter(oi)}.  ${optionText(o)}`, { indent: 18 }));
+        opts.forEach((o, oi) => w.text(`${letter(oi)}.  ${String(o)}`, { indent: 18 }));
         break;
       case 'multiple_choice':
         w.text('Choose ALL correct answers.', { size: 9, color: [0.4, 0.4, 0.4], indent: 18 });
-        opts.forEach((o, oi) => w.text(`${letter(oi)}.  ${optionText(o)}`, { indent: 18 }));
+        opts.forEach((o, oi) => w.text(`${letter(oi)}.  ${String(o)}`, { indent: 18 }));
         break;
       case 'true_false':
         w.text('Circle one:   True   /   False', { indent: 18 });
@@ -290,42 +323,42 @@ export async function generateMemoPdf(
     gap: 10,
   });
 
-  for (const entry of buildMemoEntries(questions)) {
-    w.ensure(60);
-    w.text(`Question ${entry.number}`, { bold: true, size: 12 });
-    w.rightText(`[${entry.marks} mark${entry.marks === 1 ? '' : 's'}]`);
+  questions.forEach((q, i) => {
+    const opts: any[] = Array.isArray(q.options) ? q.options : [];
+    w.ensure(40);
+    w.text(`Question ${i + 1}`, { bold: true, size: 12 });
+    w.rightText(`[${marksOf(q)} mark${marksOf(q) === 1 ? '' : 's'}]`);
     w.space(2);
-    // The question itself, so the key can be read without the paper beside it
-    w.text(entry.prompt, { size: 10, color: [0.3, 0.3, 0.3], gap: 4 });
 
-    switch (entry.type) {
+    switch (q.type) {
       case 'single_choice':
-      case 'multiple_choice':
-        // Every option, as on the paper, with the right one(s) marked
-        entry.options.forEach((o) =>
-          w.text(`${o.letter}.  ${o.text}${o.correct ? '    <-- CORRECT' : ''}`, {
-            indent: 18,
-            bold: o.correct,
-          })
-        );
-        w.space(2);
-        w.text(`Answer: ${entry.answer ?? '(no answer selected)'}`, { indent: 18, bold: true });
+      case 'multiple_choice': {
+        const correct = toArray(q.correctAnswer);
+        const parts = correct.map((c) => {
+          const idx = opts.findIndex((o) => String(o) === c);
+          return idx >= 0 ? `${letter(idx)}.  ${c}` : c;
+        });
+        w.text(parts.length ? parts.join('\n') : '(no answer selected)', { indent: 18 });
         break;
+      }
       case 'true_false':
-        w.text(`Answer: ${entry.answer ?? '(no answer selected)'}`, { indent: 18, bold: true });
+        w.text(toArray(q.correctAnswer)[0] ?? '(no answer selected)', { indent: 18 });
         break;
-      case 'matching':
-        entry.pairs.forEach((p, pi) =>
-          w.text(`${pi + 1}.  ${p.premise}  ->  ${p.letter}.  ${p.response}`, { indent: 18 })
-        );
+      case 'matching': {
+        const order = seededOrder(opts.length, q.id);
+        opts.forEach((p, pi) => {
+          const pos = order.indexOf(pi);
+          w.text(`${pi + 1}.  ${p?.premise ?? ''}  ->  ${letter(pos)}.  ${p?.response ?? ''}`, { indent: 18 });
+        });
         break;
+      }
       case 'free_text':
       default:
-        w.text(entry.guideline ?? '(no marking guideline provided)', { indent: 18 });
+        w.text(toArray(q.correctAnswer)[0] ?? '(no marking guideline provided)', { indent: 18 });
         break;
     }
     w.space(12);
-  }
+  });
 
   w.finish();
   return doc.save();
