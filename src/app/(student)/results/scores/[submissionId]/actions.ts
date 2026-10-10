@@ -3,8 +3,14 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { createRemarkRequest } from '@/domain/remarks/remarks';
+import type { ScriptPin } from '@/domain/scripts/script-rules';
 
-export async function requestStudentRemark(submissionId: string, reason: string) {
+/** `paperQuery` is only sent for paper scripts; online appeals send a reason. */
+export async function requestStudentRemark(
+  submissionId: string,
+  reason: string,
+  paperQuery?: { questionRefs: string; pins: ScriptPin[] }
+) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -13,7 +19,7 @@ export async function requestStudentRemark(submissionId: string, reason: string)
   }
 
   try {
-    const result = await createRemarkRequest(user.id, submissionId, reason);
+    const result = await createRemarkRequest(user.id, submissionId, reason, paperQuery ?? {});
     if (result.error) return { success: false, error: result.error };
 
     revalidatePath(`/results/scores/${submissionId}`);

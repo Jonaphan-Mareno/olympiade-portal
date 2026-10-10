@@ -1,12 +1,16 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { submissions, results, memberships, rounds } from '@/lib/db/schema';
+import { results } from '@/lib/db/schema';
 import { createClient } from '@/lib/supabase/server';
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
-import { getMarkingWindowStatus } from '@/domain/rounds/paper-marking';
 import { getRoundTotalMarks } from '@/domain/rounds/score-percentage';
+import {
+  checkEntrantsAtEducatorSchools,
+  findOrCreateOfflineSubmission,
+  loadOfflineMarkingRound,
+} from '@/domain/rounds/offline-marks';
 
 export async function submitBulkOfflineMarks(
   roundId: string,
@@ -21,33 +25,9 @@ export async function submitBulkOfflineMarks(
     return { error: 'Not authenticated' };
   }
 
-  const [round] = await db.select().from(rounds).where(eq(rounds.id, roundId));
-  if (!round) return { error: 'Round not found' };
-  if (round.deliveryMethod === 'online') {
-    return { error: 'This round is written online, so marks cannot be entered manually.' };
-  }
-
-  const markingWindow = getMarkingWindowStatus(round);
-  if (markingWindow.status !== 'open') return { error: markingWindow.reason };
-
-  // The educator's accepted memberships in this olympiad, by school
-  const educatorMemberships = await db
-    .select()
-    .from(memberships)
-    .where(
-      and(
-        eq(memberships.userId, user.id),
-        eq(memberships.portalId, round.portalId),
-        eq(memberships.role, 'educator'),
-        eq(memberships.status, 'accepted')
-      )
-    );
-  if (educatorMemberships.length === 0) {
-    return { error: 'Not authorized' };
-  }
-  const educatorBySchool = new Map(
-    educatorMemberships.map((m) => [m.schoolId, m.id])
-  );
+  const loaded = await loadOfflineMarkingRound(user.id, roundId);
+  if ('error' in loaded) return { error: loaded.error };
+  const { round, educatorBySchool } = loaded;
 
   const totalMarks = (await getRoundTotalMarks([roundId])).get(roundId) ?? 0;
 
@@ -62,25 +42,13 @@ export async function submitBulkOfflineMarks(
     }
   }
 
-  // Every student must be an entrant of this olympiad at one of the
-  // educator's schools
-  const studentIds = entries.map((m) => m.studentMembershipId);
-  const students = studentIds.length > 0
-    ? await db
-        .select({ id: memberships.id, schoolId: memberships.schoolId })
-        .from(memberships)
-        .where(
-          and(
-            inArray(memberships.id, studentIds),
-            eq(memberships.portalId, round.portalId),
-            eq(memberships.role, 'student')
-          )
-        )
-    : [];
-  const studentSchool = new Map(students.map((s) => [s.id, s.schoolId]));
-  if (studentIds.some((id) => !educatorBySchool.has(studentSchool.get(id) ?? null))) {
-    return { error: 'You can only enter marks for entrants at your school.' };
-  }
+  const checked = await checkEntrantsAtEducatorSchools(
+    round,
+    educatorBySchool,
+    entries.map((m) => m.studentMembershipId)
+  );
+  if ('error' in checked) return { error: checked.error };
+  const { studentSchool } = checked;
 
   try {
     for (const mark of entries) {
@@ -88,32 +56,13 @@ export async function submitBulkOfflineMarks(
         studentSchool.get(mark.studentMembershipId) ?? null
       )!;
 
-      const existingSubmissions = await db.select().from(submissions).where(
-        and(
-          eq(submissions.roundId, roundId),
-          eq(submissions.studentMembershipId, mark.studentMembershipId)
-        )
+      const submissionId = await findOrCreateOfflineSubmission(
+        roundId,
+        mark.studentMembershipId,
+        gradedByMembershipId
       );
-
       // Never overwrite a script the entrant wrote online
-      if (existingSubmissions.some((s) => s.submissionType === 'online')) continue;
-
-      let submissionId: string;
-
-      if (existingSubmissions.length > 0) {
-        submissionId = existingSubmissions[0].id;
-      } else {
-        // Create an offline submission
-        const newSubmissions = await db.insert(submissions).values({
-          roundId,
-          studentMembershipId: mark.studentMembershipId,
-          submittedByMembershipId: gradedByMembershipId,
-          submissionType: 'offline',
-          status: 'submitted',
-          submittedAt: new Date(),
-        }).returning({ id: submissions.id });
-        submissionId = newSubmissions[0].id;
-      }
+      if (!submissionId) continue;
 
       // Upsert the result
       const existingResults = await db.select().from(results).where(eq(results.submissionId, submissionId));

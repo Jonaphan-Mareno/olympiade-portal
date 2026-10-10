@@ -19,6 +19,7 @@ The global Next.js middleware (`src/middleware.ts`) **explicitly bypasses** all 
 | `GET /api/student/sitting/sync`                | **Required**    | Supabase session cookie                |
 | `POST /api/student/sitting/submit`             | **Required**    | Supabase session cookie                |
 | `GET /api/rounds/[roundId]/paper`              | **Required**    | Supabase session cookie (organiser owner / accepted educators only) |
+| `GET /api/scripts/[pageId]`                    | **Required**    | Supabase session cookie (entrant after publication / school educators / organiser) |
 | `GET /api/certificates/[submissionId]`         | **None**        | Open (depends on URL knowledge)        |
 | `GET` / `POST` `/api/webhooks/round-scheduler` | **Conditional** | `CRON_SECRET` bearer token (see below) |
 
@@ -333,6 +334,31 @@ Returns the PDF document with `Content-Type: application/pdf` and an `attachment
 
 ---
 
+### 10. Marked Script Page
+
+Serves one page image of an entrant's marked paper script. Scripts are stored in the **private** `marked-scripts` bucket; this route is the only way to view them (no public or signed URLs are handed out).
+
+- **Endpoint**: `GET /api/scripts/[pageId]` (`pageId` = `submission_script_pages.id`)
+- **Auth Required**: Yes (Supabase session cookie)
+- **Use case**: The entrant's results page, and the educator/organiser remark screens.
+
+**Access** (`decideScriptAccess` in `src/domain/scripts/script-rules.ts`, the same rule for original and re-marked pages)
+
+- The **entrant** who owns the submission — only once the round's results are published.
+- Anyone who may resolve a remark for it (`canResolveRemark`): an **accepted educator of the entrant's school** in that olympiad, or the **olympiad organiser** — at any time.
+
+**Response (200 OK)**
+The image bytes with the stored `Content-Type` (`image/jpeg`, `image/png` or `image/webp`), `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff`.
+
+**Error Responses**
+
+| Status | Cause |
+| :----- | :---- |
+| `401`  | No authenticated user. |
+| `404`  | Unknown page id, or the user may not view it (deliberately indistinguishable, so ids can't be probed). |
+
+---
+
 ## Part 2: How to Use the API Externally
 
 ### Authentication
@@ -437,6 +463,9 @@ Every action in this section follows the same broad shape:
 | 33 | [`markAsRead`](#markasread) | Educator | `src/app/educator/notifications/actions.ts` |
 | 34 | [`markAllAsRead`](#markallasread) | Educator | `src/app/educator/notifications/actions.ts` |
 | 35 | [`requestStudentRemark`](#requeststudentremark) | Student | `.../(student)/results/scores/[submissionId]/actions.ts` |
+| 36 | [`prepareScriptUploadAction`](#preparescriptuploadaction) | Educator / remark resolver | `src/components/scripts/actions.ts` |
+| 37 | [`commitScriptUploadAction`](#commitscriptuploadaction) | Educator / remark resolver | `src/components/scripts/actions.ts` |
+| 38 | [`discardScriptUploadAction`](#discardscriptuploadaction) | Educator / remark resolver | `src/components/scripts/actions.ts` |
 
 ### Authentication & Account
 
@@ -906,6 +935,39 @@ submitBulkOfflineMarks(
 - **Side effects:** `revalidatePath('/educator/rounds/<roundId>/offline-marks')`.
 - **Returns:** `{ error }` if unauthenticated/not an educator/on DB failure; otherwise `{ success: true }`.
 
+**Marked Scripts** — `src/components/scripts/actions.ts`
+
+Shared by the offline-marks page (original pages) and the remark screens (re-marked pages). The target is `{ kind: 'original', roundId, studentMembershipId }` or `{ kind: 'remarked', remarkRequestId }`. Page bytes never pass through a Server Action: the browser uploads each page straight to a one-off signed upload URL, and the server then checks what actually arrived. All rules live in `src/domain/scripts/`.
+
+- **Original pages:** the same checks as `submitBulkOfflineMarks` (accepted educator at the entrant's school, round not `online`, marking window open); creates the offline submission if the entrant has none.
+- **Re-marked pages:** the remark must be a **pending** paper remark the caller may resolve (`canResolveRemark`). Original pages are never touched.
+
+#### prepareScriptUploadAction
+
+```ts
+prepareScriptUploadAction(target, files: { contentType: string; size: number }[])
+  : Promise<{ uploads?: { path: string; token: string }[]; error?: string }>
+```
+
+Validates the page count (1–30), each claimed type (JPEG/PNG/WebP) and size (≤ 10 MB), authorises, and issues one signed upload URL per page at `{roundId}/{submissionId}/{kind}/{uuid}.{ext}`.
+
+#### commitScriptUploadAction
+
+```ts
+commitScriptUploadAction(target, pages: { path: string; contentType: string }[])
+  : Promise<{ success?: true; pageCount?: number; error?: string }>
+```
+
+Re-authorises (so a window that closed meanwhile is respected), accepts only paths issued for that submission and kind, downloads each page and checks its magic bytes and size, then replaces that script's rows in one transaction and deletes the replaced storage objects. On any failure the new objects are deleted.
+
+#### discardScriptUploadAction
+
+```ts
+discardScriptUploadAction(target, paths: string[]): Promise<void>
+```
+
+Best-effort cleanup when a page fails to upload: deletes the target's issued paths that are not part of a saved script.
+
 **Results & Remarks** — `src/app/educator/results/[submissionId]/actions.ts`
 
 #### requestRemark
@@ -957,11 +1019,16 @@ markAllAsRead(): Promise<void>
 Lets a student dispute their own result.
 
 ```ts
-requestStudentRemark(submissionId: string, reason: string): Promise<{ success: boolean; error?: string }>
+requestStudentRemark(
+  submissionId: string,
+  reason: string,
+  paperQuery?: { questionRefs: string; pins: { page: number; x: number; y: number; note: string }[] }
+): Promise<{ success: boolean; error?: string }>
 ```
 
 - **Role:** Student, with an **ownership check** — the submission's membership must belong to the caller (`memberships.userId === user.id`).
 - **Behaviour:** sets `results.status = 'remark_requested'` and stores `remarkReason`, then revalidates `/results/scores/<submissionId>`.
+- **Paper scripts only:** `paperQuery` stores `remark_requests.question_refs` (≤ 200 chars) and `pins` (≤ 10; `page` must be an original page of the uploaded script, `x`/`y` in [0, 1], `note` ≤ 300 chars). It is rejected for online submissions.
 - **Returns:** `{ success: true }`, or `{ success: false, error }` when unauthorized or on failure.
 
 :::note
@@ -982,6 +1049,8 @@ This mirrors the educator's [`requestRemark`](#requestremark) but adds a strict 
 | `inviteStudents`, `submitMarksForModeration` | Educator for the school | `memberships` (role + `schoolId` + `portalId`) |
 | `submitBulkOfflineMarks` | Any educator membership | `memberships.role` |
 | `requestStudentRemark` | Owns the submission | `memberships.userId` |
+| Script uploads (original) | Accepted educator at the entrant's school, marking window open | `loadOfflineMarkingRound` + `checkEntrantsAtEducatorSchools` |
+| Script uploads (re-marked) | May resolve the pending remark | `canResolveRemark` |
 
 :::caution Known gaps
 A few actions authenticate the caller but do **not** re-verify portal ownership before mutating:

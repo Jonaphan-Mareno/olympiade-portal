@@ -6,6 +6,7 @@ import { formatSAST } from '@/lib/sast';
 import { memberships, rounds, users, submissions, results, roundQualifications } from '@/lib/db/schema';
 import { getMarkingWindowStatus } from '@/domain/rounds/paper-marking';
 import { getRoundTotalMarks } from '@/domain/rounds/score-percentage';
+import { getScriptPageCounts } from '@/domain/scripts/script-pages';
 import { eq, and, inArray } from 'drizzle-orm';
 import Link from 'next/link';
 import OfflineMarksForm from './OfflineMarksForm';
@@ -153,6 +154,11 @@ export default async function OfflineMarksPage(props: { params: Promise<{ roundI
 
   const eligibleStudents = qualifiedStudents.filter(m => !onlineSubmissionMembershipIds.includes(m.id));
 
+  // Uploaded marked-script pages per offline submission
+  const scriptPageCounts = await getScriptPageCounts(
+    roundSubmissions.filter(s => s.submissionType === 'offline').map(s => s.id)
+  );
+
   // Format data for the form
   const formattedStudents = eligibleStudents.map(m => {
     const user = userRows.find(u => u.id === m.userId);
@@ -170,7 +176,8 @@ export default async function OfflineMarksPage(props: { params: Promise<{ roundI
       membershipId: m.id,
       name: user ? user.name : m.invitedEmail,
       email: user ? user.email : m.invitedEmail,
-      existingScore
+      existingScore,
+      scriptPages: submission ? scriptPageCounts.get(submission.id) ?? 0 : 0,
     };
   });
 
@@ -190,8 +197,9 @@ export default async function OfflineMarksPage(props: { params: Promise<{ roundI
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50 border border-amber-200 p-4 mb-8">
           <p className="text-amber-900 text-sm font-medium m-0">
             Marking deadline: <strong>{formatSAST(markingWindow.deadline)}</strong>. Marks
-            can be changed until then; after results are published, changes go
-            through a remark.
+            and marked scripts can be changed until then; after results are
+            published, changes go through a remark. Upload each entrant&apos;s
+            marked script so they can see how it was marked.
           </p>
           <div className="flex gap-3 shrink-0">
             <a href={`/api/rounds/${roundId}/paper?kind=paper`} className="text-sm font-bold text-blue-900 hover:underline">

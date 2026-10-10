@@ -25,6 +25,7 @@ import RoundFormInputs from '@/components/organiser/RoundFormInputs';
 import RoundStatsPanel from '@/components/organiser/RoundStatsPanel';
 import { getRoundStats } from '@/domain/rounds/round-stats';
 import { getRoundTotalMarks } from '@/domain/rounds/score-percentage';
+import { countScoredEntrantsWithoutScript } from '@/domain/scripts/script-pages';
 import DeleteRoundButton from './DeleteRoundButton';
 import GenerateTestButton from './GenerateTestButton';
 import BroadcastNotificationButton from './BroadcastNotificationButton';
@@ -123,6 +124,12 @@ export default async function ManageRoundPage({
   const selectedQuestionIds =
     (paper?.[0]?.selectedQuestionIds as string[] | null) ?? null;
   const targetTotalMarks = round.targetTotalMarks ?? round.paperTotalMarks ?? null;
+
+  // Advisory only: publishing never waits for schools' marked scripts
+  const missingScripts =
+    roundState === 'closed' && round.deliveryMethod !== 'online'
+      ? await countScoredEntrantsWithoutScript(roundId)
+      : 0;
 
   return (
     <div className="min-h-screen bg-slate-50 py-10 px-4 md:px-8">
@@ -434,6 +441,13 @@ export default async function ManageRoundPage({
                     educator a school-level summary and every entrant who
                     submitted their own result.
                   </p>
+                  {missingScripts > 0 && (
+                    <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-md p-3">
+                      {missingScripts} scored entrant{missingScripts === 1 ? ' has' : 's have'} no
+                      marked script uploaded. You can still publish; those entrants
+                      will see their mark without their script.
+                    </p>
+                  )}
                   <PublishResultsButton
                     portalId={olympiadId}
                     roundId={roundId}

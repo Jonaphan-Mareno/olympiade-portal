@@ -3,11 +3,14 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { QuestionMark } from '@/domain/remarks/remarks';
+import ScriptPagesPicker, { type PickedPage } from '@/components/scripts/ScriptPagesPicker';
+import { uploadScriptPages } from '@/components/scripts/upload-client';
 import { submitRemarkResolution } from './actions';
 
 /**
  * Re-marking form. Online papers are re-marked question by question,
- * starting from the current marks; paper scripts get a new total.
+ * starting from the current marks; paper scripts get a new total and may
+ * attach photos of the re-marked pages (the originals are kept).
  */
 export default function RemarkResolver({
   requestId,
@@ -28,6 +31,7 @@ export default function RemarkResolver({
   );
   const [newTotal, setNewTotal] = useState(currentScore !== null ? String(currentScore) : '');
   const [note, setNote] = useState('');
+  const [remarkedPages, setRemarkedPages] = useState<PickedPage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -41,6 +45,20 @@ export default function RemarkResolver({
   const handleSubmit = () => {
     setError(null);
     startTransition(async () => {
+      if (mode === 'paper' && remarkedPages.length > 0) {
+        if (!note.trim()) {
+          setError('Explain the outcome to the entrant.');
+          return;
+        }
+        const upload = await uploadScriptPages(
+          { kind: 'remarked', remarkRequestId: requestId },
+          remarkedPages.map((p) => p.blob)
+        );
+        if (upload.error) {
+          setError(upload.error);
+          return;
+        }
+      }
       const res = await submitRemarkResolution({
         requestId,
         note,
@@ -117,7 +135,7 @@ export default function RemarkResolver({
         <div className="bg-white border border-slate-200 rounded-lg p-5">
           <p className="text-sm text-slate-700 mb-4">
             Re-mark the entrant&apos;s physical script against the memo, then enter
-            the new total. If the script was uploaded, it is linked above.
+            the new total. If the script was uploaded, it is shown above.
           </p>
           <label className="block text-sm font-semibold mb-1">Remarked total</label>
           <div className="flex items-center gap-2">
@@ -130,6 +148,20 @@ export default function RemarkResolver({
               className="w-28 p-2 border border-slate-300 rounded bg-white text-slate-900"
             />
             {maxTotal > 0 && <span className="text-sm text-slate-600">/ {maxTotal}</span>}
+          </div>
+          <div className="mt-5 pt-5 border-t border-slate-100">
+            <label className="block text-sm font-semibold mb-1">
+              Re-marked pages <span className="font-normal text-slate-500">(optional)</span>
+            </label>
+            <p className="text-xs text-slate-500 mb-3">
+              Photograph the pages you changed. The entrant sees them as &ldquo;After
+              remark&rdquo; next to the original script, which is never replaced.
+            </p>
+            <ScriptPagesPicker
+              pages={remarkedPages}
+              onChange={setRemarkedPages}
+              disabled={isPending}
+            />
           </div>
         </div>
       )}

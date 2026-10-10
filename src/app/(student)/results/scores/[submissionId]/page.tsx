@@ -25,6 +25,9 @@ import {
   reassembleAnswers,
 } from '@/domain/marking/auto-mark';
 import { loadSittingQuestions } from '@/domain/question-bank/load-variant';
+import { getScriptPages } from '@/domain/scripts/script-pages';
+import { parseStoredPins } from '@/domain/scripts/script-rules';
+import ScriptViewer, { type ScriptPageSet } from '@/components/scripts/ScriptViewer';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,27 +97,72 @@ export default async function ViewPaperStudentPage({
       ? (remark.questionMarks as Record<string, number>)
       : null;
 
-  // If this is a paper/offline submission, we might not have digital questions to show.
-  // The user prompt mentioned: "obviously the written test won't be available for viewing like their answers... So regarding the written tests, with the written tests, the learners should be able to [CUT OFF]"
-  // For now, if it's paper, we just show a placeholder message.
+  // Paper scripts have no digital answers: show the marked script the school
+  // uploaded (once results are published), and appeal against it.
   if (subData.submission.submissionType !== 'online') {
+    const published = subData.resultsPublishedAt !== null;
+    const pages = published ? await getScriptPages(submissionId) : [];
+    const originalIds = pages.filter((p) => p.kind === 'original').map((p) => p.id);
+    const remarkedIds =
+      remark?.status === 'resolved'
+        ? pages
+            .filter((p) => p.kind === 'remarked' && p.remarkRequestId === remark.id)
+            .map((p) => p.id)
+        : [];
+    const sets: ScriptPageSet[] = [];
+    if (originalIds.length > 0) {
+      sets.push({
+        key: 'original',
+        label: 'Original',
+        pageIds: originalIds,
+        pins: parseStoredPins(remark?.pins),
+      });
+    }
+    if (remarkedIds.length > 0) {
+      sets.push({ key: 'remarked', label: 'After remark', pageIds: remarkedIds });
+    }
+    const totalMarks = (await getRoundTotalMarks([subData.roundId])).get(subData.roundId) ?? 0;
+
     return (
-      <div className="min-h-screen bg-[#F8FAFC]">
+      <div className="min-h-screen bg-[#F8FAFC] pb-20">
         <div className="max-w-4xl mx-auto px-4 py-12">
           <Link href="/results/scores" className="inline-flex items-center text-blue-600 hover:text-blue-800 font-bold text-sm uppercase tracking-wider mb-8">
             &larr; Back to Results
           </Link>
-          <div className="bg-white border-2 border-slate-200 p-12 text-center flex flex-col items-center">
-            <span className="text-4xl mb-4">📝</span>
-            <h2 className="text-2xl font-serif font-bold text-blue-950 mb-2">Written Exam</h2>
-            <p className="text-slate-500 font-medium">
-              This was a written exam. Digital review of specific answers is not available for offline tests.
-            </p>
-            <p className="text-slate-900 font-bold mt-4">
-              Your mark: {subData.result?.score ?? 'Not yet marked'}
-            </p>
+          <div className="bg-white border-2 border-slate-200 p-6 md:p-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-serif font-bold text-blue-950">Written Exam</h2>
+                <p className="text-slate-500 font-medium">
+                  {subData.portalName} • {subData.roundName}
+                </p>
+              </div>
+              <p className="text-slate-900 font-bold">
+                Your mark: {subData.result?.score != null
+                  ? formatScoreDisplay(subData.result.score, totalMarks)
+                  : 'Not yet marked'}
+              </p>
+            </div>
+            {!published ? (
+              <p className="text-slate-500 font-medium">
+                Your marked script will be available here once results are published.
+              </p>
+            ) : sets.length === 0 ? (
+              <p className="text-slate-500 font-medium">
+                Your school hasn&apos;t uploaded your marked script yet.
+              </p>
+            ) : (
+              <ScriptViewer sets={sets} />
+            )}
           </div>
-          <div className="mt-8">{remarkSection}</div>
+          <div className="mt-8">
+            <RemarkSection
+              submissionId={submissionId}
+              remark={remark ?? null}
+              eligibility={remarkEligibility}
+              paperPageIds={originalIds}
+            />
+          </div>
         </div>
       </div>
     );

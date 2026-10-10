@@ -10,6 +10,7 @@ import {
   unique,
   index,
   uniqueIndex,
+  check,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -242,6 +243,11 @@ export const remarkRequests = pgTable('remark_requests', {
   newScore: numeric('new_score'),
   // Online rounds: the remarked mark per question { [questionId]: marks }
   questionMarks: jsonb('question_marks'),
+  // Paper rounds: the questions the entrant is querying (free text, e.g.
+  // "Q3, Q5b") and optional pins on their original script pages:
+  // [{ page: 0-based page_index, x: 0..1, y: 0..1, note }]
+  questionRefs: text('question_refs'),
+  pins: jsonb('pins'),
   // Marker's explanation shown to the entrant
   responseNote: text('response_note'),
   resolvedByUserId: uuid('resolved_by_user_id').references(() => users.id, {
@@ -250,6 +256,50 @@ export const remarkRequests = pgTable('remark_requests', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
 });
+
+// Photographed pages of an entrant's marked paper script, uploaded by their
+// school's educator. 'original' pages are the script as marked (frozen once
+// results are published); 'remarked' pages are optionally added by whoever
+// resolves a remark, so the originals stay intact as the audit trail. The
+// bytes live in the private `marked-scripts` bucket and are only served
+// through /api/scripts/[pageId]. RLS is on with no policies: only the server
+// `db` client (table owner) reads or writes this table.
+export const submissionScriptPages = pgTable(
+  'submission_script_pages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    submissionId: uuid('submission_id')
+      .references(() => submissions.id, { onDelete: 'cascade' })
+      .notNull(),
+    kind: text('kind', { enum: ['original', 'remarked'] }).notNull(),
+    // Set only for kind = 'remarked'
+    remarkRequestId: uuid('remark_request_id').references(() => remarkRequests.id, {
+      onDelete: 'cascade',
+    }),
+    pageIndex: integer('page_index').notNull(),
+    storagePath: text('storage_path').notNull(),
+    contentType: text('content_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    uploadedByUserId: uuid('uploaded_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    // NULL remark ids never collide in a plain unique index, so each kind gets
+    // its own partial index.
+    originalPageUniq: uniqueIndex('script_pages_original_uniq')
+      .on(t.submissionId, t.pageIndex)
+      .where(sql`kind = 'original'`),
+    remarkedPageUniq: uniqueIndex('script_pages_remarked_uniq')
+      .on(t.submissionId, t.remarkRequestId, t.pageIndex)
+      .where(sql`kind = 'remarked'`),
+    kindRemarkCheck: check(
+      'script_pages_kind_remark_check',
+      sql`(kind = 'original' AND remark_request_id IS NULL) OR (kind = 'remarked' AND remark_request_id IS NOT NULL)`
+    ),
+  })
+).enableRLS();
 
 export const examSittings = pgTable(
   'exam_sittings',
