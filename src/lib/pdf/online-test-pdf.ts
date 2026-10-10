@@ -209,6 +209,48 @@ async function loadImage(doc: PDFDocument, url: string): Promise<PDFImage | null
   }
 }
 
+/** An option's display text (options are plain strings, or { text } objects). */
+export function optionText(o: unknown): string {
+  if (typeof o === 'string') return o;
+  if (o && typeof o === 'object' && (o as { text?: unknown }).text !== undefined) {
+    return String((o as { text: unknown }).text);
+  }
+  return String(o);
+}
+
+/**
+ * The correct option(s) of a choice question, as option texts. The answer is
+ * stored in several shapes (a string, a JSON array string, a comma-separated
+ * string, an array, or { text }); this reads them the way the auto-marker does,
+ * but prefers an exact option match so an option that itself contains a comma
+ * is not split.
+ */
+export function correctChoices(correct: unknown, options: string[]): string[] {
+  const canon = (c: string) =>
+    options.find((o) => o.trim().toLowerCase() === c.trim().toLowerCase()) ?? c.trim();
+
+  let raw: string[] = [];
+  if (Array.isArray(correct)) {
+    raw = correct.map(optionText);
+  } else if (correct && typeof correct === 'object') {
+    const text = (correct as { text?: unknown }).text;
+    raw = Array.isArray(text) ? text.map(String) : text !== undefined ? [String(text)] : [];
+  } else if (correct !== null && correct !== undefined && String(correct).trim() !== '') {
+    const str = String(correct);
+    if (options.some((o) => o.trim().toLowerCase() === str.trim().toLowerCase())) {
+      raw = [str];
+    } else {
+      try {
+        const parsed = JSON.parse(str);
+        raw = Array.isArray(parsed) ? parsed.map(String) : [String(parsed)];
+      } catch {
+        raw = str.includes(',') ? str.split(',') : [str];
+      }
+    }
+  }
+  return raw.map((c) => c.trim()).filter(Boolean).map(canon);
+}
+
 function toArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String);
   if (typeof value === 'string' && value.trim() !== '') return [value];
@@ -271,11 +313,11 @@ export async function generateQuestionPaperPdf(
     switch (q.type) {
       case 'single_choice':
         w.text('Choose ONE answer.', { size: 9, color: [0.4, 0.4, 0.4], indent: 18 });
-        opts.forEach((o, oi) => w.text(`${letter(oi)}.  ${String(o)}`, { indent: 18 }));
+        opts.forEach((o, oi) => w.text(`${letter(oi)}.  ${optionText(o)}`, { indent: 18 }));
         break;
       case 'multiple_choice':
         w.text('Choose ALL correct answers.', { size: 9, color: [0.4, 0.4, 0.4], indent: 18 });
-        opts.forEach((o, oi) => w.text(`${letter(oi)}.  ${String(o)}`, { indent: 18 }));
+        opts.forEach((o, oi) => w.text(`${letter(oi)}.  ${optionText(o)}`, { indent: 18 }));
         break;
       case 'true_false':
         w.text('Circle one:   True   /   False', { indent: 18 });
@@ -325,25 +367,47 @@ export async function generateMemoPdf(
 
   questions.forEach((q, i) => {
     const opts: any[] = Array.isArray(q.options) ? q.options : [];
-    w.ensure(40);
+    w.ensure(60);
     w.text(`Question ${i + 1}`, { bold: true, size: 12 });
     w.rightText(`[${marksOf(q)} mark${marksOf(q) === 1 ? '' : 's'}]`);
     w.space(2);
+    // The question itself, so the key can be read without the paper beside it
+    w.text(q.prompt || '', { size: 10, color: [0.3, 0.3, 0.3], gap: 4 });
 
     switch (q.type) {
       case 'single_choice':
       case 'multiple_choice': {
-        const correct = toArray(q.correctAnswer);
-        const parts = correct.map((c) => {
-          const idx = opts.findIndex((o) => String(o) === c);
-          return idx >= 0 ? `${letter(idx)}.  ${c}` : c;
+        const optionTexts = opts.map(optionText);
+        const correct = correctChoices(q.correctAnswer, optionTexts);
+        // Every option, as on the paper, with the right one(s) marked
+        optionTexts.forEach((text, oi) => {
+          const isCorrect = correct.includes(text);
+          w.text(`${letter(oi)}.  ${text}${isCorrect ? '    <-- CORRECT' : ''}`, {
+            indent: 18,
+            bold: isCorrect,
+          });
         });
-        w.text(parts.length ? parts.join('\n') : '(no answer selected)', { indent: 18 });
+        const answerLetters = correct.map((c) => {
+          const idx = optionTexts.indexOf(c);
+          return idx >= 0 ? letter(idx) : c;
+        });
+        w.space(2);
+        w.text(
+          answerLetters.length ? `Answer: ${answerLetters.join(', ')}` : 'Answer: (no answer selected)',
+          { indent: 18, bold: true }
+        );
         break;
       }
-      case 'true_false':
-        w.text(toArray(q.correctAnswer)[0] ?? '(no answer selected)', { indent: 18 });
+      case 'true_false': {
+        const [answer] = correctChoices(q.correctAnswer, ['True', 'False']);
+        w.text(
+          answer
+            ? `Answer: ${answer.charAt(0).toUpperCase()}${answer.slice(1).toLowerCase()}`
+            : 'Answer: (no answer selected)',
+          { indent: 18, bold: true }
+        );
         break;
+      }
       case 'matching': {
         const order = seededOrder(opts.length, q.id);
         opts.forEach((p, pi) => {

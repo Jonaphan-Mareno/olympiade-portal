@@ -7,12 +7,13 @@ import {
   memberships,
   schools,
 } from '@/lib/db/schema';
-import { eq, and, isNotNull, desc } from 'drizzle-orm';
+import { eq, and, inArray, isNotNull, desc } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 import { getRoundTotalMarks, calculatePercentage } from '@/domain/rounds/score-percentage';
 import Link from 'next/link';
+import { resolveActiveSchool } from '@/domain/educator/active-school';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,15 +46,13 @@ export default async function EducatorStandingsPage({
   const cookieStore = await cookies();
   const activeSchoolId = cookieStore.get('active_school_id')?.value;
 
-  const activeSchoolMemberships = activeSchoolId 
-    ? educatorMemberships.filter((m) => m.schoolId === activeSchoolId)
-    : educatorMemberships.filter(m => m.schoolId === educatorMemberships[0].schoolId);
-
-  if (activeSchoolMemberships.length === 0 || !activeSchoolMemberships[0].schoolId) {
+  const activeSchool = await resolveActiveSchool(educatorMemberships, activeSchoolId);
+  if (!activeSchool) {
     return <div>No school assigned.</div>;
   }
+  const activeSchoolMemberships = activeSchool.memberships;
   
-  const schoolId = activeSchoolMemberships[0].schoolId;
+  const schoolIds = activeSchool.schoolIds;
 
   // Single denominator source of truth (target total → selection → paper total →
   // pool sum), so standings percentages match the students' results and
@@ -77,7 +76,7 @@ export default async function EducatorStandingsPage({
       .where(
         and(
           eq(submissions.roundId, roundId),
-          eq(memberships.schoolId, schoolId),
+          inArray(memberships.schoolId, schoolIds),
           isNotNull(results.score)
         )
       )

@@ -8,6 +8,7 @@ import { getMarkingDeadline, getMarkingWindowStatus } from '@/domain/rounds/pape
 import { eq, and, inArray } from 'drizzle-orm';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 import Link from 'next/link';
+import { resolveActiveSchool } from '@/domain/educator/active-school';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,15 +40,13 @@ export default async function EducatorAssessmentsPage(props: { searchParams: Pro
   const cookieStore = await cookies();
   const activeSchoolId = cookieStore.get('active_school_id')?.value;
 
-  const activeSchoolMemberships = activeSchoolId 
-    ? educatorMemberships.filter((m) => m.schoolId === activeSchoolId)
-    : educatorMemberships.filter(m => m.schoolId === educatorMemberships[0].schoolId);
-
-  if (activeSchoolMemberships.length === 0 || !activeSchoolMemberships[0].schoolId) {
+  const activeSchool = await resolveActiveSchool(educatorMemberships, activeSchoolId);
+  if (!activeSchool) {
     return <div>No school assigned.</div>;
   }
+  const activeSchoolMemberships = activeSchool.memberships;
   
-  const portalIds = activeSchoolMemberships.map(m => m.portalId);
+  const portalIds = activeSchool.portalIds;
 
   const portalRows = portalIds.length > 0 
     ? await db.select().from(portals).where(inArray(portals.id, portalIds))

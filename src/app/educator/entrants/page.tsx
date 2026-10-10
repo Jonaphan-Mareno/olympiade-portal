@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { memberships, portals, schools } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import InviteStudentsForm from '@/components/educator/InviteStudentsForm';
+import { resolveActiveSchool } from '@/domain/educator/active-school';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,16 +35,14 @@ export default async function EducatorEntrantsPage() {
   const activeSchoolId = cookieStore.get('active_school_id')?.value;
 
   // Identify all memberships for the active school (or fallback to the first membership's school)
-  const activeSchoolMemberships = activeSchoolId 
-    ? educatorMemberships.filter(m => m.schoolId === activeSchoolId)
-    : educatorMemberships.filter(m => m.schoolId === educatorMemberships[0].schoolId);
-
-  if (activeSchoolMemberships.length === 0) {
+  const activeSchool = await resolveActiveSchool(educatorMemberships, activeSchoolId);
+  if (!activeSchool) {
     return <div>No school assigned.</div>;
   }
 
-  const currentSchoolId = activeSchoolMemberships[0].schoolId;
-  const portalIds = activeSchoolMemberships.map(m => m.portalId);
+  const currentSchoolId = activeSchool.primarySchoolId;
+  const schoolIds = activeSchool.schoolIds;
+  const portalIds = activeSchool.portalIds;
 
   // Fetch the school details and all relevant portals
   const [schoolRows, portalRows] = await Promise.all([
@@ -60,7 +59,7 @@ export default async function EducatorEntrantsPage() {
         .from(memberships)
         .where(
           and(
-            eq(memberships.schoolId, currentSchoolId),
+            inArray(memberships.schoolId, schoolIds),
             inArray(memberships.portalId, portalIds),
             eq(memberships.role, 'student')
           )
@@ -138,7 +137,7 @@ export default async function EducatorEntrantsPage() {
                       </h3>
                       <InviteStudentsForm
                         portalId={portal.id}
-                        schoolId={currentSchoolId}
+                        schoolId={activeSchool.schoolByPortal.get(portal.id) ?? currentSchoolId}
                         schoolName={school?.name ?? ''}
                       />
                     </div>
