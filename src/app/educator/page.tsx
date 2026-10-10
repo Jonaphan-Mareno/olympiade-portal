@@ -7,6 +7,7 @@ import { memberships, remarkRequests, rounds, submissions } from '@/lib/db/schem
 import Link from 'next/link';
 import { eq, and, inArray, count } from 'drizzle-orm';
 import { deriveRoundState } from '@/domain/rounds/round-state-machine';
+import { resolveActiveSchool } from '@/domain/educator/active-school';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,16 +36,14 @@ export default async function EducatorOverviewPage() {
   const cookieStore = await cookies();
   const activeSchoolId = cookieStore.get('active_school_id')?.value;
 
-  const activeSchoolMemberships = activeSchoolId 
-    ? educatorMemberships.filter((m) => m.schoolId === activeSchoolId)
-    : educatorMemberships.filter(m => m.schoolId === educatorMemberships[0].schoolId);
-
-  if (activeSchoolMemberships.length === 0 || !activeSchoolMemberships[0].schoolId) {
+  const activeSchool = await resolveActiveSchool(educatorMemberships, activeSchoolId);
+  if (!activeSchool) {
     return <div>No school assigned.</div>;
   }
+  const activeSchoolMemberships = activeSchool.memberships;
 
-  const schoolId = activeSchoolMemberships[0].schoolId;
-  const portalIds = activeSchoolMemberships.map(m => m.portalId);
+  const schoolIds = activeSchool.schoolIds;
+  const portalIds = activeSchool.portalIds;
 
   // Appeals from this school's entrants still waiting to be remarked
   const [{ value: pendingRemarks }] = portalIds.length > 0
@@ -57,7 +56,7 @@ export default async function EducatorOverviewPage() {
         .where(
           and(
             eq(remarkRequests.status, 'pending'),
-            eq(memberships.schoolId, schoolId),
+            inArray(memberships.schoolId, schoolIds),
             inArray(rounds.portalId, portalIds)
           )
         )
@@ -70,7 +69,7 @@ export default async function EducatorOverviewPage() {
         .from(memberships)
         .where(
           and(
-            eq(memberships.schoolId, schoolId),
+            inArray(memberships.schoolId, schoolIds),
             inArray(memberships.portalId, portalIds),
             eq(memberships.role, 'student')
           )

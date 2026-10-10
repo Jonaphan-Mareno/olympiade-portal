@@ -10,6 +10,7 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import SidebarNav from '@/components/educator/SidebarNav';
 import SchoolSwitcher, { SchoolMembership } from '@/components/educator/SchoolSwitcher';
+import { pickerIdFor, uniqueSchoolsByName } from '@/domain/educator/active-school';
 import CollapsibleSidebar from '@/components/ui/CollapsibleSidebar';
 
 
@@ -42,20 +43,16 @@ export default async function EducatorLayout({ children }: { children: ReactNode
     redirect('/dashboard');
   }
 
-  // Extract unique schools
-  const uniqueSchoolsMap = new Map<string, SchoolMembership>();
-  for (const m of educatorMemberships) {
-    if (m.schoolId && !uniqueSchoolsMap.has(m.schoolId)) {
-      uniqueSchoolsMap.set(m.schoolId, {
-        schoolId: m.schoolId,
-        schoolName: m.schoolName,
-      });
-    }
-  }
-  const uniqueSchools = Array.from(uniqueSchoolsMap.values());
+  // One entry per school: the same school invited to several olympiads has a
+  // row in each, but is a single school to the educator.
+  const uniqueSchools: SchoolMembership[] = uniqueSchoolsByName(educatorMemberships);
 
   const cookieStore = await cookies();
-  const activeSchoolId = cookieStore.get('active_school_id')?.value;
+  const activeSchoolId = pickerIdFor(
+    uniqueSchools,
+    educatorMemberships,
+    cookieStore.get('active_school_id')?.value
+  );
 
   return (
     <CollapsibleSidebar 

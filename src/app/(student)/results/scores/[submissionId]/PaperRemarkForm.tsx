@@ -83,7 +83,7 @@ export default function PaperRemarkForm({
               id="questionRefs"
               type="text"
               maxLength={MAX_QUESTION_REFS_LENGTH}
-              className="w-full px-4 py-3 border-2 border-slate-200 rounded-none focus:outline-none focus:border-blue-950"
+              className="w-full px-4 py-3 border-2 border-slate-200 rounded-none bg-white text-slate-900 focus:outline-none focus:border-blue-950"
               placeholder="E.g., Q3, Q5b"
               value={questionRefs}
               onChange={(e) => setQuestionRefs(e.target.value)}
@@ -98,7 +98,7 @@ export default function PaperRemarkForm({
             <textarea
               id="reason"
               rows={4}
-              className="w-full px-4 py-3 border-2 border-slate-200 rounded-none focus:outline-none focus:border-blue-950"
+              className="w-full px-4 py-3 border-2 border-slate-200 rounded-none bg-white text-slate-900 focus:outline-none focus:border-blue-950"
               placeholder="E.g., In Q3 my working is correct but only 1 of 3 marks was given..."
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -134,7 +134,7 @@ export default function PaperRemarkForm({
                           onChange={(e) => updateNote(i, e.target.value)}
                           disabled={isSubmitting}
                           placeholder="What should the marker look at here?"
-                          className="w-full px-3 py-2 border-2 border-slate-200 rounded-none focus:outline-none focus:border-blue-950 text-sm"
+                          className="w-full px-3 py-2 border-2 border-slate-200 rounded-none bg-white text-slate-900 focus:outline-none focus:border-blue-950 text-sm"
                         />
                       </div>
                       <button

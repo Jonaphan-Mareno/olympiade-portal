@@ -8,6 +8,7 @@ import { deriveRoundState } from '@/domain/rounds/round-state-machine';
 import { getRoundIdsWithCertificates } from '@/domain/certificates/availability';
 import { getRoundTotalMarks, calculatePercentage } from '@/domain/rounds/score-percentage';
 import Link from 'next/link';
+import { resolveActiveSchool } from '@/domain/educator/active-school';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,16 +44,14 @@ export default async function EducatorResultsPage({
   const cookieStore = await cookies();
   const activeSchoolId = cookieStore.get('active_school_id')?.value;
 
-  const activeSchoolMemberships = activeSchoolId 
-    ? educatorMemberships.filter((m) => m.schoolId === activeSchoolId)
-    : educatorMemberships.filter(m => m.schoolId === educatorMemberships[0].schoolId);
-
-  if (activeSchoolMemberships.length === 0 || !activeSchoolMemberships[0].schoolId) {
+  const activeSchool = await resolveActiveSchool(educatorMemberships, activeSchoolId);
+  if (!activeSchool) {
     return <div>No school assigned.</div>;
   }
+  const activeSchoolMemberships = activeSchool.memberships;
   
-  const schoolId = activeSchoolMemberships[0].schoolId;
-  const portalIds = activeSchoolMemberships.map(m => m.portalId);
+  const schoolIds = activeSchool.schoolIds;
+  const portalIds = activeSchool.portalIds;
 
   const portalRows = portalIds.length > 0 
     ? await db.select().from(portals).where(inArray(portals.id, portalIds))
@@ -138,7 +137,7 @@ export default async function EducatorResultsPage({
         };
       });
 
-      const schoolRankedSubs = rankedSubs.filter(s => s.studentSchoolId === schoolId);
+      const schoolRankedSubs = rankedSubs.filter(s => s.studentSchoolId !== null && schoolIds.includes(s.studentSchoolId));
       
       // recalculate internal rank
       let currentInternalRank = 1;
@@ -321,7 +320,7 @@ export default async function EducatorResultsPage({
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                   {globalTop50.map((student: any) => (
-                                    <tr key={student.submissionId} className={`hover:bg-slate-50 transition-colors ${student.studentSchoolId === schoolId ? 'bg-blue-50/30' : ''}`}>
+                                    <tr key={student.submissionId} className={`hover:bg-slate-50 transition-colors ${student.studentSchoolId !== null && schoolIds.includes(student.studentSchoolId) ? 'bg-blue-50/30' : ''}`}>
                                       <td className="px-6 py-4 text-center">
                                         <span className="font-bold text-blue-950 text-lg">
                                           #{student.rank}

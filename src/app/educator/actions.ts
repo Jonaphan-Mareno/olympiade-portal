@@ -85,6 +85,10 @@ export async function inviteStudents(formData: FormData) {
   }
 
   const invitesToSend: { email: string; inviteToken: string }[] = [];
+  // Students who were NOT newly added, with why, so the educator isn't told
+  // everyone was invited when some were already registered.
+  const skipped: { email: string; reason: string }[] = [];
+  let added = 0;
 
   try {
     for (const email of uniqueEmails) {
@@ -104,8 +108,25 @@ export async function inviteStudents(formData: FormData) {
           )
         );
 
+      // A student belongs to one school per olympiad. If they are already
+      // registered through a different school, leave them where they are:
+      // moving or silently ignoring them is how a student ends up "already
+      // in" an olympiad their current educator never added.
+      if (
+        existingMembership &&
+        existingMembership.schoolId &&
+        existingMembership.schoolId !== schoolId
+      ) {
+        skipped.push({
+          email,
+          reason: 'is already registered for this olympiad through another school',
+        });
+        continue;
+      }
+
       if (existingMembership?.status === 'accepted') {
         // Already a member of this portal — nothing to do.
+        skipped.push({ email, reason: 'is already registered for your school' });
         continue;
       }
 
@@ -123,6 +144,7 @@ export async function inviteStudents(formData: FormData) {
               invitedEmail: email,
             })
             .onConflictDoNothing();
+          added++;
         } else {
           // No account yet - create invite
           const [membership] = await db
@@ -140,6 +162,7 @@ export async function inviteStudents(formData: FormData) {
             email,
             inviteToken: membership.inviteToken!,
           });
+          added++;
         }
       } else if (existingUserId) {
         // Pending invite, but the account now exists — link and accept
@@ -152,6 +175,7 @@ export async function inviteStudents(formData: FormData) {
             claimedAt: new Date(),
           })
           .where(eq(memberships.id, existingMembership.id));
+        added++;
       } else {
         // Pending invite, still no account — re-send the original token,
         // refreshed to point at this school
@@ -164,6 +188,7 @@ export async function inviteStudents(formData: FormData) {
           email,
           inviteToken: existingMembership.inviteToken!,
         });
+        skipped.push({ email, reason: 'already had a pending invite, which was re-sent' });
       }
     }
 
@@ -185,5 +210,5 @@ export async function inviteStudents(formData: FormData) {
   revalidatePath('/educator');
   revalidatePath('/educator/entrants');
   revalidatePath(`/organiser/olympiads/${portalId}`);
-  return { success: true, count: uniqueEmails.length };
+  return { success: true, count: added, skipped };
 }

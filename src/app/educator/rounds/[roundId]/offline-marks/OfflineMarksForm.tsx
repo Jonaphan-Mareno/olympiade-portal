@@ -116,7 +116,7 @@ export default function OfflineMarksForm({
                         max={maxMarks > 0 ? maxMarks : undefined}
                         value={marks[student.membershipId] ?? ''}
                         onChange={(e) => handleScoreChange(student.membershipId, e.target.value)}
-                        className="w-20 px-3 py-2 border-2 border-slate-300 rounded-none focus:border-blue-900 focus:ring-0 font-medium text-center"
+                        className="w-20 px-3 py-2 border-2 border-slate-300 rounded-none bg-white text-slate-900 placeholder:text-slate-400 focus:border-blue-900 focus:ring-0 font-medium text-center"
                         placeholder="--"
                       />
                       {maxMarks > 0 && (

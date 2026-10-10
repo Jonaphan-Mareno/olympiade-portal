@@ -77,7 +77,7 @@ export default function RequestRemarkButton({
                 <textarea
                   id="reason"
                   rows={4}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-none focus:outline-none focus:border-blue-950"
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-none bg-white text-slate-900 focus:outline-none focus:border-blue-950"
                   placeholder="E.g., Question 4 was marked incorrect but my answer matches the memo..."
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}

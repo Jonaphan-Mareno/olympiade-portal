@@ -19,6 +19,7 @@ export default function InviteStudentsForm({
   const [newEmail, setNewEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [skipped, setSkipped] = useState<{ email: string; reason: string }[]>([]);
   const [isPending, startTransition] = useTransition();
 
   function addEmail() {
@@ -39,6 +40,7 @@ export default function InviteStudentsForm({
   async function handleSubmit(formData: FormData) {
     setError(null);
     setSuccess(null);
+    setSkipped([]);
 
     formData.set('portalId', portalId);
     formData.set('schoolId', schoolId);
@@ -49,9 +51,13 @@ export default function InviteStudentsForm({
       if (result?.error) {
         setError(result.error);
       } else {
+        const count = result.count ?? 0;
         setSuccess(
-          `${result.count} student${result.count !== 1 ? 's' : ''} invited successfully!`
+          count > 0
+            ? `${count} student${count !== 1 ? 's' : ''} invited successfully!`
+            : 'No new students were added.'
         );
+        setSkipped(result.skipped ?? []);
         setEmails([]);
       }
     });
@@ -89,6 +95,28 @@ export default function InviteStudentsForm({
           }}
         >
           {success}
+        </div>
+      )}
+
+      {skipped.length > 0 && (
+        <div
+          style={{
+            background: '#FEF3C7',
+            color: '#92400E',
+            padding: '0.5rem 0.75rem',
+            borderRadius: '0.375rem',
+            border: '1px solid #FCD34D',
+            fontSize: '0.85rem',
+          }}
+        >
+          Not added:
+          <ul style={{ margin: '0.25rem 0 0 1.1rem', listStyle: 'disc' }}>
+            {skipped.map((s) => (
+              <li key={s.email}>
+                {s.email} {s.reason}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

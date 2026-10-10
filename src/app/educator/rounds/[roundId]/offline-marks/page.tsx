@@ -10,6 +10,7 @@ import { getScriptPageCounts } from '@/domain/scripts/script-pages';
 import { eq, and, inArray } from 'drizzle-orm';
 import Link from 'next/link';
 import OfflineMarksForm from './OfflineMarksForm';
+import { resolveActiveSchool } from '@/domain/educator/active-school';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,15 +35,12 @@ export default async function OfflineMarksPage(props: { params: Promise<{ roundI
 
   const cookieStore = await cookies();
   const activeSchoolId = cookieStore.get('active_school_id')?.value;
-  const activeSchoolMemberships = activeSchoolId 
-    ? educatorMemberships.filter((m) => m.schoolId === activeSchoolId)
-    : educatorMemberships.filter(m => m.schoolId === educatorMemberships[0].schoolId);
-
-  if (activeSchoolMemberships.length === 0 || !activeSchoolMemberships[0].schoolId) {
+  const activeSchool = await resolveActiveSchool(educatorMemberships, activeSchoolId);
+  if (!activeSchool) {
     redirect('/dashboard');
   }
-
-  const schoolId = activeSchoolMemberships[0].schoolId;
+  const activeSchoolMemberships = activeSchool.memberships;
+  const schoolIds = activeSchool.schoolIds;
 
   // Get the round details
   const roundRows = await db.select().from(rounds).where(eq(rounds.id, roundId));
@@ -89,7 +87,7 @@ export default async function OfflineMarksPage(props: { params: Promise<{ roundI
     .from(memberships)
     .where(
       and(
-        eq(memberships.schoolId, schoolId),
+        inArray(memberships.schoolId, schoolIds),
         eq(memberships.role, 'student'),
         eq(memberships.portalId, round.portalId)
       )
