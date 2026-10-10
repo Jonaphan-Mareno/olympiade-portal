@@ -18,7 +18,7 @@ The global Next.js middleware (`src/middleware.ts`) **explicitly bypasses** all 
 | `POST /api/student/sitting/save`               | **Required**    | Supabase session cookie                |
 | `GET /api/student/sitting/sync`                | **Required**    | Supabase session cookie                |
 | `POST /api/student/sitting/submit`             | **Required**    | Supabase session cookie                |
-| `GET /api/rounds/[roundId]/paper`              | **Required**    | Supabase session cookie (organiser owner / accepted educators only) |
+| `GET /api/rounds/[roundId]/paper`              | **Required**    | Supabase session cookie (organiser owner / accepted educators / the round's entrants after publication) |
 | `GET /api/scripts/[pageId]`                    | **Required**    | Supabase session cookie (entrant after publication / school educators / organiser) |
 | `GET /api/certificates/[submissionId]`         | **None**        | Open (depends on URL knowledge)        |
 | `GET` / `POST` `/api/webhooks/round-scheduler` | **Conditional** | `CRON_SECRET` bearer token (see below) |
@@ -303,6 +303,7 @@ Serves a round's printable documents to the schools running it: the question pap
 
 - The **owner** may download at any time.
 - An **educator** is time-gated: the paper is available once the round **opens**, and the memo only once it **closes**, so answers never circulate while entrants are still writing (`403` otherwise).
+- An **entrant** who has a submission for the round may download the paper and memo once the round's results are **published** (when their marked script also appears beside an on-screen memo). Entrants never get `?variant=preview`.
 
 **Variant preview (`?variant=preview`)**
 
