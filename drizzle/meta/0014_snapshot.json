@@ -1,5 +1,5 @@
 {
-  "id": "6f1a2b3c-4d5e-4f60-8a7b-8c9d0e1f2a3b",
+  "id": "79c1f437-eb03-4e79-af22-bbbf9ecbf90f",
   "prevId": "13714380-7f96-437a-93fa-ac8a926fa419",
   "version": "7",
   "dialect": "postgresql",
@@ -1004,6 +1004,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "question_refs": {
+          "name": "question_refs",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pins": {
+          "name": "pins",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "response_note": {
           "name": "response_note",
           "type": "text",
@@ -1561,6 +1573,177 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.submission_script_pages": {
+      "name": "submission_script_pages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "submission_id": {
+          "name": "submission_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "remark_request_id": {
+          "name": "remark_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "page_index": {
+          "name": "page_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "storage_path": {
+          "name": "storage_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_type": {
+          "name": "content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "uploaded_by_user_id": {
+          "name": "uploaded_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "script_pages_original_uniq": {
+          "name": "script_pages_original_uniq",
+          "columns": [
+            {
+              "expression": "submission_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "page_index",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "kind = 'original'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "script_pages_remarked_uniq": {
+          "name": "script_pages_remarked_uniq",
+          "columns": [
+            {
+              "expression": "submission_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "remark_request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "page_index",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "kind = 'remarked'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "submission_script_pages_submission_id_submissions_id_fk": {
+          "name": "submission_script_pages_submission_id_submissions_id_fk",
+          "tableFrom": "submission_script_pages",
+          "tableTo": "submissions",
+          "columnsFrom": [
+            "submission_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "submission_script_pages_remark_request_id_remark_requests_id_fk": {
+          "name": "submission_script_pages_remark_request_id_remark_requests_id_fk",
+          "tableFrom": "submission_script_pages",
+          "tableTo": "remark_requests",
+          "columnsFrom": [
+            "remark_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "submission_script_pages_uploaded_by_user_id_users_id_fk": {
+          "name": "submission_script_pages_uploaded_by_user_id_users_id_fk",
+          "tableFrom": "submission_script_pages",
+          "tableTo": "users",
+          "columnsFrom": [
+            "uploaded_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "script_pages_kind_remark_check": {
+          "name": "script_pages_kind_remark_check",
+          "value": "(kind = 'original' AND remark_request_id IS NULL) OR (kind = 'remarked' AND remark_request_id IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": true
+    },
     "public.submissions": {
       "name": "submissions",
       "schema": "",
@@ -1634,8 +1817,8 @@
         }
       },
       "indexes": {
-        "submissions_student_round_uniq": {
-          "name": "submissions_student_round_uniq",
+        "submissions_student_round_idx": {
+          "name": "submissions_student_round_idx",
           "columns": [
             {
               "expression": "student_membership_id",
@@ -1650,7 +1833,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}

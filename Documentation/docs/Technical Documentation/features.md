@@ -27,11 +27,13 @@ The platform includes a robust online testing environment:
 For offline rounds, the platform supports manual processing:
 - **Document Uploads**: Educators or students can upload scanned answer sheets.
 - **Manual Grading**: Organizers can manually input scores and provide feedback for these submissions.
+- **Marked Scripts**: On the offline-marks page, the school educator enters one total per entrant and can upload photos of the entrant's marked script (JPEG/PNG/WebP, up to 30 ordered pages of 10 MB; phone photos are shrunk to 2400px in the browser; HEIC/PDF are not supported). Scripts can be uploaded or replaced only while the marking window is open, and are frozen once results are published. Pages live in the **private** `marked-scripts` Storage bucket and are only ever served through the authenticated `GET /api/scripts/[pageId]` route. Before publishing, the organiser's round page warns how many scored entrants have no script (publishing is never blocked).
 
 ## 5. Results & Leaderboards
 - **Result Publishing**: Organizers have full control over when results are released to the public.
 - **Public Leaderboards**: Once published, anonymous leaderboards are exposed via the Public API, allowing external sites to display top performers without compromising student privacy.
-- **Remarks/Appeals**: The system supports tracking requests for remarks and logging the outcome.
+- **Remarks/Appeals**: An entrant may appeal up to twice per paper within 14 days of results being published, one request open at a time. A pending request can be withdrawn (e.g. to fix a mistake) and still counts as one of the two; the results page tells the entrant how many they have left. If two markers resolve the same request at once, only the first is saved. The entrant's school educators (or the organiser) re-mark it and must explain the outcome; the new total is written to `results.score`, so standings, certificates and qualification follow it.
+  - **Paper scripts**: after publication the entrant sees their marked script on their results page (paged, full width), with the round's **memo in a sidebar on the right** (below the script on phones) so they can check each answer before deciding whether to appeal. The sidebar lists every question with the correct option(s) highlighted using the paper's letters, matching answers, and written-answer guidelines, plus links to the memo and question paper PDFs; an uploaded memo PDF is embedded when the round has no questions in the system. It appears even when no script was uploaded. When appealing they give the question(s) concerned and the reason, and may drop up to 10 numbered pins with short notes on their pages. The marker sees the script with the same pins, enters the new total and may upload re-marked pages, which the entrant sees as "After remark" beside the untouched originals. An appeal never requires a script to have been uploaded.
 
 ## 6. Automated Certificate Generation
 - **Custom Templates**: Organizers can upload PDF templates for certificates and configure where the student's name should be drawn (X/Y coordinates, font size, and color).
@@ -41,7 +43,8 @@ For offline rounds, the platform supports manual processing:
 ## 7. Role-Based Access Control & Memberships
 Authentication is handled by Supabase Auth, but authorization is managed by a granular `memberships` table.
 - **Roles**: Users can hold different roles (e.g., `admin`, `educator`, `student`) within different contexts (Portals and Schools).
-- **Invitations**: Organizers can invite schools to participate, generating secure invite tokens that educators can claim to join a Portal.
+- **Invitations**: Organizers can invite schools to participate, generating secure invite tokens that educators can claim to join a Portal. When an educator invites students, anyone already registered (at their school or another school in that olympiad) is listed back to them as not added, rather than silently skipped or moved.
+- **One entry per school for educators**: school rows are stored per olympiad, so a school taking part in several olympiads has one row in each. The educator's school picker lists it once (matched by name, ignoring case and spacing), and the educator pages (dashboard, entrants, rounds, offline marks, results, remarks, standings) combine all of that school's olympiads (`src/domain/educator/active-school.ts`).
 
 ## 8. Notifications & Automations
 - **Round Scheduler**: A cron job (Vercel Cron) routinely checks round states and triggers state changes (e.g., opening a round, closing it, or publishing results).

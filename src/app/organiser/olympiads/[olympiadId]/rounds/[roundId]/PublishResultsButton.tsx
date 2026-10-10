@@ -45,7 +45,11 @@ export default function PublishResultsButton({
 
   return (
     <div>
+      {/* type="button": this sits inside the round's edit <form>, and a default
+          submit button would also submit "Save Changes" instead of just
+          opening the confirmation. */}
       <button
+        type="button"
         onClick={() => setConfirmOpen(true)}
         disabled={isPending}
         className="bg-green-700 hover:bg-green-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-medium px-6 py-2 rounded-md transition-colors"

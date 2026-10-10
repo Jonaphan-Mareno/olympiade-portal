@@ -25,12 +25,12 @@ No code change; findings that motivated the work below.
 
 ---
 
-## 3. Database migration `0014` — unique index on submissions
+## 3. Database migration `0016` — unique index on submissions
 
 **Files:**
-- `drizzle/0014_submission_unique.sql` (new)
-- `drizzle/meta/0014_snapshot.json` (new)
-- `drizzle/meta/_journal.json` (entry `idx: 14`)
+- `drizzle/0016_submission_unique.sql` (new)
+- `drizzle/meta/0016_snapshot.json` (new)
+- `drizzle/meta/_journal.json` (entry `idx: 16`)
 - `src/lib/db/schema/index.ts`
 - `Documentation/docs/Initial Design & Planning/database-architecture.md`
 
@@ -50,7 +50,7 @@ No code change; findings that motivated the work below.
 - The submission insert now uses `.onConflictDoNothing()` against the new unique index; if a concurrent writer created the row between the SELECT and INSERT, `returning()` yields nothing and the request bows out without marking instead of throwing a unique violation.
 - A pre-existing **draft** (status ≠ `submitted`) is still finalized in place, preserving prior behaviour.
 
-**File:** `src/app/educator/rounds/[roundId]/offline-marks/actions.ts` (offline bulk marks)
+**File:** `src/domain/rounds/offline-marks.ts` → `findOrCreateOfflineSubmission` (shared by offline bulk marks and script uploads; moved here when main was merged in)
 
 - The submission insert now uses `.onConflictDoNothing()` + re-read, so a concurrent online submit cannot fail the entire batch with a unique violation.
 - If the winning row is an `online` script, it is skipped — reinforcing the existing "never overwrite a script the entrant wrote online" rule.
@@ -78,7 +78,7 @@ Node/npm were not available in the authoring environment, so the following were 
 ```powershell
 npx vitest run tests/api/student/sitting.submit.test.ts tests/api/student/sitting.matching.test.ts tests/domain/round-stats.test.ts
 npx tsc --noEmit
-npm run db:generate   # expected: "No schema changes" — confirms the hand-written 0014 matches the schema
+npm run db:generate   # expected: "No schema changes" — confirms the 0016 migration matches the schema
 ```
 
 ---

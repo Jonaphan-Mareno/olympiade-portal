@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { submitBulkOfflineMarks } from './actions';
 import { useRouter } from 'next/navigation';
+import ScriptUploadCell from './ScriptUploadCell';
 
 export default function OfflineMarksForm({
   roundId,
@@ -91,12 +92,13 @@ export default function OfflineMarksForm({
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Student Name</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Email</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-48">Score</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Marked Script</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {students.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-6 py-8 text-center text-slate-500 italic">
+                <td colSpan={4} className="px-6 py-8 text-center text-slate-500 italic">
                   No eligible students found for offline grading.
                 </td>
               </tr>
@@ -114,13 +116,21 @@ export default function OfflineMarksForm({
                         max={maxMarks > 0 ? maxMarks : undefined}
                         value={marks[student.membershipId] ?? ''}
                         onChange={(e) => handleScoreChange(student.membershipId, e.target.value)}
-                        className="w-20 px-3 py-2 border-2 border-slate-300 rounded-none focus:border-blue-900 focus:ring-0 font-medium text-center"
+                        className="w-20 px-3 py-2 border-2 border-slate-300 rounded-none bg-white text-slate-900 placeholder:text-slate-400 focus:border-blue-900 focus:ring-0 font-medium text-center"
                         placeholder="--"
                       />
                       {maxMarks > 0 && (
                         <span className="text-slate-400 font-bold text-sm">/ {maxMarks}</span>
                       )}
                     </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <ScriptUploadCell
+                      roundId={roundId}
+                      studentMembershipId={student.membershipId}
+                      studentName={student.name}
+                      pageCount={student.scriptPages ?? 0}
+                    />
                   </td>
                 </tr>
               ))

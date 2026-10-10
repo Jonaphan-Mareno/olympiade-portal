@@ -2,8 +2,20 @@
 
 import { useState } from 'react';
 import { requestStudentRemark } from './actions';
+import PaperRemarkForm from './PaperRemarkForm';
 
-export default function RequestRemarkButton({ submissionId }: { submissionId: string }) {
+/**
+ * `paperPageIds` is set for paper scripts (possibly empty when no script was
+ * uploaded) and switches to the paper appeal form; online appeals keep the
+ * reason-only form.
+ */
+export default function RequestRemarkButton({
+  submissionId,
+  paperPageIds,
+}: {
+  submissionId: string;
+  paperPageIds?: string[];
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,7 +49,15 @@ export default function RequestRemarkButton({ submissionId }: { submissionId: st
         Request Remark
       </button>
 
-      {isOpen && (
+      {isOpen && paperPageIds && (
+        <PaperRemarkForm
+          submissionId={submissionId}
+          pageIds={paperPageIds}
+          onClose={() => setIsOpen(false)}
+        />
+      )}
+
+      {isOpen && !paperPageIds && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-none border-2 border-slate-200 shadow-xl w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b-2 border-slate-200 bg-slate-50">
@@ -57,7 +77,7 @@ export default function RequestRemarkButton({ submissionId }: { submissionId: st
                 <textarea
                   id="reason"
                   rows={4}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-none focus:outline-none focus:border-blue-950"
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-none bg-white text-slate-900 focus:outline-none focus:border-blue-950"
                   placeholder="E.g., Question 4 was marked incorrect but my answer matches the memo..."
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}

@@ -15,6 +15,8 @@ import {
 import { eq, and } from 'drizzle-orm';
 import { loadSittingQuestions } from '@/domain/question-bank/load-variant';
 import Link from 'next/link';
+import { resolveActiveSchool } from '@/domain/educator/active-school';
+import { currentRemark } from '@/domain/remarks/remarks';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,8 +38,15 @@ export default async function ViewFullPaperPage({
   }
 
   const cookieStore = await cookies();
-  const activeSchoolId = cookieStore.get('active_school_id')?.value;
-  if (!activeSchoolId) {
+  const educatorMemberships = await db
+    .select()
+    .from(memberships)
+    .where(and(eq(memberships.userId, user.id), eq(memberships.role, 'educator')));
+  const activeSchool = await resolveActiveSchool(
+    educatorMemberships,
+    cookieStore.get('active_school_id')?.value
+  );
+  if (!activeSchool) {
     return <div>No school assigned.</div>;
   }
 
@@ -66,7 +75,7 @@ export default async function ViewFullPaperPage({
   }
 
   // Enforce school scoping
-  if (subData.schoolId !== activeSchoolId) {
+  if (!subData.schoolId || !activeSchool.schoolIds.includes(subData.schoolId)) {
     return (
       <div className="p-8 text-center text-slate-500">
         You do not have permission to view this submission.
@@ -74,10 +83,13 @@ export default async function ViewFullPaperPage({
     );
   }
 
-  const [remark] = await db
-    .select()
-    .from(remarkRequests)
-    .where(eq(remarkRequests.submissionId, submissionId));
+  // The latest appeal that wasn't withdrawn (up to two per paper)
+  const remark = currentRemark(
+    await db
+      .select()
+      .from(remarkRequests)
+      .where(eq(remarkRequests.submissionId, submissionId))
+  );
 
   // Fetch ONLY the questions this entrant was actually dealt (their sitting
   // variant, or the whole pool for legacy sittings). Rendering the full pool

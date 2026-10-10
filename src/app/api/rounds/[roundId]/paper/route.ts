@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
-import { memberships, portals, questionPapers, questions, rounds } from '@/lib/db/schema';
+import { memberships, portals, questionPapers, questions, rounds, submissions } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
 import {
   generateMemoPdf,
@@ -18,9 +18,12 @@ import { FIXED_SEED } from '@/domain/question-bank/publish-readiness';
 //   document is generated from the organiser's ordered physical selection
 //   (loadPaperQuestions), falling back to the whole pool for legacy papers, so
 //   online and hybrid rounds can be sat on paper too.
-// - Only the olympiad's organiser and its accepted educators may download.
-// - The question paper is available once the round opens; the memo only once
-//   it closes, so answers never circulate while entrants are still writing.
+// - The olympiad's organiser and its accepted educators may download. The
+//   question paper is available to educators once the round opens; the memo
+//   only once it closes, so answers never circulate while entrants are still
+//   writing.
+// - An entrant who wrote the round may download its paper and memo once the
+//   results are published, to check their marked script against the memo.
 // - GET ?variant=preview (organiser/educator only) renders a sample online
 //   variant drawn with the fixed seed, so they can see what an entrant gets.
 
@@ -83,6 +86,7 @@ export async function GET(
       opensAt: rounds.opensAt,
       closesAt: rounds.closesAt,
       targetTotalMarks: rounds.targetTotalMarks,
+      resultsPublishedAt: rounds.resultsPublishedAt,
       portalName: portals.name,
       ownerUserId: portals.ownerUserId,
     })
@@ -104,14 +108,32 @@ export async function GET(
           eq(memberships.status, 'accepted')
         )
       );
-    if (!educator) return new NextResponse('Forbidden', { status: 403 });
-
-    const now = new Date();
-    if (kind === 'paper' && now < round.opensAt) {
-      return new NextResponse('The question paper is available once the round opens.', { status: 403 });
-    }
-    if (kind === 'memo' && now < round.closesAt) {
-      return new NextResponse('The memo is available once the round closes.', { status: 403 });
+    if (educator) {
+      const now = new Date();
+      if (kind === 'paper' && now < round.opensAt) {
+        return new NextResponse('The question paper is available once the round opens.', { status: 403 });
+      }
+      if (kind === 'memo' && now < round.closesAt) {
+        return new NextResponse('The memo is available once the round closes.', { status: 403 });
+      }
+    } else {
+      // Not staff: only an entrant of this round, after publication, and
+      // never the variant preview
+      if (wantsVariantPreview || !round.resultsPublishedAt) {
+        return new NextResponse('Forbidden', { status: 403 });
+      }
+      const [entrant] = await db
+        .select({ id: submissions.id })
+        .from(submissions)
+        .innerJoin(memberships, eq(memberships.id, submissions.studentMembershipId))
+        .where(
+          and(
+            eq(submissions.roundId, roundId),
+            eq(memberships.userId, user.id),
+            eq(memberships.portalId, round.portalId)
+          )
+        );
+      if (!entrant) return new NextResponse('Forbidden', { status: 403 });
     }
   }
 

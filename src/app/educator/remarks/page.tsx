@@ -12,6 +12,7 @@ import {
   users,
 } from '@/lib/db/schema';
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { resolveActiveSchool } from '@/domain/educator/active-school';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,15 +36,14 @@ export default async function EducatorRemarksPage() {
   if (educatorMemberships.length === 0) redirect('/dashboard');
 
   const cookieStore = await cookies();
-  const activeSchoolId =
-    cookieStore.get('active_school_id')?.value ?? educatorMemberships[0].schoolId;
-  const portalIds = educatorMemberships
-    .filter((m) => m.schoolId === activeSchoolId)
-    .map((m) => m.portalId);
-
-  if (!activeSchoolId || portalIds.length === 0) {
+  const activeSchool = await resolveActiveSchool(
+    educatorMemberships,
+    cookieStore.get('active_school_id')?.value
+  );
+  if (!activeSchool) {
     return <div className="p-8 text-slate-600">No school assigned.</div>;
   }
+  const { schoolIds, portalIds } = activeSchool;
 
   const rows = await db
     .select({
@@ -67,7 +67,7 @@ export default async function EducatorRemarksPage() {
     .leftJoin(results, eq(results.submissionId, submissions.id))
     .where(
       and(
-        eq(memberships.schoolId, activeSchoolId),
+        inArray(memberships.schoolId, schoolIds),
         inArray(rounds.portalId, portalIds)
       )
     )

@@ -22,6 +22,8 @@ Our system uses a strictly normalized PostgreSQL relational database to ensure a
 | **`student_answers`** | Individual answers for online exams | `sittingId` → `exam_sittings.id`<br/>`questionId` → `questions.id` | `answerValue`, `savedAt` |
 | **`submissions`** | Wraps offline/online answers for grading | `roundId` → `rounds.id`<br/>`studentMembershipId` → `memberships.id` | `submissionType`, `fileUrl`, `variantQuestionIds` |
 | **`results`** | Final graded scores | `submissionId` → `submissions.id` | `score`, `status`, `feedback` |
+| **`remark_requests`** | An entrant's appeal against a mark (up to two per submission) | `submissionId` → `submissions.id` | `attempt`, `reason`, `status` (`pending`/`resolved`/`withdrawn`), `questionMarks`, `questionRefs`, `pins` |
+| **`submission_script_pages`** | Ordered page images of a marked paper script | `submissionId` → `submissions.id`<br/>`remarkRequestId` → `remark_requests.id`<br/>`uploadedByUserId` → `users.id` | `kind`, `pageIndex`, `storagePath` |
 | **`round_qualifications`** | Records which students have advanced into a given round (written when the previous round's results are published) | `roundId` → `rounds.id`<br/>`studentMembershipId` → `memberships.id` | `qualifiedAt`; unique on (`roundId`, `studentMembershipId`) |
 | **`notification_log`** | Audit log for sent emails/notifications | `roundId` → `rounds.id`<br/>`recipientMembershipId` → `memberships.id` | `kind`, `status`, `sentAt` |
 | **`certificate_templates`** | Designs for round-specific certificates | `roundId` → `rounds.id` | `minScorePercentage`, `templateUrl` |
@@ -40,6 +42,17 @@ The **question-bank variants** feature lets a single round support per-entrant o
 - **`exam_sittings.variantSeed`** (text, nullable): a stable option-shuffle seed so answer options render in the same order when a student resumes an interrupted sitting.
 - **`submissions.variantQuestionIds`** (jsonb, nullable): a **denormalized copy** of the dealt variant, written at submit time so results/review/remarks pages stay join-free and immutable even if the pool later changes.
 - **`student_answers` (matching questions):** no schema change was made. A matching question is stored as **one row** under the base question UUID, whose `answerValue` is an aggregated JSON object of the pair selections keyed `${questionId}_${pairIndex}`.
+
+### Marked Paper Scripts
+
+Migration `0014_script_pages` (purely additive) lets schools upload an entrant's marked paper script and lets entrants query it in a remark.
+
+- **`submission_script_pages`**: one row per page — `id`, `submission_id` (cascade), `kind` (`'original'` | `'remarked'`), `remark_request_id` (cascade; set only for `'remarked'`, enforced by the `script_pages_kind_remark_check` CHECK), `page_index` (0-based order), `storage_path`, `content_type`, `size_bytes`, `uploaded_by_user_id` (set null), `created_at`. Original pages are frozen once results are published; re-marked pages are added during a remark, so the originals remain as the audit trail.
+- **Uniqueness**: a plain unique index cannot enforce uniqueness when `remark_request_id` is `NULL`, so there are two partial unique indexes: `script_pages_original_uniq` (`submission_id`, `page_index`) `WHERE kind = 'original'` and `script_pages_remarked_uniq` (`submission_id`, `remark_request_id`, `page_index`) `WHERE kind = 'remarked'`.
+- **`remark_requests.question_refs`** (text, nullable): the questions a paper appeal concerns, e.g. `"Q3, Q5b"`.
+- **`remark_requests.pins`** (jsonb, nullable): `[{ page, x, y, note }]` — `page` is a 0-based original `page_index`, `x`/`y` are fractions of the page (0–1).
+- **Storage**: the image bytes live in the **private** `marked-scripts` bucket (created by `create-marked-scripts-bucket.mjs`, no storage policies), reached only server-side with the service-role key.
+- **RLS**: enabled on `submission_script_pages` with **no policies**, so the anon/authenticated PostgREST roles cannot read it; the app accesses it only through the server Drizzle client, which owns the table.
 
 ### Indexes
 
@@ -63,6 +76,8 @@ The database is deployed on **Supabase**, a fully managed backend-as-a-service b
 - **Connection Management**: We utilize Supabase's built-in connection pooler (PgBouncer) via a Transaction-mode connection string. This is critical for Next.js API routes and Server Actions to prevent connection exhaustion in serverless environments.
 - **Migrations**: Schema changes are version-controlled through numbered SQL migration files committed to the tracked **`drizzle/`** folder (with matching `drizzle/meta/*_snapshot.json` files). We generate a migration from the Drizzle schema with **`npm run db:generate`** (`drizzle-kit generate`) and apply it deterministically with **`npm run db:migrate`** (`drizzle-kit migrate`) against the Supabase instance.
   - **`0013_question_bank_variants`** is **purely additive** and non-destructive: it adds **6 nullable columns** (`rounds.targetTotalMarks`, `question_papers.selectedQuestionIds`, `questions.difficulty`, `exam_sittings.variantQuestionIds`, `exam_sittings.variantSeed`, `submissions.variantQuestionIds`), relaxes `questions.marks` with `DROP NOT NULL` (preserving every existing value), and creates **4 indexes** (see above). There are no renames, no column/table drops, and no data loss.
+  - **`0014_script_pages`** is **purely additive**: it creates `submission_script_pages` (with RLS enabled and no policies) and adds two nullable columns to `remark_requests` (`question_refs`, `pins`).
+  - **`0015_remark_attempts`** replaces the one-remark-per-submission unique constraint with a unique (`submission_id`, `attempt`) index, a partial unique index allowing only one `pending` request per submission, and a CHECK limiting `attempt` to 1–2. Existing rows become attempt 1.
 - **Authentication Sync**: We leverage Supabase Auth for identity management. When a user signs up, application logic securely maps the `auth.users.id` to our public `users.id` schema.
 - **Security Authorization**: While Supabase offers Row Level Security (RLS), our architecture handles authorization *at the application layer* inside Next.js Server Actions using the `memberships` table. This allows us to implement highly complex, business-specific role checks (e.g., "Is this user an educator at a school that is approved for this specific portal?") before executing database queries via Drizzle.
 

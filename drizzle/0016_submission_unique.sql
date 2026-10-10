@@ -1,4 +1,4 @@
--- 0014_submission_unique — enforce one submission per entrant per round.
+-- 0016_submission_unique — enforce one submission per entrant per round.
 -- Converts the plain lookup index into a UNIQUE index so the two routes into
 -- "submissions" (the online sitting submit and the educator's offline bulk
 -- marks) can never leave a hybrid-round entrant with two rows. round-stats
