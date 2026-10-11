@@ -328,3 +328,21 @@ a:hover {
 .text-link-danger:hover {
   color: #b91c1c;
 }
+
+/* Password visibility toggle (shared by login, signup & reset-password) */
+.has-password-toggle {
+  padding-right: 2.75rem !important;
+}
+
+.password-toggle {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #666666;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.password-toggle:hover {
+  color: #0066cc;
+}

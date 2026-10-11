@@ -5,9 +5,9 @@ import type * as Preset from '@docusaurus/preset-classic';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: 'My Site',
-  tagline: 'Dinosaurs are cool',
-  favicon: 'img/favicon.ico',
+  title: 'Olympiad Portal',
+  tagline: 'Documentation for the test taking and administration platform',
+  favicon: 'img/icon-v2.png',
 
   themes: ['@docusaurus/theme-mermaid'],
   markdown: {
@@ -29,7 +29,10 @@ const config: Config = {
   // If you aren't using GitHub pages, you don't need these.
   organizationName: 'Thabiso-Thuso', // Usually your GitHub org/user name.
   projectName: 'Olympiad-Documentation', // Usually your repo name.
-  trailingSlash: false,
+  // GitHub Pages serves directory index files; trailing slashes keep deep
+  // links (e.g. /docs/Quality%20Assurance/testing-documentation/) resolvable
+  // on direct load. See https://github.com/facebook/docusaurus/discussions/9546
+  trailingSlash: true,
   onBrokenLinks: 'throw',
 
   // Even if you don't use internationalization, you can use this field to set
@@ -46,10 +49,8 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          // Please change this to your repo.
-          // Remove this to remove the "edit this page" links.
-          editUrl:
-            'https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/',
+          // "Edit this page" links are disabled until the docs are published
+          // from the team's repository.
         },
         blog: false,
         theme: {
@@ -60,16 +61,16 @@ const config: Config = {
   ],
 
   themeConfig: {
-    // Replace with your project's social card
-    image: 'img/docusaurus-social-card.jpg',
+    // Used as the social card for link previews
+    image: 'img/social-card.jpg',
     colorMode: {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'My Site',
+      title: 'Olympiad Portal',
       logo: {
-        alt: 'My Site Logo',
-        src: 'img/logo.svg',
+        alt: 'Olympiad Portal logo',
+        src: 'img/icon-v2.png',
       },
       items: [
         {
@@ -78,10 +79,9 @@ const config: Config = {
           position: 'left',
           label: 'Documentation',
         },
-        
         {
-          href: 'https://github.com/facebook/docusaurus',
-          label: 'GitHub',
+          href: 'https://olympiad-portal-eta.vercel.app',
+          label: 'Live Portal',
           position: 'right',
         },
       ],
@@ -90,43 +90,37 @@ const config: Config = {
       style: 'dark',
       links: [
         {
-          title: 'Docs',
+          title: 'Documentation',
           items: [
             {
               label: 'Tech Stack',
               to: '/docs/Technical Documentation/tech-stack',
             },
-          ],
-        },
-        {
-          title: 'Community',
-          items: [
             {
-              label: 'Stack Overflow',
-              href: 'https://stackoverflow.com/questions/tagged/docusaurus',
+              label: 'Feature Overview',
+              to: '/docs/Technical Documentation/features',
             },
             {
-              label: 'Discord',
-              href: 'https://discordapp.com/invite/docusaurus',
-            },
-            {
-              label: 'X',
-              href: 'https://x.com/docusaurus',
+              label: 'API Guide',
+              to: '/docs/Technical Documentation/app-api',
             },
           ],
         },
         {
-          title: 'More',
+          title: 'Project',
           items: [
-     
             {
-              label: 'GitHub',
-              href: 'https://github.com/facebook/docusaurus',
+              label: 'Live Portal',
+              href: 'https://olympiad-portal-eta.vercel.app',
+            },
+            {
+              label: 'Task Board (Gitea)',
+              href: 'https://sdp.ms.wits.ac.za/edgecaserunners/Olympiad-Portal/projects/29',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} My Project, Inc. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Olympiad Portal. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,

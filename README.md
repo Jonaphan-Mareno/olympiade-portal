@@ -17,7 +17,7 @@ This project follows a logically decoupled Domain-Driven Design (DDD) architectu
 
 Before you begin, ensure you have the following installed on your system:
 
-- **Node.js** (v18 or higher recommended)
+- **Node.js** (v20 or higher recommended)
 - **Git**
 
 ## Local Setup
@@ -25,15 +25,15 @@ Before you begin, ensure you have the following installed on your system:
 **1. Clone the repository**
 
 ```bash
-git clone [https://github.com/your-username/olympiad-portal-repo.git](https://github.com/your-username/olympiad-portal-repo.git)
-cd olympiad-portal-repo
+git clone https://sdp.ms.wits.ac.za/edgecaserunners/Olympiad-Portal.git
+cd Olympiad-Portal
 ```
 
 **2. Environment Variables**
 To connect the database and authentication services, you will need to configure your local environment keys.
 
-- We have provided a secure template file named `.env.example` in the repository.
-- Duplicate this file and rename it to `.env.local` in your root directory.
+- We provide a template file named `.env.example` in the repository root, documenting each required and optional variable.
+- Duplicate this file and rename it to `.env.local` in your root directory, then fill in real values.
 - Please contact the development team for the live Supabase testing keys.
 
 **3. Running the Application**

@@ -2,6 +2,8 @@
 sidebar_position: 3
 ---
 
+import useBaseUrl from '@docusaurus/useBaseUrl';
+
 # UI Design
 
 ## Brand Design Identity (The Wave)
@@ -29,7 +31,7 @@ The typographic hierarchy is structured as follows:
 
 ## Component Mapping & Layouts
 
-- **Authentication & Onboarding (`/signup`, `/login`)**: Utilizes a split-screen layout. One half features the brand wave and onboarding context to reinforce brand identity; the other half isolates the form inputs to reduce cognitive load and maximize conversion.
+- **Authentication & Onboarding** (login at `/`, signup at `/signup`): Utilizes a split-screen layout. One half features the brand wave and onboarding context to reinforce brand identity; the other half isolates the form inputs to reduce cognitive load and maximize conversion.
 - **Organizer Dashboard**: Abandons standard rigid metric cards in favor of a clean, list-based view anchored by a fixed Welcome Banner.
 - **Interactive Drawers**: The "Create New Olympiad" and "Add School" workflows utilize `framer-motion` to slide in an off-canvas side drawer, ensuring users are not redirected to a new page and maintaining their spatial context.
 - **Dynamic Form Elements**: Educator/Teacher input fields feature dynamic, state-driven "chips." This allows organizers to visually add, review, or remove multiple email addresses before submission.
@@ -41,7 +43,7 @@ To document our complete UI/UX planning phase, our original design files (low-fi
 ### Low-Fidelity Wireframes
 
 <iframe
-  src="/olympia-wireframes.pdf"
+  src={useBaseUrl('/olympia-wireframes.pdf')}
   width="100%"
   height="700px"
   style={{
@@ -54,7 +56,7 @@ To document our complete UI/UX planning phase, our original design files (low-fi
 ### High-Fidelity Mockups
 
 <iframe
-  src="/olympia-mockup.pdf"
+  src={useBaseUrl('/olympia-mockup.pdf')}
   width="100%"
   height="700px"
   style={{ border: '1px solid #e5e7eb', borderRadius: '8px' }}

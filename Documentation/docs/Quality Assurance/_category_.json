@@ -1,0 +1,8 @@
+{
+  "label": "Quality Assurance",
+  "position": 5,
+  "link": {
+    "type": "generated-index",
+    "description": "Testing strategy, automated test suites and CI quality gates."
+  }
+}

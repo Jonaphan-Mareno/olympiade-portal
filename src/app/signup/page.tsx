@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react';
 import { signup } from '@/app/auth/actions';
 import { SubmitButton } from '@/components/SubmitButton';
+import { PasswordField } from '@/components/PasswordField';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -300,11 +301,10 @@ function SignupForm() {
                 <label className="signup-label" htmlFor="password">
                   Password
                 </label>
-                <input
-                  className="signup-input"
-                  type="password"
-                  name="password"
+                <PasswordField
+                  className="signup-input has-password-toggle"
                   id="password"
+                  name="password"
                   required
                   minLength={6}
                 />

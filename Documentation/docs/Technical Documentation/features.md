@@ -42,8 +42,8 @@ For offline rounds, the platform supports manual processing:
 
 ## 7. Role-Based Access Control & Memberships
 Authentication is handled by Supabase Auth, but authorization is managed by a granular `memberships` table.
-- **Roles**: Users can hold different roles (e.g., `admin`, `educator`, `student`) within different contexts (Portals and Schools).
-- **Invitations**: Organizers can invite schools to participate, generating secure invite tokens that educators can claim to join a Portal. When an educator invites students, anyone already registered (at their school or another school in that olympiad) is listed back to them as not added, rather than silently skipped or moved.
+- **Roles**: Users can hold different roles (e.g., `organiser`, `educator`, `student`) within different contexts (Portals and Schools). Platform administrators are flagged separately on the user record (`users.isPlatformAdmin`) rather than through a membership role.
+- **Invitations**: Organizers can invite schools to participate, generating secure invite tokens that educators can claim to join a Portal. Educator addresses in both the Create Portal form and the invite-schools form can be typed one at a time or bulk-added by uploading a CSV — the file is parsed entirely in the browser and never stored, only the extracted addresses join the invite list. When an educator invites students, anyone already registered (at their school or another school in that olympiad) is listed back to them as not added, rather than silently skipped or moved.
 - **One entry per school for educators**: school rows are stored per olympiad, so a school taking part in several olympiads has one row in each. The educator's school picker lists it once (matched by name, ignoring case and spacing), and the educator pages (dashboard, entrants, rounds, offline marks, results, remarks, standings) combine all of that school's olympiads (`src/domain/educator/active-school.ts`).
 
 ## 8. Notifications & Automations

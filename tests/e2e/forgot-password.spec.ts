@@ -55,4 +55,35 @@ test.describe('Forgot password flow', () => {
       page.getByText(/invalid or has expired/i)
     ).toBeVisible({ timeout: 10_000 });
   });
+
+  test('reset password page toggles visibility for each field independently', async ({
+    page,
+  }) => {
+    await page.goto('/reset-password');
+
+    const password = page.locator('input[name="password"]');
+    const confirm = page.locator('input[name="confirmPassword"]');
+
+    // Both toggles share an accessible name, so scope each to its own field.
+    const passwordToggle = page
+      .locator('div:has(> input[name="password"])')
+      .getByRole('button');
+    const confirmToggle = page
+      .locator('div:has(> input[name="confirmPassword"])')
+      .getByRole('button');
+
+    await expect(password).toHaveAttribute('type', 'password');
+    await expect(confirm).toHaveAttribute('type', 'password');
+
+    await passwordToggle.click();
+    await expect(password).toHaveAttribute('type', 'text');
+    await expect(confirm).toHaveAttribute('type', 'password');
+
+    await confirmToggle.click();
+    await expect(confirm).toHaveAttribute('type', 'text');
+
+    await passwordToggle.click();
+    await expect(password).toHaveAttribute('type', 'password');
+    await expect(confirm).toHaveAttribute('type', 'text');
+  });
 });
