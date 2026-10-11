@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { login } from '@/app/auth/actions';
 import { SubmitButton } from '@/components/SubmitButton';
+import { PasswordField } from '@/components/PasswordField';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 
@@ -160,11 +161,10 @@ export default function LoginPage() {
                 <label className="login-label" htmlFor="password">
                   Password
                 </label>
-                <input
-                  className="login-input"
-                  type="password"
-                  name="password"
+                <PasswordField
+                  className="login-input has-password-toggle"
                   id="password"
+                  name="password"
                   required
                 />
                 <div

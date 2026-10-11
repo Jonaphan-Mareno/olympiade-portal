@@ -4,20 +4,19 @@ import { useState, useTransition } from 'react';
 import { sendInvitations } from './actions';
 import Link from 'next/link';
 import SchoolPicker from '@/components/schools/SchoolPicker';
+import EducatorEmailsField from '@/components/organiser/EducatorEmailsField';
 import { Spinner } from '@/components/ui/Spinner';
 import type { PickedSchool } from '@/lib/schools/types';
 
 type SchoolEntry = {
   school: PickedSchool | null;
   teacherEmails: string[];
-  newTeacherEmail: string;
 };
 
 function emptyEntry(): SchoolEntry {
   return {
     school: null,
     teacherEmails: [],
-    newTeacherEmail: '',
   };
 }
 
@@ -38,38 +37,6 @@ export default function InviteSchoolForm({ portalId }: { portalId: string }) {
 
   function removeSchool(index: number) {
     setEntries((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function addTeacherEmail(index: number) {
-    setEntries((prev) =>
-      prev.map((e, i) => {
-        if (i !== index) return e;
-        const email = e.newTeacherEmail.trim().toLowerCase();
-        if (!email || !email.includes('@')) return e;
-        if (e.teacherEmails.includes(email))
-          return { ...e, newTeacherEmail: '' };
-        return {
-          ...e,
-          teacherEmails: [...e.teacherEmails, email],
-          newTeacherEmail: '',
-        };
-      })
-    );
-  }
-
-  function removeTeacherEmail(schoolIndex: number, emailIndex: number) {
-    setEntries((prev) =>
-      prev.map((e, i) =>
-        i === schoolIndex
-          ? {
-              ...e,
-              teacherEmails: e.teacherEmails.filter(
-                (_, ei) => ei !== emailIndex
-              ),
-            }
-          : e
-      )
-    );
   }
 
   async function handleSubmit(formData: FormData) {
@@ -126,70 +93,23 @@ export default function InviteSchoolForm({ portalId }: { portalId: string }) {
                 />
               </div>
 
-              {/* Teacher emails */}
+              {/* Teacher emails — typed one at a time or bulk-added from
+                  a CSV file (parsed in the browser, never stored). */}
               <div className="flex-1">
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Teachers / Educators
                 </label>
 
-                {/* Existing teacher email tags */}
-                {entry.teacherEmails.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {entry.teacherEmails.map((email, ei) => (
-                      <span
-                        key={ei}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-md"
-                      >
-                        {email}
-                        <button
-                          type="button"
-                          onClick={() => removeTeacherEmail(index, ei)}
-                          className="hover:bg-blue-200 rounded-full p-0.5 transition-colors flex items-center justify-center outline-none"
-                        >
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                          </svg>
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Add teacher email input */}
-                <div className="flex gap-2">
-                  <input
-                    className="flex-1 border border-slate-300 rounded-md p-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-                    type="email"
-                    value={entry.newTeacherEmail}
-                    onChange={(e) =>
-                      updateEntry(index, { newTeacherEmail: e.target.value })
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addTeacherEmail(index);
-                      }
-                    }}
-                    placeholder="educator@school.edu"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => addTeacherEmail(index)}
-                    className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
+                <EducatorEmailsField
+                  emails={entry.teacherEmails}
+                  onChange={(teacherEmails) =>
+                    updateEntry(index, { teacherEmails })
+                  }
+                  inputClassName="border border-slate-300 rounded-md p-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                  buttonClassName="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  placeholder="educator@school.edu"
+                  disabled={isPending}
+                />
 
                 {entries.length > 1 && (
                   <div className="mt-4 flex justify-end">

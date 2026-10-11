@@ -80,8 +80,8 @@ Our automated testing suite is separated into distinct layers to optimize execut
 * **Objective:** Simulate real, unmocked end-user interactions in real browser engines to verify UI rendering, client-side routing, and security boundaries.
 * **Tooling:** **Playwright Test Runner** across **Chromium**, **Firefox**, and **WebKit**.
 * **Key Scenarios:**
-  * **Authentication & Middleware Boundaries (`tests/e2e/signup.spec.ts`, `tests/e2e/organiser.spec.ts`):** Verifies that unauthorized users attempting to access protected routes (`/admin/*`, `/organiser/*`, `/educator/*`) are immediately redirected to `/login` with proper return URLs.
-  * **Exam Sitting Flow:** Simulates a student opening an online test, navigating between questions, saving progress, and final submission under countdown constraints.
+  * **Authentication & Middleware Boundaries (`tests/e2e/organiser.spec.ts`):** Verifies that unauthenticated users attempting to access protected routes (`/organiser/*` and nested routes) are immediately redirected by the middleware back to the login page (`/`).
+  * **Registration & Account Recovery (`tests/e2e/signup.spec.ts`, `tests/e2e/login.spec.ts`, `tests/e2e/forgot-password.spec.ts`):** Render and drive the signup (with and without an invite token), login and password-reset screens through real browser engines.
 * **Artifact Generation:** Generates execution traces, step-by-step videos, and failure DOM screenshots in `/test-results` for rapid root-cause diagnosis.
 
 ---
@@ -103,26 +103,26 @@ Our automated testing suite is separated into distinct layers to optimize execut
 To maintain strict software quality throughout the project lifecycle, the team adheres to the following formal engineering policies:
 
 ### 1. Code Coverage Target
-* **Requirement:** A minimum of **70% statement and line coverage** is required across `src/components`, `src/domain`, `src/app/api`, and `src/lib`.
-* **Enforcement:** Code coverage is monitored via the automated V8 coverage reporter during CI test runs.
+* **Requirement:** A minimum of **70% statement and line coverage** is required across `src/components`, `src/domain`, `src/app/api`, and `src/lib` (the suite currently reports **77%** statements and **79%** lines overall).
+* **Enforcement:** Enforced by CI — `npm run test:coverage` fails the run (and therefore the PR gate) whenever overall statement or line coverage drops below the 70% thresholds configured in `vitest.config.mts`.
 
 ### 2. CI/CD Integration & PR Quality Gates
-* **Continuous Integration:** Every push and Pull Request triggers our GitHub Actions pipeline (`.github/workflows/ci.yml`).
+* **Continuous Integration:** Every push and Pull Request triggers both CI pipelines: **GitHub Actions** (`.github/workflows/ci.yml`) runs the Vitest suite with coverage, and the **Gitea pipeline** (`.gitea/workflows/ci.yaml`) gates on lint, `tsc --noEmit` type-checking, the test suite and the production build.
 * **Blocking Gates:** A Pull Request **cannot be merged into `main`** unless:
-  1. `npm run test:coverage` completes with **0 failures**.
-  2. Next.js production build (`npm run build`) type-checks with **0 TypeScript errors**.
-* **Artifact Archiving:** Test coverage reports are automatically zipped and uploaded to GitHub Actions artifacts for auditable test governance.
+  1. `npm run test:coverage` completes with **0 failures** and meets the 70% coverage thresholds.
+  2. `npx tsc --noEmit` reports **0 TypeScript errors** and the Next.js production build (`npm run build`) succeeds.
+* **Artifact Archiving:** Coverage reports (and the compiled `.next` build on Gitea) are uploaded as CI artifacts for auditable test governance.
 
 ```mermaid
 flowchart LR
-    A[Git Push / PR] --> B[GitHub Actions Runner]
+    A[Git Push / PR] --> B[CI Runners]
     B --> C[Install Dependencies]
-    C --> D[Run Vitest Suite & Coverage]
-    D -->|Pass| E[TypeScript & Next.js Build]
-    D -->|Fail| X[Block PR Merge]
-    E -->|Pass| F[Upload Coverage Artifact]
-    E -->|Fail| X
-    F --> G[Ready to Merge & Deploy to Vercel]
+    C --> D[Lint & tsc --noEmit]
+    D --> E[Run Vitest Suite & Coverage]
+    E -->|Fail| X[Block PR Merge]
+    E -->|Pass| F[Next.js Production Build]
+    F --> G[Upload Build & Coverage Artifacts]
+    G --> H[Ready to Merge & Deploy to Vercel]
 ```
 
 ### 3. Test-Driven Development (TDD) & Regression Mandate
@@ -193,6 +193,7 @@ Application performance is audited with **Google PageSpeed Insights** (Lighthous
 | :--- | :--- | :--- |
 | `tests/domain/round-state-machine.test.ts` | Unit | Time-based phase calculation & state transitions |
 | `tests/domain/automation-engine.test.ts` | Unit | Notification queue logic & idempotency |
+| `tests/domain/automation-rules.test.ts` | Unit | Rule config & timing: trigger validation, stored/draft offset conversion, timing evaluation & educator/entrant email planning |
 | `tests/domain/round-scheduler.test.ts` | Unit | Scheduler sweep: due-round detection & reminder/notification enqueue |
 | `tests/domain/public-api-queries.test.ts` | Unit | Public read queries: key mapping, portal grouping, numeric coercion & file-URL filtering |
 | `tests/domain/public-api-access.test.ts` | Unit | Visibility gates: closed/released availability for papers and published marks |
@@ -204,27 +205,44 @@ Application performance is audited with **Google PageSpeed Insights** (Lighthous
 | `tests/domain/score-percentage.test.ts` | Unit | `getRoundTotalMarks` precedence: `targetTotalMarks` → selected questions → whole-pool sum |
 | `tests/domain/load-variant.test.ts` | Unit | Strict id-ordered variant hydration: referenced rows only, no undrawn pool leak & dangling-id drop |
 | `tests/domain/advance-entrants.test.ts` | Unit | Qualification across per-entrant variants: equal-percentage parity & below-threshold exclusion |
+| `tests/domain/active-school.test.ts` | Unit | Cross-olympiad school grouping: name-key matching, picker de-duplication & active-school resolution |
 | `tests/domain/auto-mark.test.ts` | Unit | `calculateEarnedMarks`: single-choice full credit, true/false, multiple-choice partial & matching aggregation |
 | `tests/domain/remarks.test.ts` | Unit | Remark eligibility: post-publication window, `REMARK_WINDOW_DAYS` cutoff & published/mark/no-prior-appeal guards |
+| `tests/domain/remarks-paper-query.test.ts` | Unit | Paper remark requests: question-reference & pin validation, attempt counting, withdrawal rules & result-summary resets |
+| `tests/domain/memo-entries.test.ts` | Unit | Memo entry building: correct-option letters, answer lines & seeded question ordering |
+| `tests/domain/memo-pdf.test.ts` | Unit | Memo PDF generation & answer reading across all stored correct-answer shapes (plain, JSON array, CSV, object) |
+| `tests/domain/offline-marks.test.ts` | Unit | Bulk offline marks: offline-submission find-or-create, result upsert & concurrent online-submit conflict handling |
+| `tests/domain/paper-marking.test.ts` | Unit | Paper marking window: 24-hour default deadline, explicit `markingClosesAt` & open/closed status derivation |
+| `tests/domain/round-stats.test.ts` | Unit | Round statistics: writer de-duplication, marked-score averaging & threshold-derived pass rate |
+| `tests/domain/script-pages.test.ts` | Unit | Script page commit: authorised path checks, transactional row replacement & replaced-object storage cleanup |
+| `tests/domain/script-rules.test.ts` | Unit | Script access & upload rules: path building, access decisions, magic-byte sniffing, page-count/size & pin validation |
 | `tests/lib/high-schools.test.ts` | Unit | Token-based fuzzy search over the SA high-school snapshot |
 | `tests/lib/universities.test.ts` | Unit | Hipolabs universities proxy mapping & failure handling |
 | `tests/lib/auth-redirect.test.ts` | Unit | Role-based post-authentication redirect resolution |
+| `tests/lib/sast.test.ts` | Unit | SAST round-time handling: timezone-independent parsing, formatting & input conversion (UTC / Africa/Johannesburg / America/New_York) |
+| `tests/lib/csv-emails.test.ts` | Unit | Batch-invite CSV parser: header rows, multi-column/quoted/semicolon files, lower-casing, de-duplication & files without addresses |
 | `tests/components/OrganisationApplicationForm.test.tsx` | Component | Form validation, user input, server action dispatch |
 | `tests/components/SubmitButton.test.tsx` | Component | Pending state, button disabling, loading spinners |
 | `tests/components/ui/ConfirmDialog.test.tsx` | Component | Confirmation modal: focus trap, Escape/backdrop cancel & busy dismissal lock |
 | `tests/components/ui/PendingButton.test.tsx` | Component | Double-click guard, async pending state & external pending flag |
 | `tests/components/student/ExamInterface.test.tsx` | Component | Exam rendering, answer autosave & finish-attempt confirmation flow |
 | `tests/components/student/RoundTabs.test.tsx` | Component | Round tabs result display rendering |
+| `tests/components/student/RemarkSection.test.tsx` | Component | Student remark section: pending/resolved states, request & withdrawal dispatch |
 | `tests/components/schools/SchoolPicker.test.tsx` | Component | Combobox type toggle, debounced fetching & keyboard navigation |
 | `tests/components/organiser/AddEducatorButton.test.tsx` | Component | Add-educator button: dialog launch & pending/disabled behaviour |
+| `tests/components/organiser/EducatorEmailsField.test.tsx` | Component | Shared educator email list: manual add/remove, CSV merge, duplicate & empty-file reporting |
+| `tests/components/organiser/CreatePortalForm.test.tsx` | Component | Create Portal form: picked-school submission of typed & CSV-uploaded educator emails |
+| `tests/components/organiser/InviteSchoolForm.test.tsx` | Component | Invite-schools form: `sendInvitations` dispatch of typed & CSV-uploaded educator emails with error surfacing |
 | `tests/components/organiser/QuestionBuilder.test.tsx` | Component | Question builder: question entry, marks & answer-option editing |
 | `tests/components/organiser/PhysicalPaperSelector.test.tsx` | Component | Physical paper picker: running total that greens at target, up/down reordering & ordered hidden payload sync |
 | `tests/components/organiser/PublishReadinessPanel.test.tsx` | Component | Publish-readiness panel: ready state, inline per-question difficulty issues & unreachable-target summary |
+| `tests/components/organiser/RoundStatsPanel.test.tsx` | Component | Round statistics panel: entrants/wrote/marked/average/pass-rate display |
 | `tests/app/signup.page.test.tsx` | Page | Signup page render & form validation |
 | `tests/app/forgot-password.page.test.tsx` | Page | Forgot-password page render & reset-request form |
 | `tests/app/welcome.page.test.tsx` | Page | Welcome page render & onboarding state |
 | `tests/app/review-page.test.tsx` | Page | Review page score display rendering |
 | `tests/app/scores-page.test.tsx` | Page | Scores denominator: round target total over dealt-variant sum, pool-sum fallback & raw-mark fallback |
+| `tests/app/scores-page-paper.test.tsx` | Page | Paper results page: marked-script display after publication & mark/appeal visibility without a script |
 | `tests/api/health.test.ts` | API Integration | System uptime & endpoint availability |
 | `tests/api/schools.suggest.test.ts` | API Integration | School picker suggestions, auth, validation & proxy 502 mapping |
 | `tests/api/certificates.test.ts` | API Integration | Certificate PDF generation: no-template 404, tier 403, highest-eligible-tier selection & image/PDF branches |
@@ -242,6 +260,8 @@ Application performance is audited with **Google PageSpeed Insights** (Lighthous
 | `tests/api/student/sitting.sync.test.ts` | API Integration | Offline/online answer synchronization |
 | `tests/api/student/sitting.matching.test.ts` | API Integration | Matching answers: save → submit → auto-mark, all pairs stored in ONE row under the base uuid (aggregate `answerValue`) & composite-key rejection guard |
 | `tests/api/rounds/paper-preview.test.ts` | API Integration | Organiser paper preview (`?variant=preview`): renders exactly the drawn variant, distinct sample-PDF labelling & 404 when the round has no questions |
+| `tests/api/rounds/paper-entrant.test.ts` | API Integration | Entrant paper/memo download gate: staff access unchanged, entrant access only after results are published & staff-only variant preview |
+| `tests/api/scripts.test.ts` | API Integration | `GET /api/scripts/[pageId]`: auth, domain access decision & private, no-cache byte streaming |
 | `tests/app/send-invitations.test.ts` | Server Action | Picked-school parsing, find-or-create of school rows & invite emails |
 | `tests/app/add-educators.test.ts` | Server Action | Add educators: find-or-create school, membership upsert & invite dispatch |
 | `tests/app/auth.actions.test.ts` | Server Action | Login & logout server actions: session handling & redirects |
@@ -249,8 +269,8 @@ Application performance is audited with **Google PageSpeed Insights** (Lighthous
 | `tests/app/password-reset.test.ts` | Server Action | Password reset: request-token issuance & reset completion |
 | `tests/app/create-round.test.ts` | Server Action | Atomic round creation: marks coercion, advancement thresholds, paper/hybrid uploads, per-question images & transaction rollback on failure |
 | `tests/app/update-round.test.ts` | Server Action | Round edit derives the time limit from the open/close window (update & insert paths) and enforces the closing-after-opening and auth guards |
-| `tests/e2e/signup.spec.ts` | Playwright E2E | User registration flow & client-side routing |
-| `tests/e2e/login.spec.ts` | Playwright E2E | Login flow & authenticated redirect |
-| `tests/e2e/forgot-password.spec.ts` | Playwright E2E | Password-reset request flow |
+| `tests/e2e/signup.spec.ts` | Playwright E2E | User registration flow, client-side routing & password visibility toggle |
+| `tests/e2e/login.spec.ts` | Playwright E2E | Login page rendering, form submission & password visibility toggle |
+| `tests/e2e/forgot-password.spec.ts` | Playwright E2E | Password-reset request flow & per-field visibility toggles on the reset form |
 | `tests/e2e/organiser.spec.ts` | Playwright E2E | Protected route access & middleware redirect rules |
 | `tests/sanity.test.ts` | Unit | Trivial smoke test confirming the Vitest runner executes |

@@ -12,6 +12,12 @@ export default defineConfig({
     pool: 'threads', // explicit pool type
     coverage: {
       reporter: ['text', 'json', 'html', 'lcov'],
+      // Quality gate (Documentation/docs/Quality Assurance/testing-documentation.md):
+      // overall statement and line coverage must stay at or above 70%.
+      thresholds: {
+        statements: 70,
+        lines: 70,
+      },
     },
   },
 });

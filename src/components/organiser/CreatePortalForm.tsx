@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { createPortal } from '@/app/organiser/actions';
 import SchoolPicker from '@/components/schools/SchoolPicker';
+import EducatorEmailsField from '@/components/organiser/EducatorEmailsField';
 import { Spinner } from '@/components/ui/Spinner';
 import type { PickedSchool } from '@/lib/schools/types';
 import { useRouter } from 'next/navigation';
@@ -10,14 +11,12 @@ import { useRouter } from 'next/navigation';
 type SchoolEntry = {
   school: PickedSchool | null;
   teacherEmails: string[];
-  newTeacherEmail: string;
 };
 
 function emptyEntry(): SchoolEntry {
   return {
     school: null,
     teacherEmails: [],
-    newTeacherEmail: '',
   };
 }
 
@@ -47,38 +46,6 @@ export default function CreatePortalForm({
 
   function removeSchool(index: number) {
     setEntries((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function addTeacherEmail(index: number) {
-    setEntries((prev) =>
-      prev.map((e, i) => {
-        if (i !== index) return e;
-        const email = e.newTeacherEmail.trim().toLowerCase();
-        if (!email || !email.includes('@')) return e;
-        if (e.teacherEmails.includes(email))
-          return { ...e, newTeacherEmail: '' };
-        return {
-          ...e,
-          teacherEmails: [...e.teacherEmails, email],
-          newTeacherEmail: '',
-        };
-      })
-    );
-  }
-
-  function removeTeacherEmail(schoolIndex: number, emailIndex: number) {
-    setEntries((prev) =>
-      prev.map((e, i) =>
-        i === schoolIndex
-          ? {
-              ...e,
-              teacherEmails: e.teacherEmails.filter(
-                (_, ei) => ei !== emailIndex
-              ),
-            }
-          : e
-      )
-    );
   }
 
   async function handleSubmit(formData: FormData) {
@@ -191,72 +158,22 @@ export default function CreatePortalForm({
                   />
                 </div>
 
-                {/* Teacher emails */}
+                {/* Teacher emails — typed one at a time or bulk-added from
+                    a CSV file (parsed in the browser, never stored). */}
                 <div>
                   <span className="text-sm font-semibold text-slate-700 block mb-2 mt-4">
                     Teachers / Educators
                   </span>
-
-                  {/* Existing teacher email tags */}
-                  {entry.teacherEmails.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3 mb-2">
-                      {entry.teacherEmails.map((email, ei) => (
-                        <span
-                          key={ei}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0066CC]/10 text-[#0066CC] text-xs font-medium"
-                        >
-                          {email}
-                          <button
-                            type="button"
-                            onClick={() => removeTeacherEmail(index, ei)}
-                            className="hover:bg-[#0066CC]/20 rounded-full p-0.5 transition-colors flex items-center justify-center outline-none"
-                            aria-label={`Remove ${email}`}
-                          >
-                            <svg
-                              width="12"
-                              height="12"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <line x1="18" y1="6" x2="6" y2="18"></line>
-                              <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Add teacher email input */}
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input
-                      className="light-input text-slate-900"
-                      style={{ flex: 1 }}
-                      type="email"
-                      value={entry.newTeacherEmail}
-                      onChange={(e) =>
-                        updateEntry(index, { newTeacherEmail: e.target.value })
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addTeacherEmail(index);
-                        }
-                      }}
-                      placeholder="teacher@email.com"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => addTeacherEmail(index)}
-                      className="light-btn btn-white"
-                    >
-                      Add
-                    </button>
-                  </div>
+                  <EducatorEmailsField
+                    emails={entry.teacherEmails}
+                    onChange={(teacherEmails) =>
+                      updateEntry(index, { teacherEmails })
+                    }
+                    inputClassName="light-input text-slate-900"
+                    buttonClassName="light-btn btn-white"
+                    placeholder="teacher@email.com"
+                    disabled={isPending}
+                  />
                 </div>
 
                 {/* Remove school button */}

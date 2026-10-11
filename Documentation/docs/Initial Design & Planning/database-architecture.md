@@ -13,7 +13,7 @@ Our system uses a strictly normalized PostgreSQL relational database to ensure a
 | **`users`** | Central identity mapping | `id` → `auth.users.id` (Supabase Auth) | `email`, `name`, `isPlatformAdmin` |
 | **`portals`** | Represents Olympiad organizing bodies | `ownerUserId` → `users.id` | `name`, `status` |
 | **`schools`** | Participating educational institutions | `portalId` → `portals.id` | `name` |
-| **`memberships`** | The authorization nexus mapping users to roles | `userId` → `users.id`<br/>`portalId` → `portals.id`<br/>`schoolId` → `schools.id` | `role` (e.g., admin, student), `status`, `inviteToken` |
+| **`memberships`** | The authorization nexus mapping users to roles | `userId` → `users.id`<br/>`portalId` → `portals.id`<br/>`schoolId` → `schools.id` | `role` (e.g., `organiser`, `educator`, `student`), `status`, `inviteToken` |
 | **`organiser_applications`** | Tracks applications to become organizers | `userId` → `users.id` | `pdfUrl`, `status` |
 | **`rounds`** | Distinct phases of a competition | `portalId` → `portals.id` | `name`, `deliveryMethod`, `opensAt`, `targetTotalMarks` |
 | **`question_papers`** | Contains the actual test material | `roundId` → `rounds.id` | `fileUrl`, `isMultipleChoice`, `selectedQuestionIds` |

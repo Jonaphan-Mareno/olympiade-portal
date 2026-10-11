@@ -23,5 +23,18 @@ test.describe('Signup flow', () => {
     // Check for inviteToken hidden field
     await expect(page.locator('input[name="inviteToken"]')).toHaveValue('12345');
   });
+
+  test('password visibility can be toggled', async ({ page }) => {
+    await page.goto('/signup');
+
+    const password = page.locator('input[name="password"]');
+    await expect(password).toHaveAttribute('type', 'password');
+
+    await page.getByRole('button', { name: 'Show password' }).click();
+    await expect(password).toHaveAttribute('type', 'text');
+
+    await page.getByRole('button', { name: 'Hide password' }).click();
+    await expect(password).toHaveAttribute('type', 'password');
+  });
 });
 

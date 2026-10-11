@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { resetPassword } from '@/app/auth/actions';
 import { SubmitButton } from '@/components/SubmitButton';
+import { PasswordField } from '@/components/PasswordField';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 
@@ -158,11 +159,10 @@ export default function ResetPasswordPage() {
                 <label className="reset-label" htmlFor="password">
                   New Password
                 </label>
-                <input
-                  className="reset-input"
-                  type="password"
-                  name="password"
+                <PasswordField
+                  className="reset-input has-password-toggle"
                   id="password"
+                  name="password"
                   autoComplete="new-password"
                   required
                   minLength={6}
@@ -173,11 +173,10 @@ export default function ResetPasswordPage() {
                 <label className="reset-label" htmlFor="confirmPassword">
                   Confirm New Password
                 </label>
-                <input
-                  className="reset-input"
-                  type="password"
-                  name="confirmPassword"
+                <PasswordField
+                  className="reset-input has-password-toggle"
                   id="confirmPassword"
+                  name="confirmPassword"
                   autoComplete="new-password"
                   required
                   minLength={6}
