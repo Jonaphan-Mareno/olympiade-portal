@@ -6,6 +6,7 @@
 - **Drizzle ORM**: Chosen as our lightweight, type-safe Data Access Layer. It allows us to interact with our PostgreSQL database securely from our isolated business logic layer, ensuring our queries are strictly typed, highly performant, and structurally separated from the front-end.
 - **Supabase (Database & Auth)**: Chosen strictly to host our PostgreSQL database and to manage secure Role-Based Access Control (RBAC) user authentication. We utilize its Storage buckets for PDF blob hosting, ensuring our primary database remains highly optimized.
 - **Tailwind CSS**: Chosen for styling because its utility-first approach allows for rapid, responsive UI development. It ensures a consistent design system and reduces the need to write and maintain custom CSS files.
+- **Upstash Redis (`@upstash/ratelimit`)**: Chosen as the shared store for rate limiting. Vercel serves requests from many stateless function instances, so counters must live outside the app; Upstash is reached over HTTPS with no persistent connection, which suits serverless functions, and its free tier covers our traffic. See [Rate Limiting](./rate-limiting.mdx).
 - **Framer Motion**: Selected for animations due to its simple, declarative API. It makes it easy to add fluid, performant animations and complex UI transitions to our React components, providing a highly interactive user experience.
 
 ## Code Quality Tooling

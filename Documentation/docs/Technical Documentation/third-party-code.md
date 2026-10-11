@@ -61,7 +61,7 @@ To maintain stability and prevent "dependency hell," we enforce the following ve
 
 ## External Services & APIs
 
-Beyond installable libraries, the portal integrates three external HTTP services. All of them are called **server-side only**, so the browser never depends on their availability directly.
+Beyond installable libraries, the portal integrates four external HTTP services. All of them are called **server-side only**, so the browser never depends on their availability directly.
 
 ### Hipolabs Universities API
 
@@ -80,3 +80,10 @@ Beyond installable libraries, the portal integrates three external HTTP services
 
 - **Service**: Brevo (formerly Sendinblue) — transactional email relay used through standard SMTP with [Nodemailer](https://nodemailer.com/), no proprietary SDK.
 - **Usage**: Delivers all invite and notification emails. See the [Email (SMTP)](./email-smtp.mdx) page for the full pipeline, environment variables, and setup guide.
+
+### Upstash Redis
+
+- **Service**: [Upstash](https://upstash.com/) — a hosted Redis database reached over HTTPS, used through the `@upstash/ratelimit` and `@upstash/redis` packages.
+- **Usage**: Stores the shared counters for rate limiting the public API, sign-in, sign-up, password reset, university search and invitation emails. Configured with `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
+- **Motivation**: On Vercel each request may run on a different, stateless function instance, so an in-memory counter would not limit anything reliably. Upstash needs no persistent connection, and its free tier covers our traffic.
+- **Error handling**: Fails open. If the variables are missing, or Redis errors or takes longer than 1.5 seconds, requests are allowed and the problem is logged, so an Upstash outage never blocks users. Identifiers are SHA-256 hashed before being sent. See [Rate Limiting](./rate-limiting.mdx).

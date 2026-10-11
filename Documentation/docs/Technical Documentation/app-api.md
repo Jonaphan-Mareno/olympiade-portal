@@ -24,7 +24,7 @@ The global Next.js middleware (`src/middleware.ts`) **explicitly bypasses** all 
 | `GET` / `POST` `/api/webhooks/round-scheduler` | **Conditional** | `CRON_SECRET` bearer token (see below) |
 
 :::note
-There is currently **no rate limiting** on any endpoint. Authenticated routes rely on Supabase Auth to verify identity and perform role-based authorization where applicable.
+`GET /api/schools/suggest?type=university` is **rate limited** (30 requests per minute per user) and the public API under `/api/public/*` is limited per IP. The auth and invitation Server Actions below are also limited. Health checks, the scheduler webhook and the student sitting routes are deliberately **not** limited. See [Rate Limiting](./rate-limiting.mdx) for every limit and the reasoning. Authenticated routes rely on Supabase Auth to verify identity and perform role-based authorization where applicable.
 :::
 
 ---
@@ -93,6 +93,8 @@ curl "https://olympiad-portal-eta.vercel.app/api/schools/suggest?q=pretoria%20bo
   }
 ]
 ```
+
+**Rate limit**: `type=university` lookups are limited to 30 per minute per user, because each one calls the free hipolabs API. Over the limit the route returns `429` with `{ "error": "Too many searches. Please wait a moment and try again." }` and a `Retry-After` header. `type=high_school` is not limited. See [Rate Limiting](./rate-limiting.mdx).
 
 ---
 
@@ -488,6 +490,7 @@ login(formData: FormData): Promise<void>
   - Calls `supabase.auth.signInWithPassword`. A development bypass exists for `admin1@gmail.com` / `111111` that auto-creates a platform-admin account if sign-in fails.
   - **Ghost-account guard:** if credentials exist in Supabase Auth but the `public.users` row was deleted, the session is signed out and an error is returned.
   - **Invite auto-claim:** any `memberships` rows with `status = 'invited'` whose `invitedEmail` matches the caller's email are accepted and linked to the user (teachers often join several olympiads).
+- **Rate limit:** 10 attempts per 15 min per email and 300 per 15 min per IP, checked before Supabase is called. Over the limit returns `{ error: 'Too many attempts. Please wait … and try again.' }`. See [Rate Limiting](./rate-limiting.mdx).
 - **Returns:** `{ error }` on failure; otherwise `revalidatePath('/', 'layout')` then `redirect('/dashboard')`.
 
 #### signup
@@ -504,6 +507,7 @@ signup(formData: FormData): Promise<void>
   - `supabase.auth.signUp` with `full_name` metadata, then inserts into `users` (`onConflictDoNothing`). `isPlatformAdmin` is set when the email is `admin1@gmail.com`.
   - If `inviteToken` is present, the matching membership is claimed (`status = 'accepted'`, `userId` linked, `users.schoolId` set) and a role-based redirect target is computed (`/educator` for educators, `/results` for students).
   - Also auto-accepts **all** other pending invites for the same email.
+- **Rate limit:** 5 per hour per email and 100 per hour per IP, checked before Supabase is called; returns `{ error }` when exceeded.
 - **Returns:** `{ error }` on failure; otherwise `redirect('/welcome?next=<target>')`.
 
 #### logout
@@ -528,7 +532,8 @@ requestPasswordReset(formData: FormData): Promise<{ error?: string; success?: st
 - **Behaviour:**
   - Only sends if a `public.users` profile exists (ghost accounts are skipped).
   - The reset link points to `/auth/callback?next=/reset-password`. The `Origin` header is validated by `resolveResetOrigin` — only the configured base URL, `localhost`/`127.0.0.1`, or RFC-1918 private addresses are trusted; anything else falls back to `NEXT_PUBLIC_BASE_URL`.
-- **Returns:** always a generic `{ success }` message (no account enumeration), or `{ error }` if the send call itself fails.
+- **Rate limit:** 3 per hour per email and 20 per hour per IP. Checked before the account lookup, so being limited reveals nothing about whether the address has an account; returns `{ error }` when exceeded.
+- **Returns:** always a generic `{ success }` message (no account enumeration), or `{ error }` if the send call itself fails or the rate limit is reached.
 
 #### resetPassword
 
@@ -541,6 +546,7 @@ resetPassword(formData: FormData): Promise<void>
 - **Role:** Requires a valid recovery session.
 - **Inputs:** `password`, `confirmPassword` (min 6 chars, must match).
 - **Behaviour:** `supabase.auth.updateUser({ password })`.
+- **Rate limit:** 20 per hour per IP; returns `{ error }` when exceeded.
 - **Returns:** `{ error }` on validation/session failure; otherwise `redirect('/dashboard')`.
 
 ### Platform Administration
@@ -606,7 +612,8 @@ createPortal(formData: FormData): Promise<{ success?: true; error?: string }>
   - For each school entry, `ensureSchool` finds-or-creates a portal-scoped `schools` row.
   - For each teacher email: existing users get an **accepted** educator membership; new emails get an **invited** membership and are queued for an invite email.
   - Invite emails are sent **after** the transaction commits (each failure is logged but does not roll back).
-- **Returns:** `{ error }` if not an approved organiser, name missing, or the transaction fails; otherwise `{ success: true }` and `revalidatePath('/organiser/dashboard')`.
+- **Rate limit:** shares the per-user invitation limit (1 000 recipient emails per hour, across all four invite actions), checked before anything is written; returns `{ error }` when exceeded. See [Rate Limiting](./rate-limiting.mdx).
+- **Returns:** `{ error }` if not an approved organiser, name missing, rate limited, or the transaction fails; otherwise `{ success: true }` and `revalidatePath('/organiser/dashboard')`.
 
 **Olympiad Management** — `src/app/organiser/olympiads/[olympiadId]/actions.ts`
 
@@ -633,6 +640,7 @@ addEducators(portalId: string, schoolId: string, formData: FormData): Promise<{ 
 - **Inputs:** `teacherEmails` (repeated).
 - **Guard:** the `schoolId` must belong to `portalId` (a tampered id cannot attach educators to another portal's school).
 - **Behaviour:** transaction wrapping `inviteEducatorsToSchool` (existing users accepted, new emails invited), then invite emails after commit.
+- **Rate limit:** shares the per-user invitation limit (1 000 recipient emails per hour); returns `{ error }` when exceeded.
 - **Side effects:** `revalidatePath('/organiser/olympiads/<portalId>')`.
 
 **Invitations** — `src/app/organiser/olympiads/[olympiadId]/invite/actions.ts`
@@ -648,6 +656,7 @@ sendInvitations(portalId: string, formData: FormData): Promise<void>
 - **Role:** Organiser (authenticated); redirects to the login screen if absent.
 - **Inputs:** `schoolCount` and the same indexed per-school fields as `createPortal`.
 - **Behaviour:** single transaction; `ensureSchool` per entry (re-inviting a school reuses its row) then `inviteEducatorsToSchool`; emails sent after commit.
+- **Rate limit:** shares the per-user invitation limit (1 000 recipient emails per hour), checked before anything is written; returns `{ error }` when exceeded.
 - **Returns:** `{ error }` on failure; otherwise `revalidatePath` + `redirect('/organiser/olympiads/<portalId>')`.
 
 **Rounds** — `.../rounds/create/actions.ts`, `.../rounds/[roundId]/actions.ts`
@@ -915,6 +924,7 @@ inviteStudents(formData: FormData): Promise<{
   - Pending invite whose owner now has an account → linked and accepted.
   - Pending invite at this school, still no account → re-sent with the original token (reported as re-sent).
   - Invite emails are sent after the DB loop; the whole operation is wrapped in try/catch.
+- **Rate limit:** shares the per-user invitation limit (1 000 recipient emails per hour), checked after the educator guard and before any membership is written; returns `{ error }` when exceeded.
 - **Side effects:** `revalidatePath('/educator')`, `/educator/entrants`, and `/organiser/olympiads/<portalId>`.
 - **Returns:** `{ error }` on guard/DB failure; otherwise `{ success: true, count, skipped }`, where `count` is the number of students actually added and `skipped` lists every email that wasn't, with the reason (shown to the educator under the form).
 

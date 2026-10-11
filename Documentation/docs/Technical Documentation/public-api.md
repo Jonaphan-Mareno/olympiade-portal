@@ -36,6 +36,16 @@ Round state is derived from timestamps rather than stored: `scheduled` (before `
 - Numeric columns (`qualifying_threshold`, `marks`, `score`) are JSON numbers, not strings.
 - The three round-scoped endpoints share the same outer envelope: `{ round, portal, ... }`.
 
+## Rate Limiting
+
+Every endpoint on this page shares one limit: **120 requests per minute per IP address**. The limit is checked before any database query runs. Over the limit, every endpoint returns:
+
+| Status | Headers | Body |
+| :----- | :------ | :--- |
+| `429` | `Retry-After: <seconds>`, `Access-Control-Allow-Origin: *` | `{ "error": "Too many requests. Please slow down and try again shortly.", "retryAfterSeconds": 42 }` |
+
+Clients should wait `Retry-After` seconds before retrying. Because the CORS header is still sent, browser clients can read the error. This `429` applies to all six endpoints even though it isn't repeated in each **Error Responses** table below. See [Rate Limiting](./rate-limiting.mdx) for details.
+
 ---
 
 ### 1. Public Schools

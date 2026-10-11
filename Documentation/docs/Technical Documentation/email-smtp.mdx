@@ -115,4 +115,5 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000
 - **Unverified senders are rejected.** If `EMAIL_FROM` is missing, the module logs a warning and falls back to a placeholder address (`noreply@olympiad-portal.local`) that Brevo will refuse.
 - **Daily quota.** The Brevo free tier allows 300 emails per day; a large portal-creation batch can approach this limit.
 - **Ethereal is silent.** While credentials are absent, everything appears to work — watch the server console for the `Invite email preview:` URL to inspect the captured messages.
+- **Invitations are rate limited.** Each user can send at most 1 000 invitation emails per hour across all four invite actions; over that, the action returns an error instead of sending. See [Rate Limiting](./rate-limiting.mdx).
 - **Emails are fire-and-log.** Failures are logged, not surfaced to the user, and are not retried automatically.
