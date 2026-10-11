@@ -273,7 +273,9 @@ const h = vi.hoisted(() => {
 
         const terminal: any = {
           onConflictDoUpdate: (options: any) => Promise.resolve(apply(options)),
-          onConflictDoNothing: () => Promise.resolve(apply(null)),
+          // Return the chain (not a bare promise) so `.onConflictDoNothing()
+          // .returning(...)` composes exactly like drizzle's real query builder.
+          onConflictDoNothing: () => terminal,
           returning: (fields?: any) =>
             Promise.resolve(apply(null).map((row) => project(row, fields))),
           then: (res: any, rej: any) => Promise.resolve(apply(null)).then(res, rej),

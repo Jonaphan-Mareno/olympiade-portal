@@ -102,7 +102,10 @@ export async function findOrCreateOfflineSubmission(
 
   if (existingSubmissions.length > 0) return existingSubmissions[0].id;
 
-  // Create an offline submission
+  // Create an offline submission. Race-safe against the unique
+  // (student_membership_id, round_id) index: a concurrent online submit may
+  // create the row between the read above and this insert, so use ON CONFLICT
+  // DO NOTHING and re-read rather than throwing a unique violation.
   const newSubmissions = await db.insert(submissions).values({
     roundId,
     studentMembershipId,
@@ -110,6 +113,16 @@ export async function findOrCreateOfflineSubmission(
     submissionType: 'offline',
     status: 'submitted',
     submittedAt: new Date(),
-  }).returning({ id: submissions.id });
-  return newSubmissions[0].id;
+  }).onConflictDoNothing().returning({ id: submissions.id });
+  if (newSubmissions.length > 0) return newSubmissions[0].id;
+
+  // Lost the race: first is final, so skip it if the winner was written online
+  const [winner] = await db.select().from(submissions).where(
+    and(
+      eq(submissions.roundId, roundId),
+      eq(submissions.studentMembershipId, studentMembershipId)
+    )
+  ).limit(1);
+  if (!winner || winner.submissionType === 'online') return null;
+  return winner.id;
 }

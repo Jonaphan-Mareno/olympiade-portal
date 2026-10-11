@@ -70,30 +70,48 @@ export async function POST(request: Request) {
     // and silently scores every matching question 0.
     const answersObj = reassembleAnswers(rawAnswers);
 
-    // 4. Create or update the submission row
+    // 4. Find-or-create the submission row, race-safe against the unique
+    // (student_membership_id, round_id) index.
+    const roundId = sittingData.paper.roundId;
+    const membershipId = sittingData.membershipId;
+
     const [existingSubmission] = await db
       .select()
       .from(submissions)
       .where(
         and(
-          eq(submissions.studentMembershipId, sittingData.membershipId),
-          eq(submissions.roundId, sittingData.paper.roundId)
+          eq(submissions.studentMembershipId, membershipId),
+          eq(submissions.roundId, roundId)
         )
       )
       .limit(1);
 
-    let submissionId = existingSubmission?.id;
+    // FIRST IS FINAL. A hybrid round can be marked offline by an educator before
+    // (or while) the entrant submits online. If a submitted record already
+    // exists for this entrant+round it is authoritative: never overwrite its
+    // answers, its submissionType or its mark. The sitting was already flagged
+    // submitted above, so there is nothing left to do here.
+    if (existingSubmission && existingSubmission.status === 'submitted') {
+      return NextResponse.json({ success: true });
+    }
 
     // Denormalize the dealt variant onto the submission so results, review and
     // remarks pages can scope to it without joining back to the sitting.
     const variantQuestionIds = sittingData.sitting.variantQuestionIds ?? null;
 
+    let submissionId = existingSubmission?.id;
+
     if (!existingSubmission) {
+      // ON CONFLICT DO NOTHING against submissions_student_round_uniq: if a
+      // concurrent writer (another submit, or the offline-marks action) created
+      // the row between the SELECT above and this INSERT, we lose the race and
+      // their record is final — return without marking rather than duplicating
+      // or clobbering it.
       const [newSub] = await db
         .insert(submissions)
         .values({
-          studentMembershipId: sittingData.membershipId,
-          roundId: sittingData.paper.roundId,
+          studentMembershipId: membershipId,
+          roundId,
           status: 'submitted',
           submissionType: 'online',
           startedAt: sittingData.sitting.startedAt,
@@ -101,10 +119,15 @@ export async function POST(request: Request) {
           answersJson: answersObj,
           variantQuestionIds,
         })
+        .onConflictDoNothing()
         .returning({ id: submissions.id });
 
+      if (!newSub) {
+        return NextResponse.json({ success: true });
+      }
       submissionId = newSub.id;
     } else {
+      // A pre-existing draft (not yet submitted): finalize it in place.
       await db
         .update(submissions)
         .set({

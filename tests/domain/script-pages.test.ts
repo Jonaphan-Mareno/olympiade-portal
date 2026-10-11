@@ -40,7 +40,8 @@ vi.mock('@/lib/db', () => {
       insert: () => ({
         values: (v: any) => {
           state.inserted.push(v);
-          return { returning: () => Promise.resolve([{ id: 'new-sub' }]) };
+          const returning = () => Promise.resolve([{ id: 'new-sub' }]);
+          return { returning, onConflictDoNothing: () => ({ returning }) };
         },
       }),
       transaction: (cb: (t: typeof tx) => Promise<unknown>) => cb(tx),
