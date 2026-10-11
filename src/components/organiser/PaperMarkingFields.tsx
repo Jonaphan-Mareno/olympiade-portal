@@ -15,6 +15,13 @@
  */
 export const TARGET_CHANGED_EVENT = 'olympiad:target-changed';
 
+/**
+ * The qualifying threshold field broadcasts its value the same way, so the
+ * sibling PublishReadinessPanel island (advisory check) stays in sync when
+ * their common parent is a server component.
+ */
+export const QUALIFYING_THRESHOLD_CHANGED_EVENT = 'olympiad:qualifying-threshold-changed';
+
 const inputClass =
   'w-full p-3 border border-slate-300 rounded-md text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none';
 
@@ -102,6 +109,50 @@ export function TargetTotalMarksField({
         fill exactly this total; percentages and advancement thresholds are
         measured against it.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Round-level qualifying threshold (all delivery methods). Required to save
+ * or publish a round; broadcasts changes so the advisory
+ * PublishReadinessPanel stays in sync with this plain (uncontrolled) field.
+ */
+export function QualifyingThresholdField({
+  defaultValue,
+}: {
+  defaultValue?: string | number | null;
+}) {
+  const initial = defaultValue ?? 0;
+  return (
+    <div>
+      <label
+        className="block text-sm font-semibold text-slate-900 mb-2"
+        htmlFor="qualifyingThreshold"
+      >
+        Minimum Score (%)
+      </label>
+      <input
+        type="number"
+        id="qualifyingThreshold"
+        name="qualifyingThreshold"
+        min="0"
+        max="100"
+        step="0.1"
+        required
+        defaultValue={initial}
+        onChange={(e) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent(QUALIFYING_THRESHOLD_CHANGED_EVENT, {
+                detail: { qualifyingThreshold: e.target.value },
+              })
+            );
+          }
+        }}
+        className={inputClass}
+      />
+      <p className="text-xs text-slate-400 mt-1">Student must score at least this percentage to advance.</p>
     </div>
   );
 }

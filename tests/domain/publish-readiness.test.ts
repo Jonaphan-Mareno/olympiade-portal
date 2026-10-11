@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   checkOnlinePublishReadiness,
   checkPhysicalPublishReadiness,
+  checkQualifyingThresholdReadiness,
 } from '@/domain/question-bank/publish-readiness';
 import {
   canReachExactly,
@@ -179,6 +180,51 @@ describe('checkPhysicalPublishReadiness', () => {
   it('does NOT flag unselected questions missing marks or difficulty', () => {
     // q3 (null marks) is left out of the paper; difficulty is unused for physical.
     const r = checkPhysicalPublishReadiness(pool, ['q1', 'q2']);
+    expect(r.ok).toBe(true);
+    expect(r.issues).toHaveLength(0);
+  });
+});
+
+describe('checkQualifyingThresholdReadiness', () => {
+  it('flags null', () => {
+    const r = checkQualifyingThresholdReadiness(null);
+    expect(r.ok).toBe(false);
+    expect(r.issues.some((i) => i.field === 'qualifyingThreshold')).toBe(true);
+  });
+
+  it('flags an empty string', () => {
+    const r = checkQualifyingThresholdReadiness('');
+    expect(r.ok).toBe(false);
+  });
+
+  it('flags a whitespace-only string', () => {
+    const r = checkQualifyingThresholdReadiness('   ');
+    expect(r.ok).toBe(false);
+  });
+
+  it('flags a negative value', () => {
+    const r = checkQualifyingThresholdReadiness('-1');
+    expect(r.ok).toBe(false);
+  });
+
+  it('flags a value over 100', () => {
+    const r = checkQualifyingThresholdReadiness('100.1');
+    expect(r.ok).toBe(false);
+  });
+
+  it('flags a non-numeric value', () => {
+    const r = checkQualifyingThresholdReadiness('abc');
+    expect(r.ok).toBe(false);
+  });
+
+  it('accepts 0 as a fully-permissive, legitimate value', () => {
+    const r = checkQualifyingThresholdReadiness('0');
+    expect(r.ok).toBe(true);
+    expect(r.issues).toHaveLength(0);
+  });
+
+  it('accepts 100', () => {
+    const r = checkQualifyingThresholdReadiness('100');
     expect(r.ok).toBe(true);
     expect(r.issues).toHaveLength(0);
   });

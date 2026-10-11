@@ -12,12 +12,16 @@
 // the guard and every real draw agree.
 // Physical: only the hand-picked selection must carry marks; difficulty is not
 // used and unselected pool questions may stay draft.
+// Qualifying threshold: round-level (not method-specific) — every round of
+// every delivery method must carry a numeric qualifying threshold in [0, 100]
+// before it can be created or saved. Checked unconditionally alongside the
+// online/physical checks above.
 
 import { canReachExactly, type PoolQuestion } from './variant-generator';
 
 export type ReadinessIssue = {
   questionId?: string;
-  field: 'marks' | 'difficulty' | 'targetTotalMarks' | 'selection' | 'pool';
+  field: 'marks' | 'difficulty' | 'targetTotalMarks' | 'selection' | 'pool' | 'qualifyingThreshold';
   message: string;
 };
 
@@ -164,6 +168,38 @@ export function checkOnlinePublishReadiness(
   }
 
   return { ok: issues.length === 0, issues, summary };
+}
+
+/**
+ * Qualifying threshold readiness: round-level and delivery-method-agnostic.
+ * Every round must carry a qualifying threshold that parses to a finite
+ * number in [0, 100]. Blank, whitespace-only, non-numeric, or out-of-range
+ * values are rejected.
+ */
+export function checkQualifyingThresholdReadiness(value: string | null): ReadinessResult {
+  const issues: ReadinessIssue[] = [];
+  const summary: string[] = [];
+
+  const trimmed = value?.trim() ?? '';
+  if (trimmed === '') {
+    issues.push({
+      field: 'qualifyingThreshold',
+      message: 'Set a qualifying threshold (0-100) before publishing.',
+    });
+    return { ok: false, issues, summary };
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+    issues.push({
+      field: 'qualifyingThreshold',
+      message: 'Qualifying threshold must be a number between 0 and 100.',
+    });
+    return { ok: false, issues, summary };
+  }
+
+  summary.push(`Qualifying threshold set to ${parsed}%.`);
+  return { ok: true, issues, summary };
 }
 
 /**

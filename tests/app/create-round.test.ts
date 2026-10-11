@@ -135,6 +135,9 @@ function buildForm(
   fd.append('orderIndex', '1');
   fd.append('opensAt', '2026-10-01T09:00');
   fd.append('closesAt', '2026-10-03T09:00');
+  // Required for every round, for every delivery method; tests that care
+  // about this field override it explicitly.
+  fd.append('qualifyingThreshold', '0');
   for (const [k, v] of Object.entries(fields)) fd.set(k, v);
   for (const [k, file] of Object.entries(files)) fd.set(k, file);
   return fd;
@@ -298,13 +301,44 @@ describe('createRound', () => {
     });
   });
 
-  it('leaves the advancement thresholds unset when the fields are omitted', async () => {
-    // Regression: absent (null) threshold fields used to crash on `.trim()`.
-    await createRound(onlineForm([readyMcq()], { targetTotalMarks: '10' }));
+  it('leaves thresholdTopN unset when omitted, alongside a required qualifyingThreshold', async () => {
+    await createRound(
+      onlineForm([readyMcq()], { targetTotalMarks: '10', qualifyingThreshold: '0' })
+    );
 
     const saved = insertFor(rounds)!.values;
-    expect(saved.qualifyingThreshold).toBeUndefined();
+    expect(saved.qualifyingThreshold).toBe('0');
     expect(saved.thresholdTopN).toBeUndefined();
+  });
+
+  it('rejects a blank qualifyingThreshold for every delivery method', async () => {
+    await expect(
+      createRound(onlineForm([readyMcq()], { targetTotalMarks: '10', qualifyingThreshold: '' }))
+    ).rejects.toThrow('not ready to publish');
+
+    await expect(
+      createRound(paperForm({ qualifyingThreshold: '' }))
+    ).rejects.toThrow('not ready to publish');
+
+    await expect(
+      createRound(
+        hybridForm([readyMcq()], {
+          targetTotalMarks: '10',
+          selectedQuestionIds: JSON.stringify([UUID1]),
+          qualifyingThreshold: '',
+        })
+      )
+    ).rejects.toThrow('not ready to publish');
+  });
+
+  it('accepts a valid 0-100 qualifyingThreshold for every delivery method', async () => {
+    await expect(
+      createRound(onlineForm([readyMcq()], { targetTotalMarks: '10', qualifyingThreshold: '100' }))
+    ).resolves.not.toThrow();
+
+    await expect(
+      createRound(paperForm({ qualifyingThreshold: '0' }))
+    ).resolves.not.toThrow();
   });
 
   it('uploads the PDF and stores its public URL for a paper round, without questions', async () => {

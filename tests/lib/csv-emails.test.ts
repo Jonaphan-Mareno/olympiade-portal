@@ -1,5 +1,33 @@
 import { describe, it, expect } from 'vitest';
-import { extractEmailsFromCsv } from '@/lib/csv-emails';
+import { extractEmailsFromCsv, mergeCsvEmails } from '@/lib/csv-emails';
+
+describe('mergeCsvEmails', () => {
+  it('appends only fresh addresses and reports duplicates', () => {
+    const r = mergeCsvEmails(['a@x.com'], 'a@x.com,b@x.com,c@x.com');
+    expect(r.emails).toEqual(['a@x.com', 'b@x.com', 'c@x.com']);
+    expect(r.note).toEqual({
+      tone: 'success',
+      text: 'Added 2 emails from the CSV (1 duplicate skipped).',
+    });
+  });
+
+  it('returns the same list unchanged when every address is already present', () => {
+    const existing = ['a@x.com'];
+    const r = mergeCsvEmails(existing, 'A@X.com');
+    expect(r.emails).toBe(existing);
+    expect(r.note.text).toBe('All 1 email from the CSV was already in the list.');
+  });
+
+  it('reports an error when the CSV has no addresses', () => {
+    const existing: string[] = [];
+    const r = mergeCsvEmails(existing, 'name,age\nJane,31');
+    expect(r.emails).toBe(existing);
+    expect(r.note).toEqual({
+      tone: 'error',
+      text: 'No email addresses were found in that file.',
+    });
+  });
+});
 
 // The parser powers the batch-invite CSV upload. It runs entirely in the
 // browser — these tests pin the tolerated CSV shapes (headers, extra

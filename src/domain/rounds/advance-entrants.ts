@@ -1,15 +1,19 @@
 /**
  * Round Advancement Engine
  *
- * When results are published for a round that has advancement thresholds set,
- * this module finds every student who qualifies and records their qualification
- * in the round_qualifications table for the NEXT round.
+ * When results are published, this module finds every student who qualifies
+ * and records their qualification in the round_qualifications table for the
+ * NEXT round.
  *
- * Two advancement modes can be used independently or combined:
- *   qualifyingThreshold  – minimum score percentage (e.g. 60 means ≥ 60%)
- *   thresholdTopN        – only the top N scorers advance
+ * Every round now carries a required qualifyingThreshold (DB NOT NULL,
+ * default '0') – a round can no longer be saved without one, for any
+ * delivery method. 0 is a legitimate, fully-permissive value ("advance
+ * everyone"), not a "disabled" sentinel. thresholdTopN remains optional and
+ * independent; if it is also set, a student must satisfy BOTH to advance.
  *
- * If both are set, a student must satisfy BOTH to advance.
+ * `noThresholdSet` on the returned summary is kept for caller compatibility
+ * (see PublishResultsButton.tsx) but is now always false, since a round can
+ * no longer exist without a score threshold.
  */
 
 import { db } from '@/lib/db';
@@ -43,19 +47,7 @@ export async function advanceQualifyingEntrants(
 
   if (!currentRound) throw new Error('Round not found');
 
-  const hasScoreThreshold = currentRound.qualifyingThreshold !== null;
   const hasTopN = currentRound.thresholdTopN !== null;
-
-  if (!hasScoreThreshold && !hasTopN) {
-    return {
-      advancedCount: 0,
-      skippedAlreadyEnrolled: 0,
-      nextRoundId: null,
-      nextRoundName: null,
-      noNextRound: false,
-      noThresholdSet: true,
-    };
-  }
 
   // 2. Find the next round (immediately higher orderIndex in same portal)
   const nextRounds = await db
@@ -126,13 +118,12 @@ export async function advanceQualifyingEntrants(
 
   //console.log('4. Calculated Percentages:', scored);
 
-  // 6. Apply filters
+  // 6. Apply filters. qualifyingThreshold is always present (DB NOT NULL);
+  // 0 is a legitimate, fully-permissive value that admits every submitter.
   let qualifiers = scored;
 
-  if (hasScoreThreshold) {
-    const minPct = parseFloat(currentRound.qualifyingThreshold as string);
-    qualifiers = qualifiers.filter((e) => e.pct >= minPct);
-  }
+  const minPct = parseFloat(currentRound.qualifyingThreshold as string);
+  qualifiers = qualifiers.filter((e) => e.pct >= minPct);
 
   if (hasTopN) {
     const topN = currentRound.thresholdTopN as number;

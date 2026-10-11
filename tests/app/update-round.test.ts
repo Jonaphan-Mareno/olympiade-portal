@@ -180,6 +180,9 @@ function buildForm(
   // Default window is exactly 2 days = 2880 minutes.
   fd.append('opensAt', '2026-10-01T09:00');
   fd.append('closesAt', '2026-10-03T09:00');
+  // Required for every round, for every delivery method; tests that care
+  // about this field override it explicitly.
+  fd.append('qualifyingThreshold', '0');
   for (const [k, v] of Object.entries(fields)) fd.set(k, v);
   for (const [k, file] of Object.entries(files)) fd.set(k, file);
   return fd;
@@ -578,6 +581,36 @@ describe('updateRound', () => {
     ).rejects.toThrow(/not ready to publish/);
 
     expect(h.state.updates).toHaveLength(0);
+  });
+
+  // --- qualifying threshold now required, for every delivery method --------
+
+  it('rejects a blank qualifyingThreshold for every delivery method, even a legacy round', async () => {
+    // qualifyingThreshold is round-level, not online/physical-specific, and is
+    // checked OUTSIDE the legacy exemption: a round that predates
+    // difficulty/target authoring still must carry a threshold going forward.
+    await expect(
+      updateRound(onlineForm([mcq({ id: UUID1, prompt: 'Typo fixed' })], { qualifyingThreshold: '' }))
+    ).rejects.toThrow(/not ready to publish/);
+    expect(h.state.updates).toHaveLength(0);
+
+    await expect(
+      updateRound(paperForm([], { qualifyingThreshold: '' }))
+    ).rejects.toThrow(/not ready to publish/);
+
+    await expect(
+      updateRound(hybridForm([], { qualifyingThreshold: '' }))
+    ).rejects.toThrow(/not ready to publish/);
+  });
+
+  it('accepts a valid 0-100 qualifyingThreshold for every delivery method', async () => {
+    await expect(
+      updateRound(onlineForm([mcq({ id: UUID1, prompt: 'Typo fixed' })], { qualifyingThreshold: '0' }))
+    ).resolves.not.toThrow();
+
+    await expect(
+      updateRound(paperForm([], { qualifyingThreshold: '100' }))
+    ).resolves.not.toThrow();
   });
 });
 

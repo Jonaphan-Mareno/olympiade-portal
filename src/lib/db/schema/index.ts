@@ -108,8 +108,9 @@ export const rounds = pgTable('rounds', {
   opensAt: timestamp('opens_at', { withTimezone: true }).notNull(),
   closesAt: timestamp('closes_at', { withTimezone: true }).notNull(),
   // Minimum score (%) a student must achieve to advance to the next round.
-  // Leave null to disable this filter.
-  qualifyingThreshold: numeric('qualifying_threshold'),
+  // Required for every round, for any delivery method; 0 is a legitimate,
+  // fully-permissive value (advances every submitter), not a "disabled" state.
+  qualifyingThreshold: numeric('qualifying_threshold').notNull().default('0'),
   // Top-N advancement: if set, only the N highest-scoring students advance.
   // Can be combined with qualifyingThreshold (both conditions must be met).
   thresholdTopN: integer('threshold_top_n'),

@@ -10,6 +10,7 @@ import { revalidatePath } from 'next/cache';
 import {
   checkOnlinePublishReadiness,
   checkPhysicalPublishReadiness,
+  checkQualifyingThresholdReadiness,
   type ReadinessResult,
 } from '@/domain/question-bank/publish-readiness';
 import type { PoolQuestion } from '@/domain/question-bank/variant-generator';
@@ -207,6 +208,7 @@ export async function createRound(formData: FormData) {
   // The SAME pure checkers power the advisory client-side PublishReadinessPanel.
   // ---------------------------------------------------------------------------
   const readiness: ReadinessResult[] = [];
+  readiness.push(checkQualifyingThresholdReadiness(qualifyingThreshold));
   const isOnlineish = deliveryMethod === 'online' || deliveryMethod === 'hybrid';
   const isPhysicalish = deliveryMethod === 'paper' || deliveryMethod === 'hybrid';
   if (isOnlineish) {

@@ -18,6 +18,7 @@ import { formatSAST, toSASTInputValue } from '@/lib/sast';
 import {
   MarkingDeadlineField,
   TargetTotalMarksField,
+  QualifyingThresholdField,
 } from '@/components/organiser/PaperMarkingFields';
 import PhysicalPaperSelector from '@/components/organiser/PhysicalPaperSelector';
 import PublishReadinessPanel from '@/components/organiser/PublishReadinessPanel';
@@ -250,27 +251,11 @@ export default async function ManageRoundPage({
               <h3 className="text-lg font-bold text-slate-900 mb-1">Advancement to Next Round</h3>
               <p className="text-sm text-slate-500 mb-4">
                 When results are published, students who qualify are automatically enrolled in the next round.
-                Leave both fields empty to disable automatic advancement.
-                If both are set, a student must satisfy <strong>both</strong> conditions.
+                Minimum score is required for every round (use 0 to advance everyone). Top N students is
+                optional — leave it empty to disable. If both are set, a student must satisfy <strong>both</strong> conditions.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-900 mb-2" htmlFor="qualifyingThreshold">
-                    Minimum Score (%)
-                  </label>
-                  <input
-                    type="number"
-                    id="qualifyingThreshold"
-                    name="qualifyingThreshold"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    placeholder="e.g. 60"
-                    defaultValue={round.qualifyingThreshold ?? ''}
-                    className="w-full p-3 border border-slate-300 rounded-md text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">Student must score at least this percentage to advance.</p>
-                </div>
+                <QualifyingThresholdField defaultValue={round.qualifyingThreshold ?? 0} />
                 <div>
                   <label className="block text-sm font-semibold text-slate-900 mb-2" htmlFor="thresholdTopN">
                     Top N Students
@@ -412,6 +397,7 @@ export default async function ManageRoundPage({
                   pool={initialQuestions}
                   targetTotal={targetTotalMarks}
                   selectedIds={selectedQuestionIds}
+                  qualifyingThreshold={round.qualifyingThreshold ?? 0}
                   deliveryMethod={round.deliveryMethod}
                   submitButtonId="save-round-submit"
                 />

@@ -143,4 +143,31 @@ describe('advanceQualifyingEntrants with per-entrant variants', () => {
     expect(summary.advancedCount).toBe(0);
     expect(h.state.inserts).toHaveLength(0);
   });
+
+  // qualifyingThreshold is now a required, DB NOT NULL column (default '0'):
+  // every round has a score threshold, so the old "noThresholdSet: true" early
+  // return (both qualifyingThreshold and thresholdTopN null) can no longer be
+  // reached in practice. 0 is a legitimate, fully-permissive threshold value —
+  // not a second "disabled" sentinel — and must advance every submitter.
+  it('advances every submitter when the threshold is 0', async () => {
+    h.state.roundsQueue = [
+      [{ ...currentRound, qualifyingThreshold: '0' }],
+      [nextRound],
+      [totalsRoundRow],
+    ];
+    h.state.submissionRows = [
+      { studentMembershipId: 'm1', score: '0', status: 'submitted', variantQuestionIds: ['q1'] },
+      { studentMembershipId: 'm2', score: '5', status: 'submitted', variantQuestionIds: ['q9'] },
+    ];
+
+    const summary = await advanceQualifyingEntrants('round-1');
+
+    expect(summary.noThresholdSet).toBe(false);
+    expect(summary.advancedCount).toBe(2);
+    const advanced = h.state.inserts
+      .filter((i) => i.table === roundQualifications)
+      .map((i) => i.values.studentMembershipId)
+      .sort();
+    expect(advanced).toEqual(['m1', 'm2']);
+  });
 });

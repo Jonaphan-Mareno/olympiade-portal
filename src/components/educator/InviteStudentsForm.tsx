@@ -1,8 +1,22 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition, type CSSProperties } from 'react';
 import { inviteStudents } from '@/app/educator/actions';
 import { Spinner } from '@/components/ui/Spinner';
+import { mergeCsvEmails, type CsvMergeNote } from '@/lib/csv-emails';
+
+const secondaryButtonStyle: CSSProperties = {
+  fontSize: '0.8rem',
+  padding: '0.5rem 0.75rem',
+  backgroundColor: 'transparent',
+  border: '1px solid #0066CC',
+  color: '#0066CC',
+  borderRadius: '0.375rem',
+  fontWeight: '500',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  transition: 'all 0.2s',
+};
 
 interface InviteStudentsFormProps {
   portalId: string;
@@ -21,6 +35,23 @@ export default function InviteStudentsForm({
   const [success, setSuccess] = useState<string | null>(null);
   const [skipped, setSkipped] = useState<{ email: string; reason: string }[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [csvNote, setCsvNote] = useState<CsvMergeNote | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // The CSV is read in the browser only — never uploaded or stored. Only the
+  // extracted addresses join the list and go through inviteStudents.
+  async function handleCsvFile(file: File) {
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      setCsvNote({ tone: 'error', text: 'Could not read that file. Please try again.' });
+      return;
+    }
+    const result = mergeCsvEmails(emails, text);
+    if (result.emails !== emails) setEmails(result.emails);
+    setCsvNote(result.note);
+  }
 
   function addEmail() {
     const email = newEmail.trim().toLowerCase();
@@ -41,6 +72,7 @@ export default function InviteStudentsForm({
     setError(null);
     setSuccess(null);
     setSkipped([]);
+    setCsvNote(null);
 
     formData.set('portalId', portalId);
     formData.set('schoolId', schoolId);
@@ -188,18 +220,7 @@ export default function InviteStudentsForm({
         <button
           type="button"
           onClick={addEmail}
-          style={{
-            fontSize: '0.8rem',
-            padding: '0.5rem 0.75rem',
-            backgroundColor: 'transparent',
-            border: '1px solid #0066CC',
-            color: '#0066CC',
-            borderRadius: '0.375rem',
-            fontWeight: '500',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            transition: 'all 0.2s',
-          }}
+          style={secondaryButtonStyle}
           onMouseOver={(e) =>
             (e.currentTarget.style.backgroundColor = '#EFF6FF')
           }
@@ -210,6 +231,53 @@ export default function InviteStudentsForm({
           Add
         </button>
       </div>
+
+      {/* Batch add from a CSV, read locally and never uploaded */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isPending}
+          style={secondaryButtonStyle}
+          onMouseOver={(e) =>
+            (e.currentTarget.style.backgroundColor = '#EFF6FF')
+          }
+          onMouseOut={(e) =>
+            (e.currentTarget.style.backgroundColor = 'transparent')
+          }
+        >
+          Upload CSV
+        </button>
+        <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+          Bulk-add students from a CSV file — it is read in your browser and never stored.
+        </span>
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        aria-label="Upload CSV file of student emails"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          // Reset so picking the same file again re-triggers onChange.
+          e.target.value = '';
+          if (file) void handleCsvFile(file);
+        }}
+      />
+      {csvNote && (
+        <p
+          role="status"
+          style={{
+            margin: 0,
+            fontSize: '0.75rem',
+            fontWeight: 500,
+            color: csvNote.tone === 'error' ? '#DC2626' : '#059669',
+          }}
+        >
+          {csvNote.text}
+        </p>
+      )}
 
       {/* Submit */}
       <button

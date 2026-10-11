@@ -96,6 +96,7 @@ export default function CreateRoundPage({
   // physical-paper selector (both client islands) can be seeded on this client
   // page without relying on event timing.
   const [builderQuestions, setBuilderQuestions] = useState<QuestionType[]>([]);
+  const [qualifyingThreshold, setQualifyingThreshold] = useState('0');
   // Advisory gate fed by PublishReadinessPanel; the server action stays
   // authoritative and re-runs the same guard before writing.
   const [readyToPublish, setReadyToPublish] = useState(false);
@@ -307,7 +308,8 @@ export default function CreateRoundPage({
               <h3 className="font-serif text-xl font-bold text-blue-950 mb-1">Advancement to Next Round</h3>
               <p className="text-sm text-slate-500 mb-4">
                 When results are published, qualifying students are automatically enrolled in the next round.
-                Leave empty to disable. If both are set, a student must satisfy <strong>both</strong>.
+                Minimum score is required for every round (use 0 to advance everyone). Top N students is
+                optional — leave it empty to disable. If both are set, a student must satisfy <strong>both</strong>.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -321,7 +323,9 @@ export default function CreateRoundPage({
                     min="0"
                     max="100"
                     step="0.1"
-                    placeholder="e.g. 60"
+                    value={qualifyingThreshold}
+                    onChange={(e) => setQualifyingThreshold(e.target.value)}
+                    required
                     className="w-full p-3 border border-slate-300 rounded-md text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                   <p className="text-xs text-slate-400 mt-1">Student must score at least this percentage to advance.</p>
@@ -560,6 +564,7 @@ export default function CreateRoundPage({
               <PublishReadinessPanel
                 pool={builderQuestions}
                 deliveryMethod={deliveryMethod}
+                qualifyingThreshold={qualifyingThreshold}
                 onReadinessChange={setReadyToPublish}
               />
             </div>

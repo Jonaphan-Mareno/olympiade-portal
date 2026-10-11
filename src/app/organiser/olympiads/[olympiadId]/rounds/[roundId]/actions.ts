@@ -26,6 +26,7 @@ import type { Round } from '@/domain/rounds/round.types';
 import {
   checkOnlinePublishReadiness,
   checkPhysicalPublishReadiness,
+  checkQualifyingThresholdReadiness,
   type ReadinessResult,
 } from '@/domain/question-bank/publish-readiness';
 import type { PoolQuestion } from '@/domain/question-bank/variant-generator';
@@ -288,8 +289,12 @@ export async function updateRound(formData: FormData) {
   const isLegacyRound =
     targetTotalMarks === null && pool.every((q) => q.difficulty === null);
 
+  // The qualifying threshold is round-level (not online/physical-specific) and
+  // applies to every round regardless of the legacy exemption above — a round
+  // predating difficulty/target authoring still must carry a qualifying
+  // threshold going forward.
+  const readiness: ReadinessResult[] = [checkQualifyingThresholdReadiness(qualifyingThreshold)];
   if (!isLegacyRound) {
-    const readiness: ReadinessResult[] = [];
     const isOnlineish = deliveryMethod === 'online' || deliveryMethod === 'hybrid';
     const isPhysicalish = deliveryMethod === 'paper' || deliveryMethod === 'hybrid';
     if (isOnlineish) {
@@ -303,8 +308,8 @@ export async function updateRound(formData: FormData) {
     if (isPhysicalish && physicalApplies) {
       readiness.push(checkPhysicalPublishReadiness(pool, selectedQuestionIds));
     }
-    assertReady(readiness);
   }
+  assertReady(readiness);
 
   // ---------------------------------------------------------------------------
   // Writes. Update the round (incl. the unified target total marks).
@@ -316,7 +321,10 @@ export async function updateRound(formData: FormData) {
       orderIndex,
       opensAt,
       closesAt,
-      qualifyingThreshold,
+      // assertReady has already rejected a null/blank value above, so this is
+      // never actually undefined in practice; the fallback only satisfies the
+      // NOT NULL column's update type.
+      qualifyingThreshold: qualifyingThreshold ?? undefined,
       thresholdTopN,
       markingClosesAt,
       targetTotalMarks,

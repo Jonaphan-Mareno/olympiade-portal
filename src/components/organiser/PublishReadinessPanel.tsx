@@ -4,12 +4,16 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   checkOnlinePublishReadiness,
   checkPhysicalPublishReadiness,
+  checkQualifyingThresholdReadiness,
   type ReadinessIssue,
   type ReadinessResult,
 } from '@/domain/question-bank/publish-readiness';
 import type { PoolQuestion } from '@/domain/question-bank/variant-generator';
 import { QUESTIONS_CHANGED_EVENT } from '@/components/organiser/QuestionBuilder';
-import { TARGET_CHANGED_EVENT } from '@/components/organiser/PaperMarkingFields';
+import {
+  TARGET_CHANGED_EVENT,
+  QUALIFYING_THRESHOLD_CHANGED_EVENT,
+} from '@/components/organiser/PaperMarkingFields';
 import { SELECTION_CHANGED_EVENT } from '@/components/organiser/PhysicalPaperSelector';
 
 /**
@@ -66,6 +70,7 @@ export default function PublishReadinessPanel({
   pool = [],
   targetTotal = null,
   selectedIds = null,
+  qualifyingThreshold = null,
   deliveryMethod,
   onReadinessChange,
   submitButtonId,
@@ -73,6 +78,7 @@ export default function PublishReadinessPanel({
   pool?: PoolSeed[];
   targetTotal?: number | null;
   selectedIds?: string[] | null;
+  qualifyingThreshold?: string | number | null;
   deliveryMethod: DeliveryMethod;
   onReadinessChange?: (ok: boolean) => void;
   submitButtonId?: string;
@@ -81,6 +87,11 @@ export default function PublishReadinessPanel({
   const [target, setTarget] = useState<number | null>(targetTotal ?? null);
   const [selected, setSelected] = useState<string[]>(() =>
     Array.isArray(selectedIds) ? selectedIds.map(String) : []
+  );
+  const [threshold, setThreshold] = useState<string | null>(
+    qualifyingThreshold === null || qualifyingThreshold === undefined
+      ? null
+      : String(qualifyingThreshold)
   );
 
   useEffect(() => {
@@ -96,13 +107,19 @@ export default function PublishReadinessPanel({
       const detail = (e as CustomEvent).detail as { selectedQuestionIds?: string[] };
       setSelected((detail?.selectedQuestionIds ?? []).map(String));
     };
+    const onThreshold = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { qualifyingThreshold?: string | null };
+      setThreshold(detail?.qualifyingThreshold ?? null);
+    };
     window.addEventListener(QUESTIONS_CHANGED_EVENT, onQuestions as EventListener);
     window.addEventListener(TARGET_CHANGED_EVENT, onTarget as EventListener);
     window.addEventListener(SELECTION_CHANGED_EVENT, onSelection as EventListener);
+    window.addEventListener(QUALIFYING_THRESHOLD_CHANGED_EVENT, onThreshold as EventListener);
     return () => {
       window.removeEventListener(QUESTIONS_CHANGED_EVENT, onQuestions as EventListener);
       window.removeEventListener(TARGET_CHANGED_EVENT, onTarget as EventListener);
       window.removeEventListener(SELECTION_CHANGED_EVENT, onSelection as EventListener);
+      window.removeEventListener(QUALIFYING_THRESHOLD_CHANGED_EVENT, onThreshold as EventListener);
     };
   }, []);
 
@@ -119,7 +136,7 @@ export default function PublishReadinessPanel({
     const isPhysicalish = deliveryMethod === 'paper' || deliveryMethod === 'hybrid';
     const hasSubstantive = filteredPool.length > 0;
 
-    const results: ReadinessResult[] = [];
+    const results: ReadinessResult[] = [checkQualifyingThresholdReadiness(threshold)];
     if (isOnlineish) {
       results.push(checkOnlinePublishReadiness(filteredPool, target ?? 0));
     }
@@ -132,7 +149,7 @@ export default function PublishReadinessPanel({
       results.push(checkPhysicalPublishReadiness(filteredPool, selected));
     }
     return results.length > 0 ? mergeResults(results) : OK;
-  }, [filteredPool, target, selected, deliveryMethod]);
+  }, [filteredPool, target, selected, threshold, deliveryMethod]);
 
   // Expose readiness to the parent / other islands, and gate the submit button
   // when a server-component parent handed us its id.

@@ -20,6 +20,7 @@ describe('PublishReadinessPanel', () => {
         deliveryMethod="online"
         targetTotal={10}
         pool={[{ id: 'a', prompt: 'Q', marks: 10, difficulty: 1 }]}
+        qualifyingThreshold={0}
       />
     );
 
@@ -82,6 +83,7 @@ describe('PublishReadinessPanel', () => {
         deliveryMethod="paper"
         pool={[{ id: 'a', prompt: 'Q', marks: 5 }]}
         selectedIds={['a']}
+        qualifyingThreshold={0}
       />
     );
 
@@ -129,7 +131,14 @@ describe('PublishReadinessPanel', () => {
       seen.push((e as CustomEvent).detail?.ok as boolean);
     window.addEventListener(READINESS_CHANGED_EVENT, listener as EventListener);
 
-    render(<PublishReadinessPanel deliveryMethod="online" targetTotal={10} pool={[]} />);
+    render(
+      <PublishReadinessPanel
+        deliveryMethod="online"
+        targetTotal={10}
+        pool={[]}
+        qualifyingThreshold={0}
+      />
+    );
     // An empty pool is not ready.
     expect(ok()).toBe('false');
 
@@ -145,5 +154,58 @@ describe('PublishReadinessPanel', () => {
     expect(ok()).toBe('true');
     expect(seen).toContain(true);
     window.removeEventListener(READINESS_CHANGED_EVENT, listener as EventListener);
+  });
+
+  it('flags a missing qualifying threshold for every delivery method', () => {
+    const online = render(
+      <PublishReadinessPanel
+        deliveryMethod="online"
+        targetTotal={10}
+        pool={[{ id: 'a', prompt: 'Q', marks: 10, difficulty: 1 }]}
+      />
+    );
+    expect(ok()).toBe('false');
+    expect(screen.getByTestId('readiness-general').textContent).toContain(
+      'qualifying threshold'
+    );
+    online.unmount();
+
+    const paper = render(
+      <PublishReadinessPanel
+        deliveryMethod="paper"
+        pool={[{ id: 'a', prompt: 'Q', marks: 5 }]}
+        selectedIds={['a']}
+      />
+    );
+    expect(ok()).toBe('false');
+    expect(screen.getByTestId('readiness-general').textContent).toContain(
+      'qualifying threshold'
+    );
+    paper.unmount();
+
+    render(
+      <PublishReadinessPanel
+        deliveryMethod="hybrid"
+        targetTotal={10}
+        pool={[{ id: 'a', prompt: 'Q', marks: 10, difficulty: 1 }]}
+        selectedIds={['a']}
+      />
+    );
+    expect(ok()).toBe('false');
+    expect(screen.getByTestId('readiness-general').textContent).toContain(
+      'qualifying threshold'
+    );
+  });
+
+  it('recognizes 0 as a valid, fully-permissive qualifying threshold', () => {
+    render(
+      <PublishReadinessPanel
+        deliveryMethod="paper"
+        pool={[{ id: 'a', prompt: 'Q', marks: 5 }]}
+        selectedIds={['a']}
+        qualifyingThreshold={0}
+      />
+    );
+    expect(ok()).toBe('true');
   });
 });

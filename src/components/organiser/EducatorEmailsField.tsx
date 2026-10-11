@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { extractEmailsFromCsv } from '@/lib/csv-emails';
+import { mergeCsvEmails, type CsvMergeNote } from '@/lib/csv-emails';
 
 // Shared educator email-list field for the organiser invite workflows — the
 // Create Portal form and the "invite more schools" form. Educators can be
@@ -10,8 +10,6 @@ import { extractEmailsFromCsv } from '@/lib/csv-emails';
 // only the extracted addresses join the list. The quick-add dialog for a
 // school that already participates (AddEducatorButton) deliberately keeps its
 // manual-only input.
-
-type CsvNote = { tone: 'success' | 'error'; text: string } | null;
 
 type EducatorEmailsFieldProps = {
   emails: string[];
@@ -33,7 +31,7 @@ export default function EducatorEmailsField({
   disabled = false,
 }: EducatorEmailsFieldProps) {
   const [newEmail, setNewEmail] = useState('');
-  const [note, setNote] = useState<CsvNote>(null);
+  const [note, setNote] = useState<CsvMergeNote | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function addEmail() {
@@ -49,42 +47,17 @@ export default function EducatorEmailsField({
   }
 
   async function handleCsvFile(file: File) {
-    let found: string[];
+    let text: string;
     try {
-      found = extractEmailsFromCsv(await file.text());
+      text = await file.text();
     } catch {
       setNote({ tone: 'error', text: 'Could not read that file. Please try again.' });
       return;
     }
 
-    if (found.length === 0) {
-      setNote({
-        tone: 'error',
-        text: 'No email addresses were found in that file.',
-      });
-      return;
-    }
-
-    const fresh = found.filter((email) => !emails.includes(email));
-    const duplicates = found.length - fresh.length;
-
-    if (fresh.length === 0) {
-      setNote({
-        tone: 'success',
-        text: `All ${found.length} email${found.length === 1 ? '' : 's'} from the CSV ${found.length === 1 ? 'was' : 'were'} already in the list.`,
-      });
-      return;
-    }
-
-    onChange([...emails, ...fresh]);
-    const added = `Added ${fresh.length} email${fresh.length === 1 ? '' : 's'} from the CSV`;
-    setNote({
-      tone: 'success',
-      text:
-        duplicates > 0
-          ? `${added} (${duplicates} duplicate${duplicates === 1 ? '' : 's'} skipped).`
-          : `${added}.`,
-    });
+    const result = mergeCsvEmails(emails, text);
+    if (result.emails !== emails) onChange(result.emails);
+    setNote(result.note);
   }
 
   return (
