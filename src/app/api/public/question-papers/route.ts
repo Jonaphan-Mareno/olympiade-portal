@@ -1,4 +1,4 @@
-import { publicJson } from '@/app/api/public/_shared';
+import { publicJson, publicRateLimitResponse } from '@/app/api/public/_shared';
 import { isSemiPublicAvailable } from '@/domain/public-api/access';
 import {
   getPublicRoundContext,
@@ -8,6 +8,9 @@ import {
 // Public (no auth) but semi-gated: a round's question papers become readable
 // once the round has closed, so they cannot leak to entrants still writing.
 export async function GET(request: Request) {
+  const limited = await publicRateLimitResponse();
+  if (limited) return limited;
+
   try {
     const roundId = new URL(request.url).searchParams.get('round_id')?.trim();
     if (!roundId) return publicJson({ error: 'Missing round_id' }, 400);

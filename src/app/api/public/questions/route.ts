@@ -1,4 +1,4 @@
-import { publicJson } from '@/app/api/public/_shared';
+import { publicJson, publicRateLimitResponse } from '@/app/api/public/_shared';
 import { isSemiPublicAvailable } from '@/domain/public-api/access';
 import {
   getPublicRoundContext,
@@ -9,6 +9,9 @@ import {
 // included - become readable once the round has closed, at which point they
 // are historical and can no longer give anyone a live advantage.
 export async function GET(request: Request) {
+  const limited = await publicRateLimitResponse();
+  if (limited) return limited;
+
   try {
     const roundId = new URL(request.url).searchParams.get('round_id')?.trim();
     if (!roundId) return publicJson({ error: 'Missing round_id' }, 400);

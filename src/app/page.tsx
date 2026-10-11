@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { login } from '@/app/auth/actions';
 import { SubmitButton } from '@/components/SubmitButton';
 import { PasswordField } from '@/components/PasswordField';
+import { SmallScreenNotice } from '@/components/SmallScreenNotice';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 
@@ -32,6 +33,7 @@ export default function LoginPage() {
         fontFamily: 'inherit',
       }}
     >
+      <SmallScreenNotice />
       <style
         dangerouslySetInnerHTML={{
           __html: `

@@ -12,6 +12,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { sendInviteEmail } from '@/lib/email';
+import { inviteRateLimitError } from '@/lib/rate-limit';
 import { ensureSchool } from '@/lib/schools/db';
 import { isSchoolType, type PickedSchool } from '@/lib/schools/types';
 
@@ -126,6 +127,9 @@ export async function createPortal(formData: FormData) {
 
   // Collect all unique teacher emails across all schools for a single lookup
   const allEmails = [...new Set(schoolEntries.flatMap((e) => e.teacherEmails))];
+
+  const limited = await inviteRateLimitError(user.id, allEmails.length);
+  if (limited) return { error: limited };
   const existingUsers =
     allEmails.length > 0
       ? await db

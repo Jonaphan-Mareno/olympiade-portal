@@ -7,12 +7,16 @@ import { createClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
 import { users, memberships } from '@/lib/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { authRateLimitError, checkRateLimit, formatRetryAfter, getClientIp, isRateLimitingEnabled } from '@/lib/rate-limit';
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
 
   const email = (formData.get('email') as string).trim();
   const password = formData.get('password') as string;
+
+  const limited = await authRateLimitError('login', email);
+  if (limited) return { error: limited };
 
   // Development bypass for admin testing
   if (email === 'admin1@gmail.com' && password === '111111') {
@@ -115,6 +119,9 @@ export async function signup(formData: FormData) {
   const password = formData.get('password') as string;
   const name = formData.get('name') as string;
   const inviteToken = formData.get('inviteToken') as string | null;
+
+  const limited = await authRateLimitError('signup', email);
+  if (limited) return { error: limited };
 
   // 1. Sign up the user in Supabase Auth
   const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -263,6 +270,11 @@ export async function requestPasswordReset(
     return { error: 'Please enter the email address you signed up with.' };
   }
 
+  // Checked before the account lookup, so being limited reveals nothing about
+  // whether the address has an account.
+  const limited = await authRateLimitError('resetRequest', email);
+  if (limited) return { error: limited };
+
   // Ghost accounts (Supabase credentials whose app profile was deleted) are
   // blocked at sign-in, so don't send them a reset link either.
   const [profile] = await db
@@ -304,6 +316,15 @@ export async function resetPassword(formData: FormData) {
   }
   if (password !== confirmPassword) {
     return { error: 'Passwords do not match.' };
+  }
+
+  if (isRateLimitingEnabled()) {
+    const result = await checkRateLimit('resetPasswordIp', await getClientIp());
+    if (!result.success) {
+      return {
+        error: `Too many attempts. Please wait ${formatRetryAfter(result.retryAfterSeconds)} and try again.`,
+      };
+    }
   }
 
   // The reset email links to /auth/callback, which exchanges the recovery

@@ -1,4 +1,4 @@
-import { publicJson } from '@/app/api/public/_shared';
+import { publicJson, publicRateLimitResponse } from '@/app/api/public/_shared';
 import { areResultsPublished } from '@/domain/public-api/access';
 import {
   getPublicRoundContext,
@@ -9,6 +9,9 @@ import {
 // published the round's results. Scores are anonymous - marks only, no
 // student identities - so they can power public leaderboards.
 export async function GET(request: Request) {
+  const limited = await publicRateLimitResponse();
+  if (limited) return limited;
+
   try {
     const roundId = new URL(request.url).searchParams.get('round_id')?.trim();
     if (!roundId) return publicJson({ error: 'Missing round_id' }, 400);

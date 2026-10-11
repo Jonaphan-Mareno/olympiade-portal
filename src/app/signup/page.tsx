@@ -4,6 +4,7 @@ import { useState, Suspense } from 'react';
 import { signup } from '@/app/auth/actions';
 import { SubmitButton } from '@/components/SubmitButton';
 import { PasswordField } from '@/components/PasswordField';
+import { SmallScreenNotice } from '@/components/SmallScreenNotice';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -36,6 +37,7 @@ function SignupForm() {
         fontFamily: 'inherit',
       }}
     >
+      <SmallScreenNotice />
       <style
         dangerouslySetInnerHTML={{
           __html: `

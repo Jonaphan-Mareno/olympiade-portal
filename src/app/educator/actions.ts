@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { sendInviteEmail } from '@/lib/email';
+import { inviteRateLimitError } from '@/lib/rate-limit';
 
 export async function inviteStudents(formData: FormData) {
   const supabase = await createClient();
@@ -54,6 +55,9 @@ export async function inviteStudents(formData: FormData) {
   }
 
   const uniqueEmails = [...new Set(emails)];
+
+  const limited = await inviteRateLimitError(user.id, uniqueEmails.length);
+  if (limited) return { error: limited };
 
   // Look up existing users
   const existingUsers = await db

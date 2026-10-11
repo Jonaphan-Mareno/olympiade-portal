@@ -1,5 +1,10 @@
 import '@testing-library/jest-dom';
 
+// Tests never talk to a real Upstash instance: with these unset the rate
+// limiter allows everything. Tests of limiting behaviour mock @/lib/rate-limit.
+delete process.env.UPSTASH_REDIS_REST_URL;
+delete process.env.UPSTASH_REDIS_REST_TOKEN;
+
 // jsdom doesn't implement IntersectionObserver, which ExamInterface uses to
 // track which questions the student has seen. A no-op stub keeps component
 // tests rendering instead of throwing a ReferenceError.

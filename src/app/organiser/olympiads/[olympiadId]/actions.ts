@@ -9,6 +9,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { sendInviteEmail } from '@/lib/email';
 import { inviteEducatorsToSchool, type PendingInvite } from '@/lib/invites';
+import { inviteRateLimitError } from '@/lib/rate-limit';
 
 export async function deleteOlympiad(portalId: string) {
   const supabase = await createClient();
@@ -80,6 +81,9 @@ export async function addEducators(
   if (emails.length === 0) {
     return { error: 'Enter at least one valid educator email address.' };
   }
+
+  const limited = await inviteRateLimitError(user.id, emails.length);
+  if (limited) return { error: limited };
 
   const invitesToSend: PendingInvite[] = [];
 

@@ -10,6 +10,7 @@ import { sendInviteEmail } from '@/lib/email';
 import { ensureSchool } from '@/lib/schools/db';
 import { isSchoolType, type PickedSchool } from '@/lib/schools/types';
 import { inviteEducatorsToSchool } from '@/lib/invites';
+import { inviteRateLimitError } from '@/lib/rate-limit';
 
 export async function sendInvitations(portalId: string, formData: FormData) {
   const supabase = await createClient();
@@ -47,6 +48,10 @@ export async function sendInvitations(portalId: string, formData: FormData) {
 
   // Collect all unique teacher emails across all schools for a single lookup
   const allEmails = [...new Set(schoolEntries.flatMap((e) => e.teacherEmails))];
+
+  const limited = await inviteRateLimitError(user.id, allEmails.length);
+  if (limited) return { error: limited };
+
   const existingUsers =
     allEmails.length > 0
       ? await db

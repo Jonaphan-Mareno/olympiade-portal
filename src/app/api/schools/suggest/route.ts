@@ -7,6 +7,7 @@ import {
   UniversitiesApiError,
 } from '@/lib/schools';
 import { isSchoolType } from '@/lib/schools/types';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // School suggestions for the picker. Schools are never free-typed:
 // - type=high_school  -> searched in the local snapshot of the SA directory
@@ -39,6 +40,16 @@ export async function GET(request: NextRequest) {
 
   if (type === 'high_school') {
     return NextResponse.json(searchHighSchools(loadHighSchools(), q));
+  }
+
+  // Only the university path proxies to the free external API, so only it is
+  // limited (per user), protecting that API's goodwill for everyone.
+  const limit = await checkRateLimit('universitySuggest', user.id);
+  if (!limit.success) {
+    return NextResponse.json(
+      { error: 'Too many searches. Please wait a moment and try again.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+    );
   }
 
   try {
